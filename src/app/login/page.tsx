@@ -33,7 +33,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="bg-background flex min-h-screen items-center justify-center">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-center text-xl">ShayFinance</CardTitle>
@@ -48,9 +48,7 @@ export default function LoginPage() {
               autoFocus
               disabled={loading}
             />
-            {error && (
-              <p className="text-sm text-destructive text-center">סיסמה שגויה</p>
-            )}
+            {error && <p className="text-destructive text-center text-sm">סיסמה שגויה</p>}
             <Button type="submit" disabled={loading || !password}>
               {loading ? "..." : "כניסה"}
             </Button>
