@@ -1,2 +1,5 @@
 - [Shay - Profile](user_profile.md) — Security-conscious dev, Hebrew-speaking, prefers minimal UI, methodical workflow
 - [ShayFinance Overview](project_shayfinance.md) — Private finance dashboard: Next.js, israeli-bank-scrapers, PostgreSQL, RTL Hebrew
+- [CI Gotchas](feedback_ci_gotchas.md) — Use npm install (not ci) in CI; never use .npmrc os/cpu flags; Vitest is test runner
+- [MCP Sequential Thinking](feedback_mcp_sequential_thinking.md) — Use sequential-thinking MCP for complex reasoning tasks
+- [Format Before Commit](feedback_format_before_commit.md) — Always run `npm run format` before committing; CI rejects unformatted code
