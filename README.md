@@ -17,13 +17,13 @@ Automatically fetches transactions from **Bank Discount**, **Max**, and **Cal**,
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js (App Router) + TypeScript |
-| Styling | Tailwind CSS + Shadcn UI |
-| Database | PostgreSQL + Drizzle ORM |
-| Scraping | israeli-bank-scrapers-core + Puppeteer |
-| Charts | Shadcn Charts (Recharts) |
+| Layer     | Technology                             |
+| --------- | -------------------------------------- |
+| Framework | Next.js (App Router) + TypeScript      |
+| Styling   | Tailwind CSS + Shadcn UI               |
+| Database  | PostgreSQL + Drizzle ORM               |
+| Scraping  | israeli-bank-scrapers-core + Puppeteer |
+| Charts    | Shadcn Charts (Recharts)               |
 
 ## Prerequisites
 
@@ -59,11 +59,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
+| Variable         | Description                           |
+| ---------------- | ------------------------------------- |
+| `DATABASE_URL`   | PostgreSQL connection string          |
 | `ENCRYPTION_KEY` | 256-bit key for credential encryption |
-| `APP_PASSWORD` | Bcrypt-hashed password for app access |
+| `APP_PASSWORD`   | Bcrypt-hashed password for app access |
 
 See `.env.example` for the full template.
 

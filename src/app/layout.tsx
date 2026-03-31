@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="he" dir="rtl" className={`${assistant.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
+      <body className="bg-background text-foreground flex min-h-full flex-col font-sans">
         {children}
       </body>
     </html>

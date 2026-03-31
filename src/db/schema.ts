@@ -22,11 +22,7 @@ const bytea = customType<{ data: Buffer }>({
 });
 
 // Enums
-export const bankTypeEnum = pgEnum("bank_type", [
-  "discount",
-  "max",
-  "visaCal",
-]);
+export const bankTypeEnum = pgEnum("bank_type", ["discount", "max", "visaCal"]);
 
 export const categoryTypeEnum = pgEnum("category_type", [
   "income",
@@ -36,22 +32,11 @@ export const categoryTypeEnum = pgEnum("category_type", [
   "ignore",
 ]);
 
-export const transactionTypeEnum = pgEnum("transaction_type", [
-  "normal",
-  "installments",
-]);
+export const transactionTypeEnum = pgEnum("transaction_type", ["normal", "installments"]);
 
-export const transactionStatusEnum = pgEnum("transaction_status", [
-  "completed",
-  "pending",
-]);
+export const transactionStatusEnum = pgEnum("transaction_status", ["completed", "pending"]);
 
-export const matchTypeEnum = pgEnum("match_type", [
-  "contains",
-  "starts_with",
-  "exact",
-  "regex",
-]);
+export const matchTypeEnum = pgEnum("match_type", ["contains", "starts_with", "exact", "regex"]);
 
 // Tables
 export const bankCredentials = pgTable("bank_credentials", {
@@ -122,7 +107,7 @@ export const transactions = pgTable(
     uniqueIndex("uq_external_id_account")
       .on(table.externalId, table.bankAccountId)
       .where(sql`external_id IS NOT NULL`),
-  ]
+  ],
 );
 
 export const categoryRules = pgTable("category_rules", {
