@@ -1,15 +1,15 @@
 import bcrypt from "bcrypt";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
-import { env } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 
 export const SESSION_COOKIE = "shayfinance-session";
 
 function getSecret(): string {
-  return env.ENCRYPTION_KEY;
+  return getEnv().ENCRYPTION_KEY;
 }
 
 export async function verifyPassword(input: string): Promise<boolean> {
-  return bcrypt.compare(input, env.APP_PASSWORD);
+  return bcrypt.compare(input, getEnv().APP_PASSWORD);
 }
 
 export function createSession(): string {
