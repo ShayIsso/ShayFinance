@@ -132,11 +132,7 @@ const EMPTY_FORM: FormState = {
   color: "#6366f1",
 };
 
-export function CategoriesSection({
-  initialCategories,
-}: {
-  initialCategories: Category[];
-}) {
+export function CategoriesSection({ initialCategories }: { initialCategories: Category[] }) {
   const [categories, setCategories] = React.useState<Category[]>(initialCategories);
   const [formOpen, setFormOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -180,9 +176,7 @@ export function CategoriesSection({
           body: JSON.stringify(form),
         });
         if (!res.ok) throw new Error("שגיאה בשמירה");
-        setCategories((prev) =>
-          prev.map((c) => (c.id === editing.id ? { ...c, ...form } : c)),
-        );
+        setCategories((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...form } : c)));
       } else {
         const res = await fetch("/api/categories", {
           method: "POST",
@@ -256,7 +250,11 @@ export function CategoriesSection({
                 size="sm"
                 disabled={cat.isDefault}
                 onClick={() => !cat.isDefault && openDelete(cat)}
-                className={cat.isDefault ? "opacity-40 cursor-not-allowed" : "text-red-600 hover:text-red-700"}
+                className={
+                  cat.isDefault
+                    ? "cursor-not-allowed opacity-40"
+                    : "text-red-600 hover:text-red-700"
+                }
               >
                 מחק
               </Button>
@@ -286,7 +284,9 @@ export function CategoriesSection({
               <Label>סוג</Label>
               <Select
                 value={form.type}
-                onValueChange={(v) => { if (v) setForm((f) => ({ ...f, type: v as CategoryType })); }}
+                onValueChange={(v) => {
+                  if (v) setForm((f) => ({ ...f, type: v as CategoryType }));
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -305,7 +305,9 @@ export function CategoriesSection({
               <Label>אייקון</Label>
               <Select
                 value={form.icon}
-                onValueChange={(v) => { if (v) setForm((f) => ({ ...f, icon: v as string })); }}
+                onValueChange={(v) => {
+                  if (v) setForm((f) => ({ ...f, icon: v as string }));
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -334,7 +336,7 @@ export function CategoriesSection({
                   onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
                   className="h-9 w-12 cursor-pointer rounded border p-1"
                 />
-                <span className="text-sm text-muted-foreground">{form.color}</span>
+                <span className="text-muted-foreground text-sm">{form.color}</span>
               </div>
             </div>
 
@@ -357,7 +359,7 @@ export function CategoriesSection({
           <DialogHeader>
             <DialogTitle>מחיקת קטגוריה</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground py-2">
+          <p className="text-muted-foreground py-2 text-sm">
             האם למחוק את הקטגוריה &quot;{deleting?.name}&quot;? עסקאות משויכות יאבדו את הסיווג שלהן.
           </p>
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -368,7 +370,7 @@ export function CategoriesSection({
             <Button
               onClick={handleDelete}
               disabled={saving}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 text-white hover:bg-red-700"
             >
               {saving ? "מוחק..." : "מחק"}
             </Button>

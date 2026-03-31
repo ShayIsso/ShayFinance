@@ -139,7 +139,11 @@ export function CredentialsSection() {
         const res = await fetch("/api/credentials", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bankType: form.bankType, displayName: form.displayName, credentials }),
+          body: JSON.stringify({
+            bankType: form.bankType,
+            displayName: form.displayName,
+            credentials,
+          }),
         });
         if (!res.ok) {
           const err = await res.json();
@@ -220,7 +224,11 @@ export function CredentialsSection() {
                 <Select
                   value={form.bankType}
                   onValueChange={(val) =>
-                    setForm({ ...EMPTY_FORM, bankType: val as BankType, displayName: form.displayName })
+                    setForm({
+                      ...EMPTY_FORM,
+                      bankType: val as BankType,
+                      displayName: form.displayName,
+                    })
                   }
                 >
                   <SelectTrigger id="bankType" className="w-full">
@@ -241,7 +249,7 @@ export function CredentialsSection() {
                 id="displayName"
                 value={form.displayName}
                 onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-                placeholder='לדוגמה: חשבון עיקרי'
+                placeholder="לדוגמה: חשבון עיקרי"
               />
             </div>
 

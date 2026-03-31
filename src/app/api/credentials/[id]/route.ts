@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  getDecryptedCredentials,
-  updateCredential,
-  removeCredential,
-} from "@/lib/credentials";
+import { getDecryptedCredentials, updateCredential, removeCredential } from "@/lib/credentials";
 
 type Params = { params: Promise<{ id: string }> };
 
