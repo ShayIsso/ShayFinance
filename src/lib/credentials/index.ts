@@ -2,21 +2,12 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bankCredentials } from "@/db/schema";
 import { encrypt, decrypt } from "@/lib/crypto";
+import { credentialSchemas } from "./schemas";
 
 type BankType = "discount" | "max" | "visaCal";
 
-function validateCredentials(bankType: BankType, raw: Record<string, unknown>): void {
-  if (bankType === "discount") {
-    if (!raw.id || !raw.password || !raw.num) {
-      throw new Error("Discount requires: id (national ID), password, num (account number)");
-    }
-  } else if (bankType === "max" || bankType === "visaCal") {
-    if (!raw.username || !raw.password) {
-      throw new Error(`${bankType} requires: username (Internet Username), password`);
-    }
-  } else {
-    throw new Error(`Unknown bank type: ${bankType}`);
-  }
+function validateCredentials(bankType: BankType, raw: Record<string, string>): void {
+  credentialSchemas[bankType].parse(raw);
 }
 
 export async function addCredential(
