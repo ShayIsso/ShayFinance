@@ -1,6 +1,6 @@
+import "dotenv/config";
 import { db } from "./index";
 import { categories } from "./schema";
-import "dotenv/config";
 
 const defaultCategories = [
   { name: "משכורת", type: "income" as const, icon: "Banknote", color: "#10b981", isDefault: true },
