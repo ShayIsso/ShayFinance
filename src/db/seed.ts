@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { db } from "./index";
 import { categories } from "./schema";
+import { eq } from "drizzle-orm";
 
 const defaultCategories = [
   { name: "משכורת", type: "income" as const, icon: "Banknote", color: "#10b981", isDefault: true },
@@ -111,11 +112,21 @@ const defaultCategories = [
 async function seed() {
   console.log("Seeding default categories...");
 
+  const existing = await db
+    .select({ name: categories.name })
+    .from(categories)
+    .where(eq(categories.isDefault, true));
+  const existingNames = new Set(existing.map((c) => c.name));
+
+  let inserted = 0;
   for (const category of defaultCategories) {
-    await db.insert(categories).values(category).onConflictDoNothing();
+    if (!existingNames.has(category.name)) {
+      await db.insert(categories).values(category);
+      inserted++;
+    }
   }
 
-  console.log(`Seeded ${defaultCategories.length} categories.`);
+  console.log(`Seeded ${inserted} new categories (${existingNames.size} already existed).`);
   process.exit(0);
 }
 
