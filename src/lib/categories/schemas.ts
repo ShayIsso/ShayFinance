@@ -8,3 +8,12 @@ export const createCategorySchema = z.object({
 });
 
 export const updateCategorySchema = createCategorySchema.partial();
+
+export const createRuleSchema = z.object({
+  categoryId: z.string().uuid(),
+  matchType: z.enum(["contains", "starts_with", "exact", "regex"]),
+  pattern: z.string().min(1, "תבנית חובה"),
+  priority: z.number().int().min(0).default(0),
+});
+
+export const updateRuleSchema = createRuleSchema.partial();
