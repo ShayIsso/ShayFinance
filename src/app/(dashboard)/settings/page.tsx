@@ -1,11 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import { getCategories } from "@/lib/categories";
+import { getRules } from "@/lib/categories/rules";
 import { CategoriesSection } from "@/components/categories-section";
 import { CredentialsSection } from "@/components/credentials-section";
+import { RulesSection } from "@/components/rules-section";
 
 export default async function SettingsPage() {
-  const categories = await getCategories();
+  const [categories, rules] = await Promise.all([getCategories(), getRules()]);
 
   return (
     <div className="space-y-8">
@@ -17,6 +19,8 @@ export default async function SettingsPage() {
       <CredentialsSection />
 
       <CategoriesSection initialCategories={categories} />
+
+      <RulesSection initialRules={rules} categories={categories} />
     </div>
   );
 }
