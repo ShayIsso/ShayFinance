@@ -9,6 +9,7 @@ Personal finance dashboard that auto-fetches and categorizes transactions from I
 **Stack:** Next.js (App Router) + TypeScript, Tailwind + Shadcn UI, PostgreSQL (Docker), israeli-bank-scrapers-core
 **Banks:** Bank Discount, Max, Cal
 **Key constraints:**
+
 - Cal and Max must use "Internet Username" (User ID), NOT National ID
 - MFA (SMS/Push) flows must be handled securely
 - All credentials in .env only, never logged

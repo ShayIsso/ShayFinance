@@ -5,6 +5,7 @@ type: user
 ---
 
 Shay is building a private personal finance dashboard (ShayFinance). Key traits:
+
 - Security-conscious: zero-leak policy for credentials, careful about logging
 - Prefers clean, minimal, modern UI (shadcn style, light theme, no emoji)
 - Primary language is Hebrew; all UI must be RTL
