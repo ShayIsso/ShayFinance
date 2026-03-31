@@ -119,6 +119,14 @@ These are non-negotiable:
 - **Never commit directly to `main`.**
 - **`.gitignore`** must cover: `.env`, `node_modules`, `.DS_Store`, `/tmp/scraper-failures/`
 
+## Known Gotchas
+
+- **CI uses `npm install`, not `npm ci`.** Lock file is generated on macOS ARM64 and `npm ci` rejects it on Linux CI runners. Do not change CI back to `npm ci`.
+- **Never add `os=any` or `cpu=any` to `.npmrc`.** This corrupts native bindings on macOS. If the lock file needs regenerating: `rm -rf node_modules package-lock.json && npm install`.
+- **Test runner is Vitest.** `npm test` runs all tests. `npm run test:watch` for watch mode. Config in `vitest.config.ts` with `@/*` path alias.
+- **`APP_PASSWORD` in `.env` must escape `$` as `\$`.** Next.js's dotenv parser expands `$VAR` — bcrypt hashes contain `$2b$12$...` which gets mangled. Always write `\$2b\$12\$...` in `.env`.
+- **Session HMAC key must be hex-decoded.** `createSession` and `validateSessionEdge` both decode `ENCRYPTION_KEY` from hex to raw bytes before using it as the HMAC key. If one uses the raw string and the other decodes it, tokens will never validate.
+
 ## Testing Priorities
 
 Tests validate external behavior through public interfaces, not implementation details.
