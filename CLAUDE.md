@@ -117,6 +117,7 @@ These are non-negotiable:
 
 - **Feature branches only** (e.g., `feature/init-setup`, `feature/scraper-engine`).
 - **Never commit directly to `main`.**
+- **Before every commit, run `npm run format`** to auto-fix Prettier issues. CI runs `prettier --check` and will reject unformatted code.
 - **`.gitignore`** must cover: `.env`, `node_modules`, `.DS_Store`, `/tmp/scraper-failures/`
 
 ## Known Gotchas
