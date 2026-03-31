@@ -50,15 +50,19 @@ export const bankCredentials = pgTable("bank_credentials", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const bankAccounts = pgTable("bank_accounts", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  credentialId: uuid("credential_id")
-    .references(() => bankCredentials.id, { onDelete: "cascade" })
-    .notNull(),
-  accountNumber: varchar("account_number", { length: 50 }).notNull(),
-  balance: decimal("balance", { precision: 12, scale: 2 }),
-  balanceUpdatedAt: timestamp("balance_updated_at"),
-});
+export const bankAccounts = pgTable(
+  "bank_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    credentialId: uuid("credential_id")
+      .references(() => bankCredentials.id, { onDelete: "cascade" })
+      .notNull(),
+    accountNumber: varchar("account_number", { length: 50 }).notNull(),
+    balance: decimal("balance", { precision: 12, scale: 2 }),
+    balanceUpdatedAt: timestamp("balance_updated_at"),
+  },
+  (table) => [uniqueIndex("uq_bank_account").on(table.credentialId, table.accountNumber)],
+);
 
 export const categories = pgTable(
   "categories",
