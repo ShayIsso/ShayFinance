@@ -126,6 +126,7 @@ These are non-negotiable:
 - **Test runner is Vitest.** `npm test` runs all tests. `npm run test:watch` for watch mode. Config in `vitest.config.ts` with `@/*` path alias.
 - **`APP_PASSWORD` in `.env` must escape `$` as `\$`.** Next.js's dotenv parser expands `$VAR` — bcrypt hashes contain `$2b$12$...` which gets mangled. Always write `\$2b\$12\$...` in `.env`.
 - **Session HMAC key must be hex-decoded.** `createSession` and `validateSessionEdge` both decode `ENCRYPTION_KEY` from hex to raw bytes before using it as the HMAC key. If one uses the raw string and the other decodes it, tokens will never validate.
+- **Middleware file must be `src/middleware.ts` exporting `middleware`.** Next.js 16 shows a deprecation warning suggesting `proxy.ts`, but `proxy.ts` does not reliably intercept requests — routes will be unprotected. Ignore the warning and keep `middleware.ts`.
 
 ## Testing Priorities
 
