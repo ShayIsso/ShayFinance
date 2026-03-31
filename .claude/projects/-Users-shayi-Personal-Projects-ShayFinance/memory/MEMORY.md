@@ -1,0 +1,2 @@
+- [Shay - Profile](user_profile.md) — Security-conscious dev, Hebrew-speaking, prefers minimal UI, methodical workflow
+- [ShayFinance Overview](project_shayfinance.md) — Private finance dashboard: Next.js, israeli-bank-scrapers, PostgreSQL, RTL Hebrew
