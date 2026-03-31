@@ -43,13 +43,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
 type CategoryType = "income" | "expense" | "investment" | "transfer" | "ignore";
@@ -93,6 +87,38 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Monitor,
   Smartphone,
   Globe,
+};
+
+const ICON_LABELS: Record<string, string> = {
+  Banknote: "שטר כסף",
+  CirclePlus: "הוספה",
+  ShoppingCart: "עגלת קניות",
+  Coffee: "קפה",
+  Car: "רכב",
+  Home: "בית",
+  Receipt: "קבלה",
+  Heart: "לב",
+  Clapperboard: "סרט",
+  ShoppingBag: "תיק קניות",
+  GraduationCap: "כובע סיום",
+  Shield: "מגן",
+  Repeat: "חזרה",
+  Gift: "מתנה",
+  TrendingUp: "מגמה עולה",
+  PiggyBank: "קופת חיסכון",
+  ArrowLeftRight: "חץ דו-כיווני",
+  CreditCard: "כרטיס אשראי",
+  MoreHorizontal: "אחר",
+  Utensils: "כלי אוכל",
+  Plane: "מטוס",
+  Bike: "אופניים",
+  Bus: "אוטובוס",
+  Train: "רכבת",
+  Dumbbell: "משקולות",
+  Music: "מוזיקה",
+  Monitor: "מסך",
+  Smartphone: "סמארטפון",
+  Globe: "גלובוס",
 };
 
 const AVAILABLE_ICONS = Object.keys(ICON_MAP);
@@ -289,7 +315,7 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <span>{TYPE_LABELS[form.type]}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {(Object.keys(TYPE_LABELS) as CategoryType[]).map((t) => (
@@ -310,7 +336,13 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <span className="flex items-center gap-2">
+                    {(() => {
+                      const Icon = ICON_MAP[form.icon] ?? MoreHorizontal;
+                      return <Icon className="size-4" />;
+                    })()}
+                    {ICON_LABELS[form.icon] ?? form.icon}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   {AVAILABLE_ICONS.map((iconName) => {
@@ -318,7 +350,7 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
                     return (
                       <SelectItem key={iconName} value={iconName}>
                         <Icon className="size-4" />
-                        {iconName}
+                        {ICON_LABELS[iconName] ?? iconName}
                       </SelectItem>
                     );
                   })}
