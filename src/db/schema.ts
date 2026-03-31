@@ -60,14 +60,18 @@ export const bankAccounts = pgTable("bank_accounts", {
   balanceUpdatedAt: timestamp("balance_updated_at"),
 });
 
-export const categories = pgTable("categories", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: varchar("name", { length: 100 }).notNull(),
-  type: categoryTypeEnum("type").notNull(),
-  icon: varchar("icon", { length: 50 }).notNull(),
-  color: varchar("color", { length: 7 }).notNull(),
-  isDefault: boolean("is_default").default(false).notNull(),
-});
+export const categories = pgTable(
+  "categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 100 }).notNull(),
+    type: categoryTypeEnum("type").notNull(),
+    icon: varchar("icon", { length: 50 }).notNull(),
+    color: varchar("color", { length: 7 }).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+  },
+  (table) => [uniqueIndex("uq_category_name").on(table.name)],
+);
 
 export const transactions = pgTable(
   "transactions",
