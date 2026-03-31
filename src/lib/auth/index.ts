@@ -1,18 +1,15 @@
 import bcrypt from "bcrypt";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { env } from "@/lib/env";
 
 export const SESSION_COOKIE = "shayfinance-session";
 
 function getSecret(): string {
-  const key = process.env.ENCRYPTION_KEY;
-  if (!key) throw new Error("ENCRYPTION_KEY is not set");
-  return key;
+  return env.ENCRYPTION_KEY;
 }
 
 export async function verifyPassword(input: string): Promise<boolean> {
-  const hash = process.env.APP_PASSWORD;
-  if (!hash) throw new Error("APP_PASSWORD is not set");
-  return bcrypt.compare(input, hash);
+  return bcrypt.compare(input, env.APP_PASSWORD);
 }
 
 export function createSession(): string {

@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z, ZodError } from "zod";
 import { getDecryptedCredentials, updateCredential, removeCredential } from "@/lib/credentials";
+import { formatZodError } from "@/lib/api-utils";
 
 type Params = { params: Promise<{ id: string }> };
+
+const updateCredentialSchema = z
+  .object({
+    displayName: z.string().min(1).optional(),
+    credentials: z.record(z.string(), z.string()).optional(),
+  })
+  .refine((data) => data.displayName !== undefined || data.credentials !== undefined, {
+    message: "Nothing to update",
+  });
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
@@ -24,19 +35,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params;
   try {
-    const body = await req.json();
-    const { displayName, credentials } = body;
-
-    if (displayName === undefined && credentials === undefined) {
-      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
-    }
-
+    const body = updateCredentialSchema.parse(await req.json());
     await updateCredential(id, {
-      displayName,
-      rawCredentials: credentials,
+      displayName: body.displayName,
+      rawCredentials: body.credentials,
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json({ error: formatZodError(err) }, { status: 400 });
+    }
     const message = err instanceof Error ? err.message : "Failed to update credential";
     return NextResponse.json({ error: message }, { status: 400 });
   }
