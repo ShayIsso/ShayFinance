@@ -4,6 +4,7 @@ import { ScraperErrorTypes } from "israeli-bank-scrapers-core/lib/scrapers/error
 import { createOtpBridge } from "./otp";
 import { mapAccount } from "./mapper";
 import type { SyncEvent, OtpHandler } from "./types";
+import { getEnv } from "@/lib/env";
 
 export type { SyncEvent, ScrapedTransaction, ScrapedAccount, OtpHandler } from "./types";
 export { createOtpBridge } from "./otp";
@@ -45,12 +46,15 @@ export async function* syncBank(
     return otpBridge.promise;
   };
 
+  const { CHROMIUM_PATH } = getEnv();
+
   const scraper = createScraper({
     companyId,
     startDate: options.startDate,
     combineInstallments: false,
     showBrowser: false,
     storeFailureScreenShotPath: "/tmp/scraper-failures",
+    ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
   });
 
   // Start scrape as a non-blocking promise so we can detect OTP requests mid-flight
