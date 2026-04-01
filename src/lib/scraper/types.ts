@@ -35,4 +35,5 @@ export type ScrapedAccount = {
 export type OtpHandler = {
   resolveOtp: (code: string) => void;
   promise: Promise<string>;
+  cancel: () => void;
 };
