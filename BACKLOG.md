@@ -4,6 +4,22 @@ Deferred features captured during the architecture planning session (2026-03-31)
 
 ---
 
+## Tech Debt & UI Refinements
+
+### Server-Side Uncategorized Filter
+
+The transactions table filters "uncategorized" client-side after fetching. This should be a server-side query filter (`WHERE category_id IS NULL`) to work correctly with pagination.
+
+### API-Driven Pagination Totals
+
+Pagination currently estimates total pages based on whether a full page was returned. The `GET /api/transactions` endpoint should return `{ data, total, page, pageSize }` so the UI can show accurate page counts and "showing X of Y" text.
+
+### Retroactive Category Rules
+
+When a new categorization rule is created, it only applies to future imports. There should be a "Apply to existing transactions" action that re-runs the rule against all uncategorized (or all) transactions in the database, assigning the category where the pattern matches. This is critical for initial data triage after the first sync.
+
+---
+
 ## Phase 2 — High Value
 
 ### Background Scheduler / Cron Sync
