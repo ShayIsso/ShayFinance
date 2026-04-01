@@ -69,7 +69,7 @@ export async function* syncBank(
     ]);
 
     if (winner.tag === "otp_needed") {
-      yield { type: "otp_required", bank: bankType };
+      yield { type: "otp_required", bank: bankType, otpHandler: otpBridge };
       // Wait for scrape to complete — scraper is blocked on otpBridge.promise
       // which will either resolve (OTP submitted) or reject (timeout)
       result = await scrapePromise;
