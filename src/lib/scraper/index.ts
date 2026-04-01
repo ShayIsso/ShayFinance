@@ -1,10 +1,14 @@
 import { createScraper, CompanyTypes } from "israeli-bank-scrapers-core";
 import type { ScraperScrapingResult } from "israeli-bank-scrapers-core/lib/scrapers/interface";
 import { ScraperErrorTypes } from "israeli-bank-scrapers-core/lib/scrapers/errors";
+import { mkdirSync } from "fs";
 import { createOtpBridge } from "./otp";
 import { mapAccount } from "./mapper";
 import type { SyncEvent, OtpHandler } from "./types";
 import { getEnv } from "@/lib/env";
+
+const SCREENSHOT_DIR = "/tmp/scraper-failures";
+mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
 export type { SyncEvent, ScrapedTransaction, ScrapedAccount, OtpHandler } from "./types";
 export { createOtpBridge } from "./otp";
@@ -47,13 +51,14 @@ export async function* syncBank(
   };
 
   const { CHROMIUM_PATH } = getEnv();
+  const screenshotPath = `/tmp/scraper-failures/${bankType}-${Date.now()}.png`;
 
   const scraper = createScraper({
     companyId,
     startDate: options.startDate,
     combineInstallments: false,
     showBrowser: false,
-    storeFailureScreenShotPath: "/tmp/scraper-failures",
+    storeFailureScreenShotPath: screenshotPath,
     ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
   });
 
@@ -78,9 +83,12 @@ export async function* syncBank(
       // which will either resolve (OTP submitted) or reject (timeout)
       result = await scrapePromise;
     } else {
+      // No OTP was needed — cancel the dangling timeout
+      otpBridge.cancel();
       result = winner.result;
     }
   } catch (err) {
+    otpBridge.cancel();
     if (err instanceof Error && err.message === "OTP_TIMEOUT") {
       yield { type: "otp_timeout", bank: bankType };
     } else {
