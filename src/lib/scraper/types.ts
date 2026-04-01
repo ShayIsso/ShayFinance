@@ -4,10 +4,11 @@ export type SyncEvent =
       bank: string;
       status: "initializing" | "logging_in" | "login_success" | "scraping" | "importing";
     }
-  | { type: "otp_required"; bank: string }
+  | { type: "otp_required"; bank: string; otpHandler: OtpHandler }
   | { type: "otp_timeout"; bank: string }
   | { type: "bank_complete"; bank: string; accounts: ScrapedAccount[] }
-  | { type: "bank_error"; bank: string; error: string; hasScreenshot: boolean };
+  | { type: "bank_error"; bank: string; error: string; hasScreenshot: boolean }
+  | { type: "sync_complete"; summary: { total: number; byBank: Record<string, number> } };
 
 export type ScrapedTransaction = {
   externalId: string | null;
