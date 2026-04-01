@@ -278,7 +278,7 @@ export function DashboardPanel({ categories: _categories }: { categories: Catego
               >
                 <XAxis
                   type="number"
-                  tickFormatter={(v) => formatCurrency(v)}
+                  tickFormatter={(v: number) => formatCurrency(v)}
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
