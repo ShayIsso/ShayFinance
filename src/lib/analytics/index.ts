@@ -31,6 +31,7 @@ export type CategorySpending = {
 };
 
 export type AccountBalance = {
+  id: string;
   accountNumber: string;
   balance: number | null;
   bankType: "discount" | "max" | "visaCal";
@@ -168,6 +169,7 @@ export async function getSpendingByCategory(
 export async function getAccountBalances(): Promise<AccountBalance[]> {
   const rows = await db
     .select({
+      id: bankAccounts.id,
       accountNumber: bankAccounts.accountNumber,
       balance: bankAccounts.balance,
       bankType: bankCredentials.bankType,
@@ -177,6 +179,7 @@ export async function getAccountBalances(): Promise<AccountBalance[]> {
     .innerJoin(bankCredentials, eq(bankAccounts.credentialId, bankCredentials.id));
 
   return rows.map((r) => ({
+    id: r.id,
     accountNumber: r.accountNumber,
     balance: r.balance !== null ? Number(r.balance) : null,
     bankType: r.bankType,
