@@ -43,8 +43,6 @@ export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
     for await (const event of generator) {
       if (event.type === "otp_required") {
         activeOtpHandler = event.otpHandler;
-        // Suppress dangling timeout if OTP is never needed
-        event.otpHandler.promise.catch(() => {});
         yield { type: "otp_required", bank: event.bank, otpHandler: event.otpHandler };
         continue;
       }

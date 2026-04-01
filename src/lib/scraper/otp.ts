@@ -17,5 +17,12 @@ export function createOtpBridge(): OtpHandler {
     };
   });
 
-  return { resolveOtp, promise };
+  // Suppress unhandled rejection if promise is never awaited
+  promise.catch(() => {});
+
+  function cancel() {
+    clearTimeout(timeoutId);
+  }
+
+  return { resolveOtp, promise, cancel };
 }
