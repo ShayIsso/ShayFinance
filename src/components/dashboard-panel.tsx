@@ -227,7 +227,7 @@ export function DashboardPanel({ categories: _categories }: { categories: Catego
           <h3 className="mb-3 text-base font-semibold">יתרות חשבון</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {balances.map((acc) => (
-              <Card key={`${acc.bankType}-${acc.accountNumber}`}>
+              <Card key={acc.id}>
                 <CardContent className="pt-4">
                   <div className="flex items-center justify-between">
                     <div>
