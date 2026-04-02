@@ -21,6 +21,7 @@ type BankSyncState = {
     | "otp_timeout";
   error?: string;
   hasScreenshot?: boolean;
+  screenshotFilename?: string;
   transactionCount?: number;
 };
 
@@ -35,7 +36,13 @@ type ClientSyncEvent =
   | { type: "otp_required"; bank: string }
   | { type: "otp_timeout"; bank: string }
   | { type: "bank_complete"; bank: string }
-  | { type: "bank_error"; bank: string; error: string; hasScreenshot: boolean }
+  | {
+      type: "bank_error";
+      bank: string;
+      error: string;
+      hasScreenshot: boolean;
+      screenshotFilename?: string;
+    }
   | { type: "sync_complete"; summary: SyncSummary };
 
 type Bank = {
@@ -157,6 +164,7 @@ export function SyncPanel({ banks }: { banks: Bank[] }) {
             status: "error",
             error: event.error,
             hasScreenshot: event.hasScreenshot,
+            screenshotFilename: event.screenshotFilename,
           },
         }));
       } else if (event.type === "sync_complete") {
@@ -306,9 +314,21 @@ export function SyncPanel({ banks }: { banks: Bank[] }) {
                 )}
 
                 {(state?.status === "error" || state?.status === "otp_timeout") && (
-                  <Button variant="outline" size="sm" onClick={startSync}>
-                    נסה שוב
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline" size="sm" onClick={startSync}>
+                      נסה שוב
+                    </Button>
+                    {state?.screenshotFilename && (
+                      <a
+                        href={`/api/screenshots/${state.screenshotFilename}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        צפה בצילום מסך
+                      </a>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
