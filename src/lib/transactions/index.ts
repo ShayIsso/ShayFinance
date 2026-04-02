@@ -18,7 +18,7 @@ export async function importScrapedAccounts(
   let skipped = 0;
 
   for (const account of scrapedAccounts) {
-    // Upsert bank_account
+    // Upsert bank_account — insert or update balance on conflict
     const [bankAccount] = await db
       .insert(bankAccounts)
       .values({
@@ -27,29 +27,17 @@ export async function importScrapedAccounts(
         balance: account.balance?.toString() ?? null,
         balanceUpdatedAt: new Date(),
       })
-      .onConflictDoNothing()
-      .returning({ id: bankAccounts.id });
-
-    let accountId: string | undefined = bankAccount?.id;
-    if (!accountId) {
-      const existing = await db.query.bankAccounts.findFirst({
-        where: and(
-          eq(bankAccounts.credentialId, credentialId),
-          eq(bankAccounts.accountNumber, account.accountNumber),
-        ),
-        columns: { id: true },
-      });
-      accountId = existing?.id;
-      if (!accountId) continue;
-
-      await db
-        .update(bankAccounts)
-        .set({
+      .onConflictDoUpdate({
+        target: [bankAccounts.credentialId, bankAccounts.accountNumber],
+        set: {
           balance: account.balance?.toString() ?? null,
           balanceUpdatedAt: new Date(),
-        })
-        .where(eq(bankAccounts.id, accountId));
-    }
+        },
+      })
+      .returning({ id: bankAccounts.id });
+
+    const accountId = bankAccount?.id;
+    if (!accountId) continue;
 
     for (const tx of account.transactions) {
       const result = await importTransaction(tx, accountId, store, categorizeTransaction);
