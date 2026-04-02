@@ -58,10 +58,21 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+const CURRENCY_SYMBOL_TO_CODE: Record<string, string> = {
+  "₪": "ILS",
+  $: "USD",
+  "€": "EUR",
+  "£": "GBP",
+};
+
+function normalizeCurrency(currency: string): string {
+  return CURRENCY_SYMBOL_TO_CODE[currency] ?? currency;
+}
+
 function formatAmount(amount: number, currency: string = "ILS"): string {
   return new Intl.NumberFormat("he-IL", {
     style: "currency",
-    currency,
+    currency: normalizeCurrency(currency),
     minimumFractionDigits: 2,
   }).format(amount);
 }
