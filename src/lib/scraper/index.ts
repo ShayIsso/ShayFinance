@@ -2,6 +2,8 @@ import { createScraper, CompanyTypes } from "israeli-bank-scrapers-core";
 import type { ScraperScrapingResult } from "israeli-bank-scrapers-core/lib/scrapers/interface";
 import { ScraperErrorTypes } from "israeli-bank-scrapers-core/lib/scrapers/errors";
 import { mkdirSync } from "fs";
+import puppeteer from "puppeteer-core";
+import type { Browser as ScraperBrowser } from "israeli-bank-scrapers-core/node_modules/puppeteer-core/lib/types";
 import { createOtpBridge } from "./otp";
 import { mapAccount } from "./mapper";
 import type { SyncEvent, OtpHandler } from "./types";
@@ -53,70 +55,92 @@ export async function* syncBank(
   const { CHROMIUM_PATH } = getEnv();
   const screenshotPath = `/tmp/scraper-failures/${bankType}-${Date.now()}.png`;
 
-  const scraper = createScraper({
-    companyId,
-    startDate: options.startDate,
-    combineInstallments: false,
-    showBrowser: false,
-    storeFailureScreenShotPath: screenshotPath,
-    ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: CHROMIUM_PATH,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
-  // Start scrape as a non-blocking promise so we can detect OTP requests mid-flight
-  const scrapePromise = scraper.scrape({
-    ...credentials,
-    otpCodeRetriever,
-  } as Parameters<typeof scraper.scrape>[0]);
-
-  let result: ScraperScrapingResult;
-
   try {
-    // Race: scrape finishes normally OR scraper requests OTP
-    const winner = await Promise.race([
-      scrapePromise.then((r) => ({ tag: "done" as const, result: r })),
-      otpNeededSignal.then(() => ({ tag: "otp_needed" as const })),
-    ]);
+    const scraper = createScraper({
+      companyId,
+      startDate: options.startDate,
+      combineInstallments: false,
+      showBrowser: false,
+      storeFailureScreenShotPath: screenshotPath,
+      browser: browser as unknown as ScraperBrowser,
+      skipCloseBrowser: true,
+    });
 
-    if (winner.tag === "otp_needed") {
-      yield { type: "otp_required", bank: bankType, otpHandler: otpBridge };
-      // Wait for scrape to complete — scraper is blocked on otpBridge.promise
-      // which will either resolve (OTP submitted) or reject (timeout)
-      result = await scrapePromise;
-    } else {
-      // No OTP was needed — cancel the dangling timeout
+    // Start scrape as a non-blocking promise so we can detect OTP requests mid-flight
+    const scrapePromise = scraper.scrape({
+      ...credentials,
+      otpCodeRetriever,
+    } as Parameters<typeof scraper.scrape>[0]);
+
+    let result: ScraperScrapingResult;
+
+    try {
+      // Race: scrape finishes normally OR scraper requests OTP
+      const winner = await Promise.race([
+        scrapePromise.then((r) => ({ tag: "done" as const, result: r })),
+        otpNeededSignal.then(() => ({ tag: "otp_needed" as const })),
+      ]);
+
+      if (winner.tag === "otp_needed") {
+        yield { type: "otp_required", bank: bankType, otpHandler: otpBridge };
+        // Wait for scrape to complete — scraper is blocked on otpBridge.promise
+        // which will either resolve (OTP submitted) or reject (timeout)
+        result = await scrapePromise;
+      } else {
+        // No OTP was needed — cancel the dangling timeout
+        otpBridge.cancel();
+        result = winner.result;
+      }
+    } catch (err) {
       otpBridge.cancel();
-      result = winner.result;
+      if (err instanceof Error && err.message === "OTP_TIMEOUT") {
+        yield { type: "otp_timeout", bank: bankType };
+      } else {
+        yield {
+          type: "bank_error",
+          bank: bankType,
+          error: err instanceof Error ? err.message : String(err),
+          hasScreenshot: false,
+        };
+      }
+      return;
     }
-  } catch (err) {
-    otpBridge.cancel();
-    if (err instanceof Error && err.message === "OTP_TIMEOUT") {
-      yield { type: "otp_timeout", bank: bankType };
-    } else {
+
+    if (!result.success) {
+      const hasScreenshot =
+        result.errorType === ScraperErrorTypes.Timeout || (result.errorMessage?.length ?? 0) > 0;
       yield {
         type: "bank_error",
         bank: bankType,
-        error: err instanceof Error ? err.message : String(err),
-        hasScreenshot: false,
+        error: result.errorType ?? "UNKNOWN",
+        hasScreenshot,
       };
+      return;
     }
-    return;
+
+    yield { type: "progress", bank: bankType, status: "scraping" };
+
+    const isCreditCard = bankType === "max" || bankType === "visaCal";
+    const accounts = (result.accounts ?? []).map((acc) => {
+      const mapped = mapAccount(acc);
+      // For credit cards, use futureDebits amount as balance if account balance is absent
+      if (isCreditCard && !mapped.balance && result.futureDebits?.length) {
+        const debit =
+          result.futureDebits.find((fd) => fd.bankAccountNumber === acc.accountNumber) ??
+          result.futureDebits[0];
+        mapped.balance = debit.amount;
+      }
+      return mapped;
+    });
+
+    yield { type: "bank_complete", bank: bankType, accounts };
+  } finally {
+    await browser.close().catch(() => {});
   }
-
-  if (!result.success) {
-    const hasScreenshot =
-      result.errorType === ScraperErrorTypes.Timeout || (result.errorMessage?.length ?? 0) > 0;
-    yield {
-      type: "bank_error",
-      bank: bankType,
-      error: result.errorType ?? "UNKNOWN",
-      hasScreenshot,
-    };
-    return;
-  }
-
-  yield { type: "progress", bank: bankType, status: "scraping" };
-
-  const accounts = (result.accounts ?? []).map(mapAccount);
-
-  yield { type: "bank_complete", bank: bankType, accounts };
 }
