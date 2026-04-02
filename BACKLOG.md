@@ -18,6 +18,14 @@ Pagination currently estimates total pages based on whether a full page was retu
 
 Build a logger wrapper that redacts sensitive patterns (passwords, OTP codes, national IDs, account numbers) from stdout. Currently no evidence of actual leaks (zero console.log in scraper/sync code), but a defensive utility would prevent accidental leaks from future development or third-party library output.
 
+### Multi-Card Credit Balance Mapping
+
+The `futureDebits` fallback uses `[0]` when `bankAccountNumber` doesn't match. For users with multiple credit cards under one provider (e.g., two Max cards), this could show the wrong balance on the second card. Fix: require exact `bankAccountNumber` match and show null if unmatched.
+
+### Pin Puppeteer-Core Version
+
+The scraper uses `as unknown as ScraperBrowser` to bridge between our `puppeteer-core` v24 and the library's bundled version. Pin to the same version as `israeli-bank-scrapers-core` to eliminate the type cast.
+
 ### Retroactive Category Rules
 
 When a new categorization rule is created, it only applies to future imports. There should be a "Apply to existing transactions" action that re-runs the rule against all uncategorized (or all) transactions in the database, assigning the category where the pattern matches. This is critical for initial data triage after the first sync.
