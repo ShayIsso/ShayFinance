@@ -7,7 +7,13 @@ export type SyncEvent =
   | { type: "otp_required"; bank: string; otpHandler: OtpHandler }
   | { type: "otp_timeout"; bank: string }
   | { type: "bank_complete"; bank: string; accounts: ScrapedAccount[] }
-  | { type: "bank_error"; bank: string; error: string; hasScreenshot: boolean }
+  | {
+      type: "bank_error";
+      bank: string;
+      error: string;
+      hasScreenshot: boolean;
+      screenshotFilename?: string;
+    }
   | { type: "sync_complete"; summary: { total: number; byBank: Record<string, number> } };
 
 export type ScrapedTransaction = {

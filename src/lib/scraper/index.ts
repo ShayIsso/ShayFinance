@@ -120,6 +120,7 @@ export async function* syncBank(
         bank: bankType,
         error: result.errorType ?? "UNKNOWN",
         hasScreenshot,
+        screenshotFilename: hasScreenshot ? screenshotPath.split("/").pop() : undefined,
       };
       return;
     }
