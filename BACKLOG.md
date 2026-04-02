@@ -6,6 +6,10 @@ Deferred features captured during the architecture planning session (2026-03-31)
 
 ## Tech Debt & UI Refinements
 
+### API Route Auth: Return 401 JSON Instead of Redirect
+
+The auth middleware redirects all unauthenticated requests to `/login` (HTML). For `/api/*` routes, this returns a 200 with the login page HTML instead of a proper `401 JSON` response. The middleware should check `pathname.startsWith("/api/")` and return `NextResponse.json({ error: "Unauthorized" }, { status: 401 })` instead of redirecting.
+
 ### Server-Side Uncategorized Filter
 
 The transactions table filters "uncategorized" client-side after fetching. This should be a server-side query filter (`WHERE category_id IS NULL`) to work correctly with pagination.
