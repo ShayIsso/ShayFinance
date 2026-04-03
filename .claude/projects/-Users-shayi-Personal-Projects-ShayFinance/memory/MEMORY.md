@@ -3,3 +3,4 @@
 - [CI Gotchas](feedback_ci_gotchas.md) — Use npm install (not ci) in CI; never use .npmrc os/cpu flags; Vitest is test runner
 - [MCP Sequential Thinking](feedback_mcp_sequential_thinking.md) — Use sequential-thinking MCP for complex reasoning tasks
 - [Format Before Commit](feedback_format_before_commit.md) — Always run `npm run format` before committing; CI rejects unformatted code
+- [Phase 2 Handover](handover_phase2.md) — Full context for next session: MVP done, start with backlog review + Phase 2 PRD
