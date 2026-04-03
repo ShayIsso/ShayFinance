@@ -4,6 +4,54 @@ Deferred features captured during the architecture planning session (2026-03-31)
 
 ---
 
+## Phase 2 Critical — Accounting Engine
+
+### Credit Card Double-Counting ("The Paradox")
+
+When a credit card settles on "יום החיוב" (settlement day), the bank imports both the individual transactions (coffee, groceries, etc.) AND the total monthly charge as a single deduction from the bank account. Both get imported, doubling expense totals. The system must detect settlement-day lump charges and auto-classify them as `ignore` or `transfer` to prevent double-counting. This likely requires matching the sum of a card's monthly transactions against the bank's settlement charge.
+
+### Transfer Reconciliation (Bit/Internal)
+
+Bit payments and inter-account transfers create duplicate entries across banks. E.g., a Bit transfer shows as an expense in the sender's bank and income in the receiver's — but it's the same money. Need detection logic to identify and neutralize these pairs based on matching amounts, dates, and counterparty patterns. Critical for accurate net income/expense calculations.
+
+### Net Analytics Accuracy
+
+The analytics engine must produce clean numbers without noise from double-counting, internal transfers, or settlement charges. This is the core value proposition — wrong numbers undermine trust. May require a reconciliation pass that runs after import, flagging suspicious pairs for user confirmation.
+
+---
+
+## Phase 2 Critical — Code Quality
+
+### React Hook Form + Zod Integration
+
+Replace all manual `useState` forms (credentials, categories, rules) with React Hook Form integrated with Zod schemas. Current forms are verbose and fragile. The Zod schemas already exist server-side — reuse them client-side.
+
+### Server Actions & Mutations
+
+Reduce `useState` + `useEffect` + `fetch` patterns. Move to Next.js Server Actions for mutations (create, update, delete) and use `revalidatePath` for data synchronization. Keeps data fetching on the server where possible.
+
+### Architecture Deep Pass
+
+Run `improve-codebase-architecture` skill to refine directory structure, identify shallow modules, and ensure Phase 2 features build on solid foundations.
+
+---
+
+## Phase 2 Critical — UI/UX
+
+### Visual Identity Overhaul
+
+Replace the B&W MVP aesthetic with a sophisticated, modern design. Introduce a professional green palette (subtle emerald tones, not garish). Refine spacing, typography hierarchy, and card designs. The app should look like a premium personal finance tool, not a template.
+
+### Chart Readability
+
+Fix overlapping text and categories in the spending-by-category chart. Implement proper label truncation, interactive tooltips, and responsive sizing. Consider horizontal bar chart with scroll for many categories.
+
+### UX Polish
+
+Every interaction must feel fluid: loading skeletons (not "טוען..."), smooth transitions, proper empty states, confirmation feedback on actions. Mobile experience must be refined, not just "responsive."
+
+---
+
 ## Tech Debt & UI Refinements
 
 ### API Route Auth: Return 401 JSON Instead of Redirect
