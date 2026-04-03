@@ -127,16 +127,7 @@ export async function* syncBank(
 
     yield { type: "progress", bank: bankType, status: "scraping" };
 
-    const isCreditCard = bankType === "max" || bankType === "visaCal";
     const accounts = (result.accounts ?? []).map((acc) => {
-      const mapped = mapAccount(acc);
-      // For credit cards, use futureDebits amount as balance if account balance is absent
-      if (isCreditCard && !mapped.balance && result.futureDebits?.length) {
-        const debit =
-          result.futureDebits.find((fd) => fd.bankAccountNumber === acc.accountNumber) ??
-          result.futureDebits[0];
-        mapped.balance = debit.amount;
-      }
       return mapped;
     });
 
