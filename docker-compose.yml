@@ -26,6 +26,9 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://shayfinance:shayfinance_dev@db:5432/shayfinance
+      - CHROMIUM_PATH=/usr/bin/chromium
     env_file:
       - .env
     profiles:
