@@ -153,6 +153,8 @@ These are non-negotiable:
 - Use **`/tdd`** skill for any module with computation logic (analytics, rules, transactions).
 - Worker prompts must include: exact file paths, schema context, acceptance criteria, gotchas section.
 - Every PR must be reviewed by the orchestrator before merge.
+- After agent work, optionally run **/simplify** on touched modules if complexity warrants it — skip if changes are minor.
+- Use the **obsidian** skills to sync relevant project files, decisions, and module graphs to Obsidian when tracking cross-module changes or phase milestones.
 
 ### Worker Protocol
 
