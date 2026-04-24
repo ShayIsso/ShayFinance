@@ -4,3 +4,4 @@
 - [MCP Sequential Thinking](feedback_mcp_sequential_thinking.md) — Use sequential-thinking MCP for complex reasoning tasks
 - [Format Before Commit](feedback_format_before_commit.md) — Always run `npm run format` before committing; CI rejects unformatted code
 - [Phase 2 Handover](handover_phase2.md) — Full context for next session: MVP done, start with backlog review + Phase 2 PRD
+- [Obsidian Vault Mirror](reference_obsidian_vault.md) — Vault at ~/Documents/Gini_learning/Self_projects/ShayFinance; repo docs/ mirrored to vault with frontmatter + wikilinks
