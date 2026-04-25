@@ -3,7 +3,6 @@ import type { ScraperScrapingResult } from "israeli-bank-scrapers-core/lib/scrap
 import { ScraperErrorTypes } from "israeli-bank-scrapers-core/lib/scrapers/errors";
 import { mkdirSync } from "fs";
 import puppeteer from "puppeteer-core";
-import type { Browser as ScraperBrowser } from "israeli-bank-scrapers-core/node_modules/puppeteer-core/lib/types";
 import { createOtpBridge } from "./otp";
 import { mapAccount } from "./mapper";
 import type { SyncEvent, OtpHandler } from "./types";
@@ -68,7 +67,7 @@ export async function* syncBank(
       combineInstallments: false,
       showBrowser: false,
       storeFailureScreenShotPath: screenshotPath,
-      browser: browser as unknown as ScraperBrowser,
+      browser: browser,
       skipCloseBrowser: true,
     });
 
@@ -127,9 +126,7 @@ export async function* syncBank(
 
     yield { type: "progress", bank: bankType, status: "scraping" };
 
-    const accounts = (result.accounts ?? []).map((acc) => {
-      return mapped;
-    });
+    const accounts = (result.accounts ?? []).map((acc) => mapAccount(acc));
 
     yield { type: "bank_complete", bank: bankType, accounts };
   } finally {
