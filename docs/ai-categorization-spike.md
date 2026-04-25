@@ -1,6 +1,6 @@
 # AI Categorization Spike — Hebrew Transaction Benchmark
 
-**Status:** Phase A complete — awaiting fixture from Shay to run Phase B  
+**Status:** Phase A.5 complete — awaiting Shay's label corrections on fixture-draft.json to run Phase B  
 **Branch:** `feature/ai-categorization-spike`  
 **Issue:** Closes #42  
 **Go threshold:** ≥70% overall accuracy
@@ -67,16 +67,32 @@ Examples were pulled from `transactions` joined to `categories` where `category_
 
 Categories with no existing DB examples (ביטוח, חיסכון, רכב ודלק partially) received plausible illustrative examples to keep the prompt balanced.
 
+### Train/test split and contamination
+
+Both the few-shot (train) examples and the test fixture are sourced from the same dev DB — but they are **disjoint by design**:
+
+- **Few-shot (train):** `WHERE category_id IS NOT NULL` — transactions the rule engine or user already categorized.
+- **Test fixture:** `WHERE category_id IS NULL` — transactions the rule engine could not match, i.e., the exact population that AI categorization will see in production.
+
+This split is methodologically clean. The same merchant name can appear in both sets (multiple visits to the same store), but that reflects real production behavior: a new uncategorized transaction arriving from a known merchant is exactly the use case AI categorization is intended to solve.
+
+Note: Some descriptions in the fixture are exact string matches of few-shot examples. These are flagged with `"few_shot_overlap": true` in `fixture-draft.json`. Shay may choose to exclude them from the final 50 for a harder test, or keep them to measure whether models reliably follow their own examples (also useful). Both are valid benchmark choices.
+
 ### Test fixture
 
-50 transaction descriptions labeled by Shay with ground-truth categories. Requirements:
+80 candidate transactions were queried (`SELECT ... WHERE category_id IS NULL ORDER BY RANDOM() LIMIT 80`) and pre-labeled by the worker as a first-pass draft. Shay reviews `scripts/spike/fixture-draft.json`, corrects any wrong labels, and saves the final 50 as `scripts/spike/fixture.json`.
 
-- Descriptions only (no amounts, dates, account numbers)
-- PII-free (merchant names only; personal names anonymized)
-- Representative distribution across categories
-- Sourced from real production transactions that were manually categorized
+Privacy: one description (`עאיישה`) was anonymized to `[NAME]` because the token is both a common Hebrew given name and a restaurant name — ambiguous under policy. Shay should decide whether to restore or keep the anonymized form. All other descriptions are merchant/business names.
 
-Fixture file: `scripts/spike/fixture.json` (embedded below in section 6).
+Fixture file (final): `scripts/spike/fixture.json` (embedded below in section 6).
+
+### Worker first-pass baseline
+
+The worker's pre-labeling of the 80-item pool using the same category list and few-shot examples (reasoned from context, not Ollama) serves as a human-readable baseline. Once Shay's corrections are applied, the worker first-pass accuracy is:
+
+**`correct_before_shay_corrections / 80`** — to be computed after Shay's review.
+
+This provides a useful upper bound: if the worker (reading the prompt carefully) achieves X%, a model that matches X% is doing comparably well.
 
 ### Evaluation
 
@@ -86,7 +102,7 @@ Each description is scored as correct if the model's prediction exactly matches 
 
 ## 2. Results
 
-> **STATUS: BLOCKED — waiting for Shay to provide fixture.json**
+> **STATUS: BLOCKED — waiting for Shay to correct `fixture-draft.json` labels and save as `fixture.json`**
 
 To run the benchmark once fixture.json is ready:
 
@@ -145,15 +161,42 @@ npx tsx scripts/spike/benchmark.ts
 
 ## 6. Test Fixture
 
-> `scripts/spike/fixture.json` — to be embedded or linked here once Shay provides the 50 labeled transactions.
+**Draft (80 items, worker-labeled):** `scripts/spike/fixture-draft.json`  
+**Final (50 items, Shay-corrected):** `scripts/spike/fixture.json` — to be produced by Shay from the draft.
 
-**Required format:**
+### Category coverage in the 80-item draft
+
+The uncategorized pool is naturally skewed toward expenses (the rule engine already handles income, savings, and investments well). Categories with zero representation in the draft:
+
+- **ביטוח, חינוך, חיסכון, השקעות, מנויים, משכורת, הכנסה אחרת** — not present in the uncategorized pool.
+
+This reflects real production: the rule engine reliably catches these. The AI will mainly operate on the expense categories, which are well-represented in the fixture.
+
+### Anonymization applied
+
+| Original | Replaced with | Reason                                                    |
+| -------- | ------------- | --------------------------------------------------------- |
+| `עאיישה` | `[NAME]`      | Ambiguous: both a common given name and a restaurant name |
+
+### Draft field reference
+
+Each item in `fixture-draft.json` includes:
+
+- `id` — sequential integer (1–80)
+- `source_id` — UUID from the `transactions` table (for DB lookup)
+- `description` — Hebrew text, PII-free
+- `ground_truth` — worker's first-pass category label
+- `confidence` — `"high"` / `"medium"` / `"low"`
+- `few_shot_overlap` — `true` if the exact string appears in the benchmark prompt's few-shot examples
+- `notes` — reasoning and caveats
+
+### Format for fixture.json
 
 ```json
 [
-  { "id": 1, "description": "תיאור עסקה", "ground_truth": "מסעדות וקפה" },
+  { "id": 1, "description": "מינימרקט מנצור ובניו", "ground_truth": "מזון וסופר" },
   ...
 ]
 ```
 
-**Category names must match exactly** (Hebrew, from the 19-category list in section 1).
+Extra fields (`source_id`, `notes`, etc.) are ignored by the benchmark script — Shay can strip or retain them.
