@@ -93,6 +93,7 @@ export function DashboardPanel({ categories: _categories }: { categories: Catego
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- removed during Phase 2 Server Actions migration (see PRD issue #35)
     setLoading(true);
     fetchDashboardData(year, month)
       .then(setData)

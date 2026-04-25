@@ -75,6 +75,7 @@ export function CredentialsSection() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- removed during Phase 2 Server Actions migration (see PRD issue #35)
     fetchCredentials();
   }, []);
 
