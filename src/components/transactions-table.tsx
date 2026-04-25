@@ -253,6 +253,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
 
   React.useEffect(() => {
     const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- removed during Phase 2 Server Actions migration (see PRD issue #35)
     setLoading(true);
 
     const params = new URLSearchParams();
