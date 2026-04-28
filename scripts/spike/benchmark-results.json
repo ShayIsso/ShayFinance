@@ -1,0 +1,1016 @@
+[
+  {
+    "model": "qwen2.5-coder:7b",
+    "predictions": [
+      {
+        "id": 1,
+        "description": "מינימרקט מנצור ובניו",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 2,
+        "description": "משיכת שיק:0080000031",
+        "ground_truth": "דיור ושכירות",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 4,
+        "description": "נכסי אריאל-חניון מרכז ויצמן בע\"מ",
+        "ground_truth": "רכב ודלק",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 5,
+        "description": "יוחננוף תל אביב",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 6,
+        "description": "מש' מכספומט דיסקונט 19/10",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 7,
+        "description": "שטראוס מים בע\"מ הו\"ק",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 8,
+        "description": "דן חברה לתחבורה ציבורית",
+        "ground_truth": "תחבורה ציבורית",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 9,
+        "description": "מינימרקט כהן",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 10,
+        "description": "טיטי מרקט",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 11,
+        "description": "גוגיס גריל בר",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 12,
+        "description": "BIT",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 13,
+        "description": "אנגוס פתח תקווה",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 15,
+        "description": "WWW.ALIEXPRESS.COM",
+        "ground_truth": "קניות וביגוד",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 18,
+        "description": "בוסתן המושבה פתח",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 19,
+        "description": "חברת פרטנר תקשורת בע\"מ (ה",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 20,
+        "description": "HOT MOBILE הו\"ק",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 21,
+        "description": "משיכת מזומן ללא כרטיס",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 22,
+        "description": "פרי טיוי",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 23,
+        "description": "דוגז שווק בע\"מ",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 24,
+        "description": "מש' מכספומט דיסקונט 07/04",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 25,
+        "description": "מכבי חיפה אצטדיון",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 27,
+        "description": "שרותי בריאות כללית הו\"ק",
+        "ground_truth": "בריאות",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 28,
+        "description": "עמלת סמס חבילה בסיסית",
+        "ground_truth": "תשלום כ. אשראי",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 31,
+        "description": "ALIEXPRESS.COM",
+        "ground_truth": "קניות וביגוד",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 32,
+        "description": "רב קו אונליין",
+        "ground_truth": "תחבורה ציבורית",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 33,
+        "description": "המאפיה אלנבי",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 36,
+        "description": "אלונית פארק חדרה",
+        "ground_truth": "רכב ודלק",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 37,
+        "description": "מש' מכספומט דיסקונט 05/10",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 38,
+        "description": "[NAME]",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 39,
+        "description": "שווארמה שאולי חדרה",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 41,
+        "description": "אוטו פתח תקווה",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 42,
+        "description": "קפה מאפיה לוגסי",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 43,
+        "description": "סופר-פארם צמרת תל אביב 175",
+        "ground_truth": "בריאות",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 44,
+        "description": "סופר פארם רמת אביב 8",
+        "ground_truth": "בריאות",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 46,
+        "description": "דמי כרטיס בנק דיסקונט",
+        "ground_truth": "תשלום כ. אשראי",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 47,
+        "description": "ניצת הדובדבן יכין סנטר",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 49,
+        "description": "חניון רכב די.סי בע\"מ",
+        "ground_truth": "רכב ודלק",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 52,
+        "description": "יס פלאנט ראשל\"צ- מזנון",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 53,
+        "description": "אפליקצית ילו",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 55,
+        "description": "מש' מכספומט דיסקונט 28/05",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 56,
+        "description": "מ.תחבורה רב- פס",
+        "ground_truth": "תחבורה ציבורית",
+        "predicted": "תחבורה ציבורית",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 61,
+        "description": "כ.א.ל חיוב",
+        "ground_truth": "העברה פנימית",
+        "predicted": "העברה פנימית",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 63,
+        "description": "שולה בחצר",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 65,
+        "description": "PAYBOX",
+        "ground_truth": "מתנות ואירועים",
+        "predicted": "מתנות ואירועים",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 68,
+        "description": "משיכת שיק:0080000038",
+        "ground_truth": "דיור ושכירות",
+        "predicted": "דיור ושכירות",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 70,
+        "description": "אוטו פתח תקווה",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "רכב ודלק",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 72,
+        "description": "עירית פ\"ת - אגף הגבייה",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "חיסכון",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 74,
+        "description": "פרשמרקט מרום נווה",
+        "ground_truth": "מזון וסופר",
+        "predicted": "קניות וביגוד",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 78,
+        "description": "CARREFOUR קניון גבעתיים-יציל",
+        "ground_truth": "מזון וסופר",
+        "predicted": "מזון וסופר",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 80,
+        "description": "עמלת פעולה בערוץ ישיר-מט\"י, לפי 8 יח'",
+        "ground_truth": "תשלום כ. אשראי",
+        "predicted": "תשלום כ. אשראי",
+        "correct": true,
+        "few_shot_overlap": false
+      }
+    ],
+    "overall_accuracy": 0.26,
+    "overlap_accuracy": 0.2857142857142857,
+    "non_overlap_accuracy": 0.25,
+    "per_category": {
+      "מזון וסופר": {
+        "correct": 1,
+        "total": 9,
+        "accuracy": 0.1111111111111111
+      },
+      "דיור ושכירות": {
+        "correct": 1,
+        "total": 2,
+        "accuracy": 0.5
+      },
+      "רכב ודלק": {
+        "correct": 0,
+        "total": 3,
+        "accuracy": 0
+      },
+      "אחר": {
+        "correct": 7,
+        "total": 7,
+        "accuracy": 1
+      },
+      "חשבונות ושירותים": {
+        "correct": 0,
+        "total": 6,
+        "accuracy": 0
+      },
+      "תחבורה ציבורית": {
+        "correct": 1,
+        "total": 3,
+        "accuracy": 0.3333333333333333
+      },
+      "מסעדות וקפה": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0
+      },
+      "קניות וביגוד": {
+        "correct": 0,
+        "total": 2,
+        "accuracy": 0
+      },
+      "בילויים ופנאי": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0
+      },
+      "בריאות": {
+        "correct": 0,
+        "total": 3,
+        "accuracy": 0
+      },
+      "תשלום כ. אשראי": {
+        "correct": 1,
+        "total": 3,
+        "accuracy": 0.3333333333333333
+      },
+      "העברה פנימית": {
+        "correct": 1,
+        "total": 1,
+        "accuracy": 1
+      },
+      "מתנות ואירועים": {
+        "correct": 1,
+        "total": 1,
+        "accuracy": 1
+      }
+    },
+    "failures": [
+      {
+        "description": "מינימרקט מנצור ובניו",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "analysis": ""
+      },
+      {
+        "description": "משיכת שיק:0080000031",
+        "ground_truth": "דיור ושכירות",
+        "predicted": "אחר",
+        "analysis": ""
+      },
+      {
+        "description": "נכסי אריאל-חניון מרכז ויצמן בע\"מ",
+        "ground_truth": "רכב ודלק",
+        "predicted": "אחר",
+        "analysis": ""
+      },
+      {
+        "description": "יוחננוף תל אביב",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "analysis": ""
+      },
+      {
+        "description": "שטראוס מים בע\"מ הו\"ק",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "אחר",
+        "analysis": ""
+      }
+    ]
+  },
+  {
+    "model": "llama3.1:8b",
+    "predictions": [
+      {
+        "id": 1,
+        "description": "מינימרקט מנצור ובניו",
+        "ground_truth": "מזון וסופר",
+        "predicted": "מזון וסופר",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 2,
+        "description": "משיכת שיק:0080000031",
+        "ground_truth": "דיור ושכירות",
+        "predicted": "דיור ושכירות",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 4,
+        "description": "נכסי אריאל-חניון מרכז ויצמן בע\"מ",
+        "ground_truth": "רכב ודלק",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 5,
+        "description": "יוחננוף תל אביב",
+        "ground_truth": "מזון וסופר",
+        "predicted": "מזון וסופר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 6,
+        "description": "מש' מכספומט דיסקונט 19/10",
+        "ground_truth": "אחר",
+        "predicted": "העברה פנימית",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 7,
+        "description": "שטראוס מים בע\"מ הו\"ק",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "חשבונות ושירותים",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 8,
+        "description": "דן חברה לתחבורה ציבורית",
+        "ground_truth": "תחבורה ציבורית",
+        "predicted": "תחבורה ציבורית",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 9,
+        "description": "מינימרקט כהן",
+        "ground_truth": "מזון וסופר",
+        "predicted": "מזון וסופר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 10,
+        "description": "טיטי מרקט",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 11,
+        "description": "גוגיס גריל בר",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "מזון וסופר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 12,
+        "description": "BIT",
+        "ground_truth": "אחר",
+        "predicted": "בילויים ופנאי",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 13,
+        "description": "אנגוס פתח תקווה",
+        "ground_truth": "מזון וסופר",
+        "predicted": "מזון וסופר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 15,
+        "description": "WWW.ALIEXPRESS.COM",
+        "ground_truth": "קניות וביגוד",
+        "predicted": "העברה פנימית",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 18,
+        "description": "בוסתן המושבה פתח",
+        "ground_truth": "מזון וסופר",
+        "predicted": "חשבונות ושירותים",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 19,
+        "description": "חברת פרטנר תקשורת בע\"מ (ה",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "תחבורה ציבורית",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 20,
+        "description": "HOT MOBILE הו\"ק",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "מזון וסופר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 21,
+        "description": "משיכת מזומן ללא כרטיס",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 22,
+        "description": "פרי טיוי",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 23,
+        "description": "דוגז שווק בע\"מ",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 24,
+        "description": "מש' מכספומט דיסקונט 07/04",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 25,
+        "description": "מכבי חיפה אצטדיון",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "בריאות",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 27,
+        "description": "שרותי בריאות כללית הו\"ק",
+        "ground_truth": "בריאות",
+        "predicted": "בריאות",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 28,
+        "description": "עמלת סמס חבילה בסיסית",
+        "ground_truth": "תשלום כ. אשראי",
+        "predicted": "תשלום כ. אשראי",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 31,
+        "description": "ALIEXPRESS.COM",
+        "ground_truth": "קניות וביגוד",
+        "predicted": "קניות וביגוד",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 32,
+        "description": "רב קו אונליין",
+        "ground_truth": "תחבורה ציבורית",
+        "predicted": "תחבורה ציבורית",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 33,
+        "description": "המאפיה אלנבי",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "מזון וסופר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 36,
+        "description": "אלונית פארק חדרה",
+        "ground_truth": "רכב ודלק",
+        "predicted": "מזון וסופר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 37,
+        "description": "מש' מכספומט דיסקונט 05/10",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 38,
+        "description": "[NAME]",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "בילויים ופנאי",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 39,
+        "description": "שווארמה שאולי חדרה",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "מזון וסופר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 41,
+        "description": "אוטו פתח תקווה",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "מזון וסופר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 42,
+        "description": "קפה מאפיה לוגסי",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "תשלום כ. אשראי",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 43,
+        "description": "סופר-פארם צמרת תל אביב 175",
+        "ground_truth": "בריאות",
+        "predicted": "מזון וסופר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 44,
+        "description": "סופר פארם רמת אביב 8",
+        "ground_truth": "בריאות",
+        "predicted": "בילויים ופנאי",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 46,
+        "description": "דמי כרטיס בנק דיסקונט",
+        "ground_truth": "תשלום כ. אשראי",
+        "predicted": "רכב ודלק",
+        "correct": false,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 47,
+        "description": "ניצת הדובדבן יכין סנטר",
+        "ground_truth": "מזון וסופר",
+        "predicted": "מזון וסופר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 49,
+        "description": "חניון רכב די.סי בע\"מ",
+        "ground_truth": "רכב ודלק",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 52,
+        "description": "יס פלאנט ראשל\"צ- מזנון",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 53,
+        "description": "אפליקצית ילו",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 55,
+        "description": "מש' מכספומט דיסקונט 28/05",
+        "ground_truth": "אחר",
+        "predicted": "אחר",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 56,
+        "description": "מ.תחבורה רב- פס",
+        "ground_truth": "תחבורה ציבורית",
+        "predicted": "תחבורה ציבורית",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 61,
+        "description": "כ.א.ל חיוב",
+        "ground_truth": "העברה פנימית",
+        "predicted": "העברה פנימית",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 63,
+        "description": "שולה בחצר",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "אחר",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 65,
+        "description": "PAYBOX",
+        "ground_truth": "מתנות ואירועים",
+        "predicted": "מתנות ואירועים",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 68,
+        "description": "משיכת שיק:0080000038",
+        "ground_truth": "דיור ושכירות",
+        "predicted": "דיור ושכירות",
+        "correct": true,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 70,
+        "description": "אוטו פתח תקווה",
+        "ground_truth": "בילויים ופנאי",
+        "predicted": "רכב ודלק",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 72,
+        "description": "עירית פ\"ת - אגף הגבייה",
+        "ground_truth": "חשבונות ושירותים",
+        "predicted": "הכנסה אחרת",
+        "correct": false,
+        "few_shot_overlap": false
+      },
+      {
+        "id": 74,
+        "description": "פרשמרקט מרום נווה",
+        "ground_truth": "מזון וסופר",
+        "predicted": "מזון וסופר",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 78,
+        "description": "CARREFOUR קניון גבעתיים-יציל",
+        "ground_truth": "מזון וסופר",
+        "predicted": "מזון וסופר",
+        "correct": true,
+        "few_shot_overlap": true
+      },
+      {
+        "id": 80,
+        "description": "עמלת פעולה בערוץ ישיר-מט\"י, לפי 8 יח'",
+        "ground_truth": "תשלום כ. אשראי",
+        "predicted": "תשלום כ. אשראי",
+        "correct": true,
+        "few_shot_overlap": false
+      }
+    ],
+    "overall_accuracy": 0.5,
+    "overlap_accuracy": 0.5714285714285714,
+    "non_overlap_accuracy": 0.4722222222222222,
+    "per_category": {
+      "מזון וסופר": {
+        "correct": 7,
+        "total": 9,
+        "accuracy": 0.7777777777777778
+      },
+      "דיור ושכירות": {
+        "correct": 2,
+        "total": 2,
+        "accuracy": 1
+      },
+      "רכב ודלק": {
+        "correct": 0,
+        "total": 3,
+        "accuracy": 0
+      },
+      "אחר": {
+        "correct": 5,
+        "total": 7,
+        "accuracy": 0.7142857142857143
+      },
+      "חשבונות ושירותים": {
+        "correct": 1,
+        "total": 6,
+        "accuracy": 0.16666666666666666
+      },
+      "תחבורה ציבורית": {
+        "correct": 3,
+        "total": 3,
+        "accuracy": 1
+      },
+      "מסעדות וקפה": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0
+      },
+      "קניות וביגוד": {
+        "correct": 1,
+        "total": 2,
+        "accuracy": 0.5
+      },
+      "בילויים ופנאי": {
+        "correct": 1,
+        "total": 5,
+        "accuracy": 0.2
+      },
+      "בריאות": {
+        "correct": 1,
+        "total": 3,
+        "accuracy": 0.3333333333333333
+      },
+      "תשלום כ. אשראי": {
+        "correct": 2,
+        "total": 3,
+        "accuracy": 0.6666666666666666
+      },
+      "העברה פנימית": {
+        "correct": 1,
+        "total": 1,
+        "accuracy": 1
+      },
+      "מתנות ואירועים": {
+        "correct": 1,
+        "total": 1,
+        "accuracy": 1
+      }
+    },
+    "failures": [
+      {
+        "description": "נכסי אריאל-חניון מרכז ויצמן בע\"מ",
+        "ground_truth": "רכב ודלק",
+        "predicted": "אחר",
+        "analysis": ""
+      },
+      {
+        "description": "מש' מכספומט דיסקונט 19/10",
+        "ground_truth": "אחר",
+        "predicted": "העברה פנימית",
+        "analysis": ""
+      },
+      {
+        "description": "טיטי מרקט",
+        "ground_truth": "מזון וסופר",
+        "predicted": "אחר",
+        "analysis": ""
+      },
+      {
+        "description": "גוגיס גריל בר",
+        "ground_truth": "מסעדות וקפה",
+        "predicted": "מזון וסופר",
+        "analysis": ""
+      },
+      {
+        "description": "BIT",
+        "ground_truth": "אחר",
+        "predicted": "בילויים ופנאי",
+        "analysis": ""
+      }
+    ]
+  }
+]

@@ -1,0 +1,452 @@
+[
+  {
+    "id": 1,
+    "source_id": "2f914ba2-3bb3-4140-88fe-d9ed2bdb4f5a",
+    "description": "מינימרקט מנצור ובניו",
+    "ground_truth": "מזון וסופר",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 2,
+    "source_id": "f0054836-4baa-44bb-a7e5-10c028e4a5e1",
+    "description": "משיכת שיק:0080000031",
+    "ground_truth": "דיור ושכירות",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Cheque withdrawal — same pattern as few-shot examples 0080000028/0080000040 but different number"
+  },
+  {
+    "id": 4,
+    "source_id": "1067cf87-409f-42ed-82f7-4312dca9f5dc",
+    "description": "נכסי אריאל-חניון מרכז ויצמן בע\"מ",
+    "ground_truth": "רכב ודלק",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Ariel Assets parking lot — Weizmann Center"
+  },
+  {
+    "id": 5,
+    "source_id": "bbbaa364-19e1-41fd-ae2d-1a0976270db1",
+    "description": "יוחננוף תל אביב",
+    "ground_truth": "מזון וסופר",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Yohananof — major Israeli supermarket chain"
+  },
+  {
+    "id": 6,
+    "source_id": "a9f58f8d-0bcc-42da-b9ed-97226f8a06ce",
+    "description": "מש' מכספומט דיסקונט 19/10",
+    "ground_truth": "אחר",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "ATM cash withdrawal — uncategorizable without knowing purpose; near-match pattern in few-shot under אחר"
+  },
+  {
+    "id": 7,
+    "source_id": "85ce1b7c-cb19-4b90-84ca-1dd8db7bd465",
+    "description": "שטראוס מים בע\"מ הו\"ק",
+    "ground_truth": "חשבונות ושירותים",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 8,
+    "source_id": "6532216b-5dbc-4a2c-87e1-caadf13a94fd",
+    "description": "דן חברה לתחבורה ציבורית",
+    "ground_truth": "תחבורה ציבורית",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "Dan public bus company — public transit fits רכב ודלק broadly; could argue חשבונות ושירותים"
+  },
+  {
+    "id": 9,
+    "source_id": "ae3ae857-7015-43d3-8ed3-a539c1413caf",
+    "description": "מינימרקט כהן",
+    "ground_truth": "מזון וסופר",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Mini market"
+  },
+  {
+    "id": 10,
+    "source_id": "75f1902f-7918-41db-a626-ac688f8ec392",
+    "description": "טיטי מרקט",
+    "ground_truth": "מזון וסופר",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 11,
+    "source_id": "715dd7c9-333d-49ce-8d11-813dbb85183d",
+    "description": "גוגיס גריל בר",
+    "ground_truth": "מסעדות וקפה",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Gogis Grill Bar — restaurant"
+  },
+  {
+    "id": 12,
+    "source_id": "41593b3e-a021-432c-b032-662e5716dd85",
+    "description": "BIT",
+    "ground_truth": "אחר",
+    "confidence": "medium",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot under אחר; standalone BIT is ambiguous (could be any payee)"
+  },
+  {
+    "id": 13,
+    "source_id": "2e240171-d423-4e5c-b968-2a7fb4b9a59b",
+    "description": "אנגוס פתח תקווה",
+    "ground_truth": "מזון וסופר",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Angus steakhouse/burger — restaurant in Petah Tikva"
+  },
+  {
+    "id": 15,
+    "source_id": "45a110c2-0b13-45ae-beb5-ebadeabac7cc",
+    "description": "WWW.ALIEXPRESS.COM",
+    "ground_truth": "קניות וביגוד",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "AliExpress — online shopping"
+  },
+  {
+    "id": 18,
+    "source_id": "95ee6a8a-8347-4487-b132-31066b091c2b",
+    "description": "בוסתן המושבה פתח",
+    "ground_truth": "מזון וסופר",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "Bustan HaMoshava — produce market; בוסתן גבעתיים categorized as מזון וסופר in DB"
+  },
+  {
+    "id": 19,
+    "source_id": "7ce9c346-8cc0-4c02-90d3-9f51aeda42d5",
+    "description": "חברת פרטנר תקשורת בע\"מ (ה",
+    "ground_truth": "חשבונות ושירותים",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 20,
+    "source_id": "e2ca1faa-6fcb-441a-9db4-c1d62715b1bd",
+    "description": "HOT MOBILE הו\"ק",
+    "ground_truth": "חשבונות ושירותים",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 21,
+    "source_id": "7a73362a-013b-4a18-97a6-8b4572f95e43",
+    "description": "משיכת מזומן ללא כרטיס",
+    "ground_truth": "אחר",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "Cardless cash withdrawal — purpose unknown"
+  },
+  {
+    "id": 22,
+    "source_id": "21ed801e-dc16-4c13-a481-b06b484f81b5",
+    "description": "פרי טיוי",
+    "ground_truth": "חשבונות ושירותים",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Fri-TV streaming service; appears as חשבונות ושירותים in categorized rows"
+  },
+  {
+    "id": 23,
+    "source_id": "4de90282-2bb8-4346-844e-39549857d538",
+    "description": "דוגז שווק בע\"מ",
+    "ground_truth": "חשבונות ושירותים",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 24,
+    "source_id": "15ad30a2-6bad-49f5-95b9-b8064b8eca89",
+    "description": "מש' מכספומט דיסקונט 07/04",
+    "ground_truth": "אחר",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "ATM withdrawal — near-match pattern to few-shot אחר but different date"
+  },
+  {
+    "id": 25,
+    "source_id": "b9774b6d-8ed5-4ba2-a016-e331506bc01e",
+    "description": "מכבי חיפה אצטדיון",
+    "ground_truth": "בילויים ופנאי",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Maccabi Haifa football stadium — sports event ticket"
+  },
+  {
+    "id": 27,
+    "source_id": "1c9bd520-5f58-4149-93bc-7777ded1435a",
+    "description": "שרותי בריאות כללית הו\"ק",
+    "ground_truth": "בריאות",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 28,
+    "source_id": "9a9e5cb6-7724-4917-a8ef-6136c888826b",
+    "description": "עמלת סמס חבילה בסיסית",
+    "ground_truth": "תשלום כ. אשראי",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 31,
+    "source_id": "9b84415c-e4c4-47ba-9763-7e556d0fa4ab",
+    "description": "ALIEXPRESS.COM",
+    "ground_truth": "קניות וביגוד",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "AliExpress — different capitalisation from id 15"
+  },
+  {
+    "id": 32,
+    "source_id": "db2af17f-9247-46de-ba3c-c94b71ee321f",
+    "description": "רב קו אונליין",
+    "ground_truth": "תחבורה ציבורית",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Rav-Kav public transit card online top-up"
+  },
+  {
+    "id": 33,
+    "source_id": "6b39755a-8b5b-4838-8f09-e75f92e081a7",
+    "description": "המאפיה אלנבי",
+    "ground_truth": "מסעדות וקפה",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "HaMafiya Allenby — bakery/cafe on Allenby St"
+  },
+  {
+    "id": 36,
+    "source_id": "280b1e9f-dc59-4abe-880a-0c5a034dc863",
+    "description": "אלונית פארק חדרה",
+    "ground_truth": "רכב ודלק",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Alonit gas station convenience store — Hadera park"
+  },
+  {
+    "id": 37,
+    "source_id": "c1da7166-3b0d-49ae-b5a5-c37425fda61c",
+    "description": "מש' מכספומט דיסקונט 05/10",
+    "ground_truth": "אחר",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "ATM withdrawal — near-match pattern to few-shot אחר"
+  },
+  {
+    "id": 38,
+    "source_id": "a2e41465-b68c-4d9a-96f0-9c12576e67e9",
+    "description": "[NAME]",
+    "ground_truth": "בילויים ופנאי",
+    "confidence": "low",
+    "few_shot_overlap": false,
+    "notes": "Anonymized: original was a single Hebrew word (עאיישה) that is both a common given name and an existing restaurant name — anonymized per policy. Category unknown after anonymization; Shay should correct both anonymization decision and category."
+  },
+  {
+    "id": 39,
+    "source_id": "94b93e25-2d98-4125-bd25-7dd833d428d0",
+    "description": "שווארמה שאולי חדרה",
+    "ground_truth": "מסעדות וקפה",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Shawarma Shauli — shawarma restaurant in Hadera; 'שאולי' is part of restaurant trade name, not anonymized"
+  },
+  {
+    "id": 41,
+    "source_id": "5252c522-c8be-41c3-bd39-7cd524a22060",
+    "description": "אוטו פתח תקווה",
+    "ground_truth": "בילויים ופנאי",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "אוטו בר — bar in Petah Tikva (Shay correction)"
+  },
+  {
+    "id": 42,
+    "source_id": "dc1238ef-7916-4740-8fd9-868cf67db1fc",
+    "description": "קפה מאפיה לוגסי",
+    "ground_truth": "מסעדות וקפה",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Cafe Mafiya Lugasi — cafe/bakery"
+  },
+  {
+    "id": 43,
+    "source_id": "12434e9c-2fc9-4042-8ac7-4d12263045d1",
+    "description": "סופר-פארם צמרת תל אביב 175",
+    "ground_truth": "בריאות",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "SuperPharm pharmacy chain; note user once categorized a SuperPharm branch as אחר — could be cosmetics/non-health purchase"
+  },
+  {
+    "id": 44,
+    "source_id": "9c0c15cc-d3df-4ed7-9b10-1e0dad5b5dd2",
+    "description": "סופר פארם רמת אביב 8",
+    "ground_truth": "בריאות",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "SuperPharm pharmacy chain — Ramat Aviv branch"
+  },
+  {
+    "id": 46,
+    "source_id": "48459cf8-f9b0-4970-9b55-0a7ab062b68e",
+    "description": "דמי כרטיס בנק דיסקונט",
+    "ground_truth": "תשלום כ. אשראי",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 47,
+    "source_id": "dd56b13f-c303-4c5d-bc21-e5bc057cded5",
+    "description": "ניצת הדובדבן יכין סנטר",
+    "ground_truth": "מזון וסופר",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Nitzat Haduvdevan (Cherry Blossom) — flower shop at Yachin Center; flowers = gifts/events"
+  },
+  {
+    "id": 49,
+    "source_id": "8a026a0d-bf55-43df-9021-588fb37c1a5a",
+    "description": "חניון רכב די.סי בע\"מ",
+    "ground_truth": "רכב ודלק",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "DC Parking Ltd"
+  },
+  {
+    "id": 52,
+    "source_id": "8cd34f05-22a5-41e8-9fa0-eea47a01d80d",
+    "description": "יס פלאנט ראשל\"צ- מזנון",
+    "ground_truth": "בילויים ופנאי",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Yes Planet cinema cafeteria — Rishon LeZion; cinema = entertainment"
+  },
+  {
+    "id": 53,
+    "source_id": "71bf3b6c-5df6-41d6-be26-2a11a1696106",
+    "description": "אפליקצית ילו",
+    "ground_truth": "אחר",
+    "confidence": "low",
+    "few_shot_overlap": false,
+    "notes": "Yelo app — uncertain: could be mobility/transit, food delivery, or local deals; categorized as אחר pending Shay's clarification"
+  },
+  {
+    "id": 55,
+    "source_id": "b45277ca-6405-42f5-96e6-580cb799fe44",
+    "description": "מש' מכספומט דיסקונט 28/05",
+    "ground_truth": "אחר",
+    "confidence": "medium",
+    "few_shot_overlap": false,
+    "notes": "ATM withdrawal — near-match pattern to few-shot אחר"
+  },
+  {
+    "id": 56,
+    "source_id": "7fe43b6c-dfb5-420f-a4ae-79226e276680",
+    "description": "מ.תחבורה רב- פס",
+    "ground_truth": "תחבורה ציבורית",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Rav-Pas (metropolitan transport authority) multi-line pass"
+  },
+  {
+    "id": 61,
+    "source_id": "dc420084-f53b-4037-86de-80710c614b83",
+    "description": "כ.א.ל חיוב",
+    "ground_truth": "העברה פנימית",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples — CAL credit card charge"
+  },
+  {
+    "id": 63,
+    "source_id": "21fed4af-e47a-44a5-b943-607e45685b61",
+    "description": "שולה בחצר",
+    "ground_truth": "מסעדות וקפה",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Shula BaHatzer — well-known Israeli restaurant chain; 'שולה' is part of trade name, not anonymized"
+  },
+  {
+    "id": 65,
+    "source_id": "7a5e2695-8f10-435e-afe1-29d19af0ab59",
+    "description": "PAYBOX",
+    "ground_truth": "מתנות ואירועים",
+    "confidence": "medium",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot under מתנות ואירועים; PayBox is a general payment platform — actual category depends on payee context"
+  },
+  {
+    "id": 68,
+    "source_id": "317b6fe6-8367-4b69-bc5d-d27d9ebd51f9",
+    "description": "משיכת שיק:0080000038",
+    "ground_truth": "דיור ושכירות",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Cheque withdrawal — same pattern as few-shot 0080000028/0080000040"
+  },
+  {
+    "id": 70,
+    "source_id": "c49a0426-b0db-4568-84cc-fc2933131e70",
+    "description": "אוטו פתח תקווה",
+    "ground_truth": "בילויים ופנאי",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Duplicate of id 41"
+  },
+  {
+    "id": 72,
+    "source_id": "02838d1b-7ef9-45ed-8a58-133973169513",
+    "description": "עירית פ\"ת - אגף הגבייה",
+    "ground_truth": "חשבונות ושירותים",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Petah Tikva municipality collection department — municipal taxes (arnona) or water"
+  },
+  {
+    "id": 74,
+    "source_id": "3ac5e179-46ea-4a25-a68b-6955daa908fd",
+    "description": "פרשמרקט מרום נווה",
+    "ground_truth": "מזון וסופר",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 78,
+    "source_id": "fc022eef-4267-4c25-9de8-4e640e832a3c",
+    "description": "CARREFOUR קניון גבעתיים-יציל",
+    "ground_truth": "מזון וסופר",
+    "confidence": "high",
+    "few_shot_overlap": true,
+    "notes": "Exact string in few-shot examples"
+  },
+  {
+    "id": 80,
+    "source_id": "040a67a7-8e06-4cf5-bd75-45c3e8bad73a",
+    "description": "עמלת פעולה בערוץ ישיר-מט\"י, לפי 8 יח'",
+    "ground_truth": "תשלום כ. אשראי",
+    "confidence": "high",
+    "few_shot_overlap": false,
+    "notes": "Bank transaction fee — direct channel fee; few-shot has 'לפי 10 יח'' (different unit count, same pattern)"
+  }
+]

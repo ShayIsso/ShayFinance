@@ -19,6 +19,7 @@ interface FixtureItem {
   id: number;
   description: string;
   ground_truth: string;
+  few_shot_overlap?: boolean;
 }
 
 interface ModelResult {
@@ -31,6 +32,8 @@ interface ModelResult {
     correct: boolean;
   }>;
   overall_accuracy: number;
+  overlap_accuracy: number;
+  non_overlap_accuracy: number;
   per_category: Record<string, { correct: number; total: number; accuracy: number }>;
   failures: Array<{
     description: string;
@@ -80,6 +83,11 @@ const CATEGORIES = [
     name: "תשלום כ. אשראי",
     type: "ignore",
     hint: "Bank fees, card fees, tax withholding, bank commissions",
+  },
+  {
+    name: "תחבורה ציבורית",
+    type: "expense",
+    hint: "Public transport — buses (Dan, Egged, Metropoline), Rav-Kav card top-ups, metro, train",
   },
   { name: "אחר", type: "expense", hint: "Other unclassifiable expenses" },
 ];
@@ -163,6 +171,13 @@ const FEW_SHOT_EXAMPLES: Record<string, string[]> = {
     "עמלת סמס חבילה בסיסית",
     "תשלום מס במקור",
     "החזר דיסקונט עמלות וריביות",
+  ],
+  "תחבורה ציבורית": [
+    "דן חברה לתחבורה ציבורית",
+    "רב קו אונליין",
+    "מ.תחבורה רב- פס",
+    "אגד",
+    "מטרופולין",
   ],
   אחר: ["BIT", "מש' מכספומט דיסקונט 24/03", "סופר-פארם נמל-תל אביב 205"],
 };
@@ -297,12 +312,10 @@ async function benchmarkModel(model: string, fixture: FixtureItem[]): Promise<Mo
         ground_truth: item.ground_truth,
         predicted,
         correct,
-      });
-      const status = correct ? "✓" : "✗";
+        few_shot_overlap: item.few_shot_overlap ?? false,
+      } as (typeof predictions)[0] & { few_shot_overlap: boolean });
       if (!correct) {
-        console.log(
-          `    ${status} "${item.description}" → ${predicted} (expected: ${item.ground_truth})`,
-        );
+        console.log(`    ✗ "${item.description}" → ${predicted} (expected: ${item.ground_truth})`);
       }
     }
   }
@@ -310,6 +323,26 @@ async function benchmarkModel(model: string, fixture: FixtureItem[]): Promise<Mo
   // Compute overall accuracy
   const correct = predictions.filter((p) => p.correct).length;
   const overall_accuracy = correct / predictions.length;
+
+  // Overlap vs non-overlap accuracy
+  const overlapPreds = (
+    predictions as Array<(typeof predictions)[0] & { few_shot_overlap: boolean }>
+  ).filter((p) => p.few_shot_overlap);
+  const nonOverlapPreds = (
+    predictions as Array<(typeof predictions)[0] & { few_shot_overlap: boolean }>
+  ).filter((p) => !p.few_shot_overlap);
+  const overlap_accuracy =
+    overlapPreds.length > 0
+      ? overlapPreds.filter((p) => p.correct).length / overlapPreds.length
+      : 0;
+  const non_overlap_accuracy =
+    nonOverlapPreds.length > 0
+      ? nonOverlapPreds.filter((p) => p.correct).length / nonOverlapPreds.length
+      : 0;
+
+  console.log(
+    `  Overlap (n=${overlapPreds.length}): ${(overlap_accuracy * 100).toFixed(1)}%  |  Non-overlap (n=${nonOverlapPreds.length}): ${(non_overlap_accuracy * 100).toFixed(1)}%`,
+  );
 
   // Per-category accuracy
   const per_category: ModelResult["per_category"] = {};
@@ -342,6 +375,8 @@ async function benchmarkModel(model: string, fixture: FixtureItem[]): Promise<Mo
     model,
     predictions,
     overall_accuracy,
+    overlap_accuracy,
+    non_overlap_accuracy,
     per_category,
     failures,
   };
