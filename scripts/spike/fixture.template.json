@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "description": "REPLACE WITH REAL TRANSACTION DESCRIPTION",
+    "ground_truth": "REPLACE WITH EXACT HEBREW CATEGORY NAME"
+  },
+  {
+    "id": 2,
+    "description": "...",
+    "ground_truth": "..."
+  }
+]
