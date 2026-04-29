@@ -6,11 +6,11 @@ Automatically fetches transactions from **Bank Discount**, **Max**, and **Cal**,
 
 ## Status & Roadmap
 
-| Phase             | Status          | Scope                                                                                                                                                 |
-| ----------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MVP (Phase 1)** | **Shipped**     | End-to-end import, dedup, rule-based categorization, savings analytics, encrypted credentials, Docker                                                 |
-| **Phase 2**       | **In progress** | Accounting Engine (reconciliation) · automation (scheduler, AI-assisted categorization) · production craft (RHF+Zod, Server Actions, visual overhaul) |
-| **Phase 3+**      | Planned         | Dark mode · budgeting & goals · reports & export · push notifications                                                                                 |
+| Phase             | Status          | Scope                                                                                                                                                   |
+| ----------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MVP (Phase 1)** | **Shipped**     | End-to-end import, dedup, rule-based categorization, savings analytics, encrypted credentials, Docker                                                   |
+| **Phase 2**       | **In progress** | Accounting Engine (reconciliation) · automation (scheduler, retroactive rule application) · production craft (RHF+Zod, Server Actions, visual overhaul) |
+| **Phase 3+**      | Planned         | Dark mode · budgeting & goals · reports & export · push notifications                                                                                   |
 
 - **Phase 1 PRD:** [docs/PRD-v1.md](docs/PRD-v1.md) — [closed GitHub issue #1](https://github.com/ShayIsso/ShayFinance/issues/1)
 - **Phase 2 PRD:** [docs/PRD-phase2.md](docs/PRD-phase2.md) — [GitHub issue #35](https://github.com/ShayIsso/ShayFinance/issues/35) (approved, 23 slice issues open)
@@ -22,7 +22,7 @@ Automatically fetches transactions from **Bank Discount**, **Max**, and **Cal**,
 - Automated bank scraping via `israeli-bank-scrapers-core`
 - Real-time sync progress with inline OTP/MFA support
 - AES-256-GCM encrypted credential storage
-- Rule-based auto-categorization (19 pre-seeded Hebrew categories)
+- Rule-based auto-categorization (20 pre-seeded Hebrew categories)
 - Savings dashboard: Net Savings, Savings Rate (%), investment tracking
 - Transaction management with filters, search, and inline editing
 - Installment and multi-currency support
@@ -34,7 +34,7 @@ Automatically fetches transactions from **Bank Discount**, **Max**, and **Cal**,
 - **Reconciliation Engine** — detects credit-card settlement double-counting, debit/Bit 1:1 mirrors, and inter-account transfers; confidence-threshold split (auto-apply ≥0.95, inbox 0.70–0.95)
 - **Retroactive rule application** — apply new categorization rules to historical transactions
 - **Daily background sync** — node-cron scheduler with attempt-and-skip OTP handling
-- **AI-assisted categorization** — local Ollama sidecar (gated on accuracy spike); zero third-party API traffic
+- ~~**AI-assisted categorization**~~ — **deferred to Phase 3** per Spike #42 NO-GO. Both candidate Ollama models scored below the 70% threshold (qwen2.5-coder:7b 26%, llama3.1:8b 50%, human baseline 84%). See [docs/ai-categorization-spike.md](docs/ai-categorization-spike.md). Retroactive rule application carries the workflow instead.
 - **Recurring expense detection** — subscription tracking with anomaly alerts (price changes, missed payments, newly detected)
 - **Production craft** — React Hook Form + Zod, Next.js Server Actions, Monarch + Linear visual identity
 - **Tech debt cleanup** — API 401 JSON, pagination totals, log sanitization, credit card balance fix
@@ -114,7 +114,7 @@ src/
     reconciliation/        # Credit card / Bit / inter-account de-duplication engine
     recurring-detection/   # Subscription and fixed-expense pattern detection
     scheduler/             # Daily automated sync (node-cron, attempt-and-skip OTP)
-    ai-categorization/     # Local Ollama sidecar for AI-assisted rule fallback
+    # ai-categorization/   # NOT BUILT — deferred to Phase 3 per Spike #42 NO-GO
     logging/               # Redacted logger wrapper (zero-leak guardrail)
   components/       # Shared UI components
   db/               # Drizzle schema + migrations
@@ -181,7 +181,7 @@ Project-local skills under `.claude/skills/` encode repeatable workflows:
 - Zero-leak policy: no credentials or sensitive data in logs
 - Failure screenshots auto-delete after 24 hours
 - Local/Docker deployment only — no cloud exposure
-- Privacy-first AI: local Ollama only (Phase 2); no transaction data to third-party APIs
+- Privacy-first: no transaction data to third-party APIs (Claude/OpenAI excluded by policy). AI categorization deferred to Phase 3 — when revisited, local Ollama or local Hebrew embeddings only.
 
 ## License
 
