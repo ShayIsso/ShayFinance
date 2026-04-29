@@ -44,7 +44,8 @@ Each issue body contains its own "Blocked by" field and worker-prompt structure.
 - **UI reference:** Monarch Money + Linear. emerald-600 accent over zinc/stone neutrals. `tabular-nums` on every financial amount. Assistant font. 150ms fades. Lucide 1.5px. Light theme only (dark mode = Phase 3).
 - **Untouched modules:** scraper (except minimal futureDebits fix), crypto, auth, credentials, screenshots.
 - **Scheduler:** daily 07:00, node-cron env-gated (`SCHEDULER_ENABLED`), attempt-and-skip OTP, `sync_runs` history table, no push layer.
-- **AI categorization:** Spike first (≥70% accuracy threshold on 50 real Hebrew transactions). If fail, defer to Phase 3 and lean on retroactive rules.
+- **AI categorization (deferred to Phase 3):** Spike (#42) ran 2026-04-25, both candidate models below 70% threshold (qwen2.5-coder:7b at 26%, llama3.1:8b at 50%, human baseline 84%). Issue #52 (AI2) closed as wontfix. Retroactive rule application (#37 RR1) carries the load instead. See `docs/ai-categorization-spike.md` for full report. Phase 3 retesting should consider larger/newer models, Hebrew embeddings (AlephBERT/HeBERT), Ollama JSON mode, chain-of-thought, confidence thresholding.
+- **Category count:** 20 default Hebrew categories (was 19; `תחבורה ציבורית` added 2026-04-25 during the spike). Always verify against `src/db/seed.ts` for the canonical list.
 - **Recurring detection:** fuzzy merchant + ±10% amount + 3-month minimum; monthly/quarterly/annual cadences; persisted `recurring_expenses`; no cancellation helpers in Phase 2.
 - **Shared primitive:** `src/lib/transaction-matching/` is consumed by BOTH reconciliation and recurring detection. Extract first (issue #43), do not duplicate.
 - **Test split:** TDD for pure computation (transaction-matching, reconciliation detectors, recurring detection, logging/redaction, retroactive rules); no unit tests for AI adapter, scheduler, 401 middleware, pagination totals.
