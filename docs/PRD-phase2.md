@@ -1,10 +1,11 @@
 # ShayFinance — Phase 2 PRD
 
-**Status:** Approved
-**Date:** 2026-04-24
+**Status:** Approved · In progress
+**Date:** 2026-04-24 (last updated 2026-04-25)
 **Parent:** [PRD-v1](./PRD-v1.md)
 **Kickoff Context:** [phase2-kickoff.md](./phase2-kickoff.md)
 **GitHub Issue:** [#35](https://github.com/ShayIsso/ShayFinance/issues/35)
+**AI Spike Outcome:** [NO-GO — see report](./ai-categorization-spike.md)
 
 ---
 
@@ -30,7 +31,7 @@ Phase 2 is three outcomes compounded into one release:
 
 1. **Trustworthy numbers** via a generic Reconciliation Engine that detects three patterns of same-money duplication (credit-card settlement, debit/Bit 1:1 mirror, inter-account transfer) and neutralizes the artifact side of each pair. Uses a confidence-threshold split: high-confidence matches auto-apply with a subtle toast; medium-confidence matches queue into an inbox-zero `/reconciliation` page with bulk-approve. The analytics module doesn't change — reconciliation works by flipping artifact transactions into seeded "transfer" categories that analytics already excludes.
 
-2. **Automation** via a daily scheduled sync, local AI-assisted categorization (gated on an accuracy Spike — fallback is pure retroactive rules), and recurring-expense detection with anomaly alerts for price changes, missed payments, and newly-detected subscriptions.
+2. **Automation** via a daily scheduled sync, retroactive rule application, and recurring-expense detection with anomaly alerts for price changes, missed payments, and newly-detected subscriptions. (Local AI-assisted categorization was scoped here as Spike-gated; the Spike returned NO-GO 2026-04-25 — feature is now deferred to Phase 3. See `docs/ai-categorization-spike.md`.)
 
 3. **Production-grade craft** across the codebase (React Hook Form + Zod, Server Actions, shared `transaction-matching` primitives, a scoped architecture pass producing an `ARCHITECTURE.md` blueprint) and the UI (Monarch + Linear reference aesthetic, emerald accent over neutral zinc/stone, `tabular-nums` on all financial amounts, chart redesign, polished loading/empty states).
 
@@ -190,7 +191,7 @@ Phase 2 explicitly does NOT compromise the privacy-first posture of Phase 1. No 
 
 - **Tier 1 (confirmed):** Accounting Engine, Code Quality, UI/UX.
 - **Tier 2 (folded in):** retroactive rules, API 401, server-side uncategorized filter, API pagination totals, log sanitization, multi-card balance, puppeteer pinning, credit card balance fix.
-- **Tier 3 (in Phase 2):** Background Scheduler, AI Categorization (Spike-gated), Recurring Expense Detection.
+- **Tier 3 (in Phase 2):** Background Scheduler, ~~AI Categorization (Spike-gated)~~ → **deferred to Phase 3 per Spike NO-GO**, Recurring Expense Detection.
 - **Tier 4 (deferred to Phase 3):** dark mode, budgeting & goals, reports & export, push notifications.
 
 ### New deep modules
@@ -198,7 +199,7 @@ Phase 2 explicitly does NOT compromise the privacy-first posture of Phase 1. No 
 - **`transaction-matching`** — pure functional primitives (`extractMerchant`, `amountsMatch`, `datesWithin`, `sumMatches`) used by both reconciliation and recurring-detection. Interface is stable; swappable extraction strategies hidden behind it.
 - **`reconciliation`** — detects three patterns behind one interface: P1 credit-card settlement (bank lump matches sum of card transactions in cycle), P2 1:1 mirror (single card transaction matches single bank deduction), P3 inter-account transfer (outflow in one bank matches inflow in another). Computes confidence per pattern. Applies results via hybrid storage: new reconciliation columns on `transactions` + category-flip to seeded transfer categories.
 - **`recurring-detection`** — detects patterns requiring ≥3 occurrences of fuzzy-matched merchant + amount within ±10% + supported cadence (monthly/quarterly/annual). Computes `next_expected_date`. Detects anomalies: price change >15%, missed (±7 days past expected), newly-detected (3rd occurrence).
-- **`ai-categorization`** (Spike-gated) — thin adapter over a local Ollama HTTP endpoint. Exposes `classify(descriptions[])` returning ranked suggestions per input. Batched 20-50 per call. Silently disables if Ollama unreachable.
+- ~~**`ai-categorization`** (Spike-gated)~~ — **NOT BUILT.** Spike (#42) returned NO-GO; module deferred to Phase 3.
 - **`scheduler`** — thin node-cron orchestrator gated by env flag; invokes existing sync pipeline with an OTP-skip handler that yields `{ type: 'otp_skipped', bank }` instead of blocking.
 - **`logging`** — `createRedactedLogger()` wraps console with regex-based redaction of password fields, OTP codes, national IDs (9-digit numbers in credential context), and account numbers.
 
@@ -262,13 +263,21 @@ Phase 2 explicitly does NOT compromise the privacy-first posture of Phase 1. No 
 - **Empty states:** polished on every page (transactions, rules, credentials, subscriptions, reconciliation).
 - **Mobile:** first-class — tables collapse to cards, tap targets sized appropriately.
 
-### AI Categorization contract
+### AI Categorization contract — RESOLVED: NO-GO
 
-- **Spike first:** benchmark qwen2.5-coder:7b and/or llama3.1:8b on 50 real uncategorized Hebrew transactions. Record accuracy vs. ground truth categories.
-- **Go threshold:** ≥70% accuracy.
-- **If go:** ship local Ollama sidecar via docker-compose; `src/lib/ai-categorization/classify()` calls `http://ollama:11434/api/generate`; prompt primes with current category list + 5-10 rule-matched examples per category; batched 20-50 per request; fallback-after-rules flow; user-confirm triggers "Create rule?" suggestion; silently disabled if sidecar unreachable.
-- **If no-go:** AI deferred to Phase 3; retroactive rule application (Tier 2) carries the load.
-- **Strict privacy:** no third-party APIs under any circumstances.
+Spike (#42) ran 2026-04-25 against 50 PII-free Hebrew descriptions:
+
+| Model              | Accuracy | Verdict |
+| ------------------ | -------- | ------- |
+| `qwen2.5-coder:7b` | 26%      | NO-GO   |
+| `llama3.1:8b`      | 50%      | NO-GO   |
+| Worker baseline    | 84%      | —       |
+
+Both candidate models fall below the 70% go threshold. AI categorization is **deferred to Phase 3**. Issue #52 (AI2 implementation) closed as `wontfix`. Retroactive rule application (#37 RR1) carries the workflow.
+
+Phase 3 considerations if revisited: larger/newer models (llama3.2, Mistral-7B), Hebrew-specific embeddings (AlephBERT, HeBERT), Ollama JSON mode with schema, chain-of-thought, confidence thresholding. Full report: `docs/ai-categorization-spike.md`.
+
+**Privacy invariant remains in force:** no third-party APIs (Claude/OpenAI/etc.) under any circumstances. When Phase 3 retests, local-only stays the rule.
 
 ### Background Scheduler contract
 
@@ -340,7 +349,7 @@ The following are explicitly deferred to Phase 3 or beyond:
 - **Budgeting & goals.** Per-category monthly budgets, savings targets, visual progress. Requires accurate numbers from Phase 2 first.
 - **Reports & export.** CSV/PDF generation, year-over-year comparisons.
 - **Push notifications.** No notification layer; the Dashboard "Last sync" strip surfaces all scheduler output.
-- **AI categorization via third-party APIs.** Claude API and similar are excluded by privacy policy. Local Ollama only.
+- **AI categorization (any).** Deferred to Phase 3 per Spike #42 NO-GO. Third-party APIs (Claude/OpenAI/etc.) are excluded permanently by privacy policy; when Phase 3 revisits, local-only stays the rule.
 - **Cancellation helpers in recurring detection.** No provider deep-links, no unsubscribe flows. Pure detection + visibility only.
 - **Multi-user support.** Single-user app remains.
 - **Additional banks.** Only Discount, Max, Cal in Phase 2.
@@ -376,7 +385,7 @@ Suggested implementation order (enforced via `prd-to-issues` slicing):
 6. **UI foundation** (design tokens, palette, typography, motion, skeletons, empty states, chart redesign). Locks the visual language early so later features ship consistent.
 7. **Code quality migration** (RHF+Zod, Server Actions). Tactical within feature PRs; retrofit legacy forms at the end if time permits.
 8. **Background scheduler** (sync_runs table + node-cron + Dashboard strip).
-9. **AI categorization Spike.** Decide go/no-go before implementing.
+9. ~~**AI categorization Spike.**~~ **DONE 2026-04-25 — NO-GO.** AI categorization deferred to Phase 3 (#52 closed as wontfix). Retroactive rule application (#37) is the substitute workflow.
 10. **Recurring expense detection** (detection + `/subscriptions` page + badge + dashboard card + anomalies).
 
 ### Privacy and security guardrails (unchanged from Phase 1)
