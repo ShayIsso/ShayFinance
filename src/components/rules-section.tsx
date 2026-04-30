@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { previewRetroactiveApplyAction, applyRetroactivelyAction } from "@/app/actions/rules";
 
 type MatchType = "contains" | "starts_with" | "exact" | "regex";
 
@@ -68,8 +69,12 @@ export function RulesSection({
   const [rules, setRules] = React.useState<CategoryRule[]>(initialRules);
   const [formOpen, setFormOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [applyOpen, setApplyOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<CategoryRule | null>(null);
   const [deleting, setDeleting] = React.useState<CategoryRule | null>(null);
+  const [applying, setApplying] = React.useState<CategoryRule | null>(null);
+  const [applyPreviewCount, setApplyPreviewCount] = React.useState<number | null>(null);
+  const [applySuccess, setApplySuccess] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<FormState>(() => emptyForm(categories));
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -101,6 +106,20 @@ export function RulesSection({
   function openDelete(rule: CategoryRule) {
     setDeleting(rule);
     setDeleteOpen(true);
+  }
+
+  async function openApply(rule: CategoryRule) {
+    setApplying(rule);
+    setApplyPreviewCount(null);
+    setApplySuccess(null);
+    setError(null);
+    setApplyOpen(true);
+    const result = await previewRetroactiveApplyAction({ ruleId: rule.id });
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setApplyPreviewCount(result.count ?? 0);
+    }
   }
 
   async function handleSave() {
@@ -156,6 +175,27 @@ export function RulesSection({
     }
   }
 
+  async function handleApply() {
+    if (!applying) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await applyRetroactivelyAction({ ruleId: applying.id });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      const count = result.applied ?? 0;
+      setApplySuccess(
+        count === 0 ? "לא נמצאו עסקאות לא מסווגות התואמות לכלל זה" : `סווגו ${count} עסקאות בהצלחה`,
+      );
+    } catch {
+      setError("שגיאה בעת יישום הכלל");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -188,6 +228,9 @@ export function RulesSection({
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => openApply(rule)}>
+                יישום על קיימים
+              </Button>
               <Button variant="outline" size="sm" onClick={() => openEdit(rule)}>
                 ערוך
               </Button>
@@ -311,6 +354,61 @@ export function RulesSection({
             >
               {saving ? "מוחק..." : "מחק"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Apply to existing dialog */}
+      <Dialog
+        open={applyOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setApplyOpen(false);
+            setApplying(null);
+            setApplyPreviewCount(null);
+            setApplySuccess(null);
+            setError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>יישום על עסקאות קיימות</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            {applySuccess ? (
+              <p className="text-sm text-emerald-700">{applySuccess}</p>
+            ) : applyPreviewCount === null && !error ? (
+              <p className="text-muted-foreground text-sm">בודק עסקאות...</p>
+            ) : error ? (
+              <p className="text-sm text-red-600">{error}</p>
+            ) : (
+              <p className="text-sm">
+                {applyPreviewCount === 0
+                  ? "לא נמצאו עסקאות לא מסווגות התואמות לכלל זה."
+                  : `כלל זה יסווג ${applyPreviewCount} עסקאות לא מסווגות. להמשיך?`}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setApplyOpen(false);
+                setApplying(null);
+                setApplyPreviewCount(null);
+                setApplySuccess(null);
+                setError(null);
+              }}
+              disabled={saving}
+            >
+              {applySuccess ? "סגור" : "ביטול"}
+            </Button>
+            {!applySuccess && applyPreviewCount !== null && applyPreviewCount > 0 && (
+              <Button onClick={handleApply} disabled={saving}>
+                {saving ? "מסווג..." : "יישם"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
