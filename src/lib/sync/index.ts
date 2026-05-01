@@ -2,6 +2,11 @@ import { listCredentials, getDecryptedCredentials } from "@/lib/credentials";
 import { syncBank, getSyncStartDate } from "@/lib/scraper";
 import type { SyncEvent, OtpHandler } from "@/lib/scraper";
 import { importScrapedAccounts } from "@/lib/transactions";
+import {
+  detectP1Settlement,
+  applyReconciliation,
+  drizzleReconciliationStore,
+} from "@/lib/reconciliation";
 import { db } from "@/db";
 import { bankAccounts } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -16,7 +21,9 @@ export function submitOtp(code: string): boolean {
   return true;
 }
 
-export type SyncSummaryEvent = SyncEvent & { _credentialId?: string };
+export type SyncSummaryEvent =
+  | (SyncEvent & { _credentialId?: string })
+  | { type: "reconciliation_summary"; autoApplied: number; queued: number };
 
 export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
   const credentials = await listCredentials();
@@ -62,6 +69,11 @@ export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
 
     activeOtpHandler = null;
   }
+
+  const recentTxns = await drizzleReconciliationStore.getRecentTransactions(90);
+  const candidates = detectP1Settlement(recentTxns);
+  const { autoApplied, queued } = await applyReconciliation(candidates, drizzleReconciliationStore);
+  yield { type: "reconciliation_summary", autoApplied, queued };
 
   yield { type: "sync_complete", summary: { total, byBank: importedByBank } };
 }
