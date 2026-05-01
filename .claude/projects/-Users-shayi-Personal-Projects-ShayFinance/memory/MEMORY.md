@@ -6,3 +6,4 @@
 - [Phase 2 Handover](handover_phase2.md) — Full context for next session: MVP done, start with backlog review + Phase 2 PRD
 - [Obsidian Vault Mirror](reference_obsidian_vault.md) — Vault at ~/Documents/Gini_learning/Self_projects/ShayFinance; repo docs/ mirrored to vault with frontmatter + wikilinks
 - [Phase 2 Invariants & Orchestrator Mode](project_phase2_invariants.md) — Locked architecture decisions, doc re-read order, Lead Architect operating modes, dynamic-state pointers
+- [Worktree Setup Hygiene](feedback_worktree_setup.md) — Always copy .env into new worktrees; never `docker compose up` from a worktree (creates duplicate empty DB)

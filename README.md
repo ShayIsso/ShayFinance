@@ -22,7 +22,7 @@ Automatically fetches transactions from **Bank Discount**, **Max**, and **Cal**,
 - Automated bank scraping via `israeli-bank-scrapers-core`
 - Real-time sync progress with inline OTP/MFA support
 - AES-256-GCM encrypted credential storage
-- Rule-based auto-categorization (20 pre-seeded Hebrew categories)
+- Rule-based auto-categorization (21 pre-seeded Hebrew categories)
 - Savings dashboard: Net Savings, Savings Rate (%), investment tracking
 - Transaction management with filters, search, and inline editing
 - Installment and multi-currency support

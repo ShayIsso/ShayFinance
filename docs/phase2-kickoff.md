@@ -74,7 +74,7 @@ src/
 ├── db/
 │   ├── schema.ts                 # Drizzle ORM (5 tables, 6 enums)
 │   ├── index.ts                  # DB connection
-│   └── seed.ts                   # 20 default Hebrew categories
+│   └── seed.ts                   # 21 default Hebrew categories
 └── components/
     ├── dashboard-panel.tsx        # Charts + savings summary
     ├── transactions-table.tsx     # Filters + inline edit + bulk ops
@@ -93,7 +93,7 @@ bank_credentials (encrypted)
   └── bank_accounts (unique: credentialId + accountNumber)
        └── transactions (dedup: externalId + bankAccountId)
 
-categories (20 defaults, 5 types)
+categories (21 defaults, 5 types)
   └── category_rules (priority-ordered matching)
 ```
 
