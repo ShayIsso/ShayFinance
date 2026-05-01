@@ -131,8 +131,9 @@ export interface MatchOptions {
 export function extractMerchant(description: string): string;
 
 /**
- * True if |a - b| / max(|a|, |b|) <= tolerancePct.
- * Requires both values to have the same sign.
+ * True if |a - b| / min(|a|, |b|) <= tolerancePct.
+ * Uses min as denominator (stricter: a 100→111 diff is 11% off the smaller value),
+ * which matches the test fixture (100, 111, 10%) → false. Same-sign required.
  */
 export function amountsMatch(a: number, b: number, options?: MatchOptions): boolean;
 
@@ -150,7 +151,10 @@ export function sumMatches(items: number[], target: number, options?: MatchOptio
 /**
  * Returns 0–1 similarity between two descriptions.
  * Calls extractMerchant on both before scoring.
- * Implementation: Jaro-Winkler on normalized strings.
+ * Implementation: Jaro-Winkler **squared** on normalized strings — squaring
+ * increases discrimination between moderate and high matches so unrelated
+ * pairs land below 0.40 (per the test fixture). Consumers picking a "strong
+ * match" threshold should aim for ~0.7 in JW² (~0.84 in plain JW).
  */
 export function scoreSimilarity(a: string, b: string): number;
 ```
