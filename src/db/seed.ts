@@ -94,6 +94,13 @@ const defaultCategories = [
     isDefault: true,
   },
   {
+    name: "הסדרה - כרטיס אשראי",
+    type: "transfer" as const,
+    icon: "CreditCard",
+    color: "#71717a",
+    isDefault: true,
+  },
+  {
     name: "תשלום כ. אשראי",
     type: "ignore" as const,
     icon: "CreditCard",
