@@ -28,6 +28,13 @@ const defaultCategories = [
   },
   { name: "רכב ודלק", type: "expense" as const, icon: "Car", color: "#6366f1", isDefault: true },
   {
+    name: "תחבורה ציבורית",
+    type: "expense" as const,
+    icon: "Bus",
+    color: "#0ea5e9",
+    isDefault: true,
+  },
+  {
     name: "דיור ושכירות",
     type: "expense" as const,
     icon: "Home",
