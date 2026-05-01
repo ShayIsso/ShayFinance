@@ -3,6 +3,7 @@ import {
   uuid,
   varchar,
   text,
+  real,
   decimal,
   integer,
   boolean,
@@ -37,6 +38,12 @@ export const transactionTypeEnum = pgEnum("transaction_type", ["normal", "instal
 export const transactionStatusEnum = pgEnum("transaction_status", ["completed", "pending"]);
 
 export const matchTypeEnum = pgEnum("match_type", ["contains", "starts_with", "exact", "regex"]);
+
+export const reconciliationRoleEnum = pgEnum("reconciliation_role", [
+  "settlement_lump",
+  "settlement_detail",
+  "transfer_pair",
+]);
 
 // Tables
 export const bankCredentials = pgTable("bank_credentials", {
@@ -107,6 +114,10 @@ export const transactions = pgTable(
     categoryId: uuid("category_id").references(() => categories.id, {
       onDelete: "set null",
     }),
+    reconciliationGroupId: uuid("reconciliation_group_id"),
+    reconciliationRole: reconciliationRoleEnum("reconciliation_role"),
+    reconciliationConfidence: real("reconciliation_confidence"),
+    reconciliationConfirmedAt: timestamp("reconciliation_confirmed_at"),
     scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
