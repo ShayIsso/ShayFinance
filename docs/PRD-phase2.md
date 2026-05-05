@@ -375,7 +375,7 @@ Phase 2 follows the Phase 1 pattern:
 
 ### Ordering & dependencies
 
-Suggested implementation order (enforced via `prd-to-issues` slicing):
+Suggested implementation order (enforced via `to-issues` slicing):
 
 1. **Architecture Pass 1** → `ARCHITECTURE.md` blueprint. Must land before any module build.
 2. **`transaction-matching` primitives.** Shared foundation. Before reconciliation and recurring detection.
