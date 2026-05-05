@@ -166,6 +166,20 @@ These are non-negotiable:
 - Follow existing patterns in the codebase (check similar modules first).
 - Never log credentials, OTP codes, or bank data.
 
+## Agent skills
+
+### Issue tracker
+
+GitHub issues at `ShayIsso/ShayFinance` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles mapped to existing repo labels (`AFK` for ready-for-agent, `HITL` for ready-for-human). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md`.
+
 ## Known Gotchas
 
 - **CI uses `npm install`, not `npm ci`.** Lock file is generated on macOS ARM64 and `npm ci` rejects it on Linux CI runners. Do not change CI back to `npm ci`.
