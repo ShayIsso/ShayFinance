@@ -125,7 +125,7 @@ src/
 ShayFinance is developed with a structured human + agent workflow. Every phase moves through the same pipeline:
 
 ```
- Grill Me  →  write-a-prd  →  PRD as GitHub Issue  →  prd-to-issues  →  feature branches  →  review  →  merge
+ Grill Me  →  to-prd  →  PRD as GitHub Issue  →  to-issues  →  feature branches  →  review  →  merge
 ```
 
 ### Roles
@@ -136,19 +136,21 @@ ShayFinance is developed with a structured human + agent workflow. Every phase m
 
 ### Skills used
 
-Project-local skills under `.claude/skills/` encode repeatable workflows:
+A mix of global skills (Matt Pocock's set, installed via `npx`) and project-local skills under `.claude/skills/` encode repeatable workflows:
 
-| Skill                                | Role                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------ |
-| `grill-me`                           | Interview the user to lock architectural decisions before coding               |
-| `write-a-prd`                        | Turn decisions into a PRD submitted as a GitHub issue                          |
-| `prd-to-issues`                      | Slice the PRD into tracer-bullet vertical GitHub issues                        |
-| `improve-codebase-architecture`      | Find shallow modules, recommend deepening, produce `ARCHITECTURE.md`           |
-| `tdd`                                | Red-green-refactor loop for pure computation modules                           |
-| `generate-commit-message`            | Produce concise, why-focused commit messages from staged diffs (mandatory)     |
-| `simplify`                           | Post-implementation review for code reuse, quality, and efficiency             |
-| `obsidian-cli` / `obsidian-markdown` | Mirror PRDs and decisions to an Obsidian vault for long-term knowledge capture |
-| `json-canvas`                        | Planned: visualize module dependency graphs and phase milestones (future)      |
+| Skill                           | Role                                                                       |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| `grill-me`                      | Interview the user to lock architectural decisions before coding           |
+| `grill-with-docs`               | Stress-test a plan against `CONTEXT.md` and `docs/adr/` decisions          |
+| `to-prd`                        | Synthesize current conversation into a PRD submitted as a GitHub issue     |
+| `to-issues`                     | Slice the PRD into tracer-bullet vertical GitHub issues                    |
+| `improve-codebase-architecture` | Find shallow modules, recommend deepening, produce `ARCHITECTURE.md`       |
+| `tdd`                           | Red-green-refactor loop for pure computation modules                       |
+| `diagnose`                      | Disciplined reproduce → minimise → hypothesise loop for hard bugs          |
+| `triage`                        | State-machine triage of incoming issues into the project tracker           |
+| `generate-commit-message`       | Produce concise, why-focused commit messages from staged diffs (mandatory) |
+| `simplify`                      | Post-implementation review for code reuse, quality, and efficiency         |
+| `obsidian-markdown`             | Mirror PRDs and decisions to the Obsidian vault with frontmatter+wikilinks |
 
 ### Core rules enforced by the workflow
 
