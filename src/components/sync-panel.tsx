@@ -43,6 +43,7 @@ type ClientSyncEvent =
       hasScreenshot: boolean;
       screenshotFilename?: string;
     }
+  | { type: "reconciliation_summary"; autoApplied: number; queued: number }
   | { type: "sync_complete"; summary: SyncSummary };
 
 type Bank = {
@@ -81,6 +82,10 @@ export function SyncPanel({ banks }: { banks: Bank[] }) {
   const [bankStates, setBankStates] = useState<Record<string, BankSyncState>>({});
   const [syncing, setSyncing] = useState(false);
   const [summary, setSummary] = useState<SyncSummary | null>(null);
+  const [reconciliationToast, setReconciliationToast] = useState<{
+    autoApplied: number;
+    queued: number;
+  } | null>(null);
   const [connectionError, setConnectionError] = useState(false);
   const [otpCodes, setOtpCodes] = useState<Record<string, string>>({});
   const [otpCountdowns, setOtpCountdowns] = useState<Record<string, number>>({});
@@ -112,6 +117,7 @@ export function SyncPanel({ banks }: { banks: Bank[] }) {
 
     setBankStates({});
     setSummary(null);
+    setReconciliationToast(null);
     setConnectionError(false);
     setOtpCodes({});
     setOtpCountdowns({});
@@ -167,6 +173,10 @@ export function SyncPanel({ banks }: { banks: Bank[] }) {
             screenshotFilename: event.screenshotFilename,
           },
         }));
+      } else if (event.type === "reconciliation_summary") {
+        if (event.autoApplied > 0 || event.queued > 0) {
+          setReconciliationToast({ autoApplied: event.autoApplied, queued: event.queued });
+        }
       } else if (event.type === "sync_complete") {
         setBankStates((prev) => {
           const next = { ...prev };
@@ -335,6 +345,32 @@ export function SyncPanel({ banks }: { banks: Bank[] }) {
           );
         })}
       </div>
+
+      {reconciliationToast && (
+        <Card className="border-emerald-200 bg-emerald-50">
+          <CardContent className="flex items-start justify-between py-3">
+            <div className="space-y-0.5 text-sm">
+              {reconciliationToast.autoApplied > 0 && (
+                <p className="text-emerald-800">
+                  סווגו אוטומטית {reconciliationToast.autoApplied} עסקאות כהסדרת כרטיס אשראי
+                </p>
+              )}
+              {reconciliationToast.queued > 0 && (
+                <p className="text-emerald-700">
+                  {reconciliationToast.queued} התאמות ממתינות לאישור
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setReconciliationToast(null)}
+              className="mt-0.5 text-xs leading-none text-emerald-600 hover:text-emerald-800"
+              aria-label="סגור"
+            >
+              ✕
+            </button>
+          </CardContent>
+        </Card>
+      )}
 
       {summary && (
         <Card>
