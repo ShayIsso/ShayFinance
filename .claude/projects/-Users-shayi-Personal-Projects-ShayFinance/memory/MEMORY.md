@@ -7,3 +7,4 @@
 - [Obsidian Vault Mirror](reference_obsidian_vault.md) — Vault at ~/Documents/Gini_learning/Self_projects/ShayFinance; repo docs/ mirrored to vault with frontmatter + wikilinks
 - [Phase 2 Invariants & Orchestrator Mode](project_phase2_invariants.md) — Locked architecture decisions, doc re-read order, Lead Architect operating modes, dynamic-state pointers
 - [Worktree Setup Hygiene](feedback_worktree_setup.md) — Always copy .env into new worktrees; never `docker compose up` from a worktree (creates duplicate empty DB)
+- [Session Management — Context Thresholds & Compact Prompt](reference_session_management.md) — When to compact vs end the session (50/70/85 zones); canonical paste-in compact prompt for resuming as Lead Architect
