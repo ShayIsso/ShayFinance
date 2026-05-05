@@ -47,3 +47,10 @@ next-env.d.ts
 
 # docker
 pgdata/
+
+# AI-categorization spike — fixtures and benchmark contain real (anonymized in the report) transaction descriptions.
+# Only the template is committed; actual fixtures stay local-only.
+scripts/spike/fixture.json
+scripts/spike/fixture-draft.json
+scripts/spike/benchmark-results.json
+scripts/spike/benchmark.ts

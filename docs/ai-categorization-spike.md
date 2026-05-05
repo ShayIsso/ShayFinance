@@ -79,7 +79,7 @@ Both the few-shot (train) examples and the test fixture are sourced from the sam
 
 This split is methodologically clean. The same merchant name can appear in both sets (multiple visits to the same store), but that reflects real production behavior: a new uncategorized transaction from a known merchant is exactly the use case AI categorization is intended to solve.
 
-Items whose description appears verbatim in the few-shot examples are flagged `few_shot_overlap: true` in `fixture-draft.json`. The fixture intentionally retains these (14 of 50 items) because production realism requires testing on the full uncategorized pool, not a sanitized subset.
+Items whose description appears verbatim in the few-shot examples are flagged `few_shot_overlap: true` in the local fixture file (gitignored to keep real transaction descriptions out of the public repo). The fixture intentionally retains these (14 of 50 items) because production realism requires testing on the full uncategorized pool, not a sanitized subset.
 
 ### Evaluation
 
@@ -155,60 +155,62 @@ For qwen2.5-coder:7b, there is essentially no difference — the model mostly ou
 
 ## 4. Representative Failures
 
+> **Anonymization note:** Specific merchant names, neighborhoods, branch numbers, and street names below have been replaced with bracketed placeholders (`[חברת סלולר]`, `[רשת קולנוע]`, `[שכונה]`, etc.) to keep the public report free of personal-routine signals. The Hebrew word(s) that motivated each model failure (`מאפיה`, `שווארמה`, `אצטדיון`, `הו"ק`, etc.) are preserved so the analysis remains valid.
+
 ### qwen2.5-coder:7b — Collapse-to-אחר failure mode
 
 The model predicted "אחר" for 33 of 50 items. This is not a semantic error but a prompt-following failure: the model apparently fails to parse the Hebrew category list or ignores the JSON format instruction, defaulting to the fallback category. The model is a code-optimized variant; its generation behaviour on right-to-left Hebrew prompts with mixed Latin/Hebrew content is unreliable.
 
-| Description               | Expected         | Predicted    | Analysis                                                |
-| ------------------------- | ---------------- | ------------ | ------------------------------------------------------- |
-| `מינימרקט [מ]`    | מזון וסופר       | אחר          | In few-shot; model ignores example                      |
-| `[חברת מים] בע"מ הו"ק`    | חשבונות ושירותים | אחר          | In few-shot; model ignores example                      |
-| `שרותי בריאות [קופ"ח] הו"ק` | בריאות           | אחר          | In few-shot; model ignores example                      |
-| `עמלת סמס חבילה בסיסית`   | תשלום כ. אשראי   | אחר          | In few-shot; model ignores example                      |
-| `פרשמרקט [שכונה]`       | מזון וסופר       | קניות וביגוד | Batch 3 outlier — "מרום" triggered shopping association |
+| Description (anonymized)    | Expected         | Predicted    | Analysis                                                           |
+| --------------------------- | ---------------- | ------------ | ------------------------------------------------------------------ |
+| `מינימרקט [מ]`              | מזון וסופר       | אחר          | In few-shot; model ignores example                                 |
+| `[חברת מים] בע"מ הו"ק`      | חשבונות ושירותים | אחר          | In few-shot; model ignores example                                 |
+| `שרותי בריאות [קופ"ח] הו"ק` | בריאות           | אחר          | In few-shot; model ignores example                                 |
+| `עמלת סמס חבילה בסיסית`     | תשלום כ. אשראי   | אחר          | In few-shot; model ignores example                                 |
+| `פרשמרקט [שכונה]`           | מזון וסופר       | קניות וביגוד | Batch 3 outlier — neighborhood word triggered shopping association |
 
 ### llama3.1:8b — Four systematic failure patterns
 
 **1. Restaurants categorized as food markets (מסעדות וקפה → מזון וסופר)**
 
-| Description          | Expected    | Predicted  |
-| -------------------- | ----------- | ---------- |
-| `[שם] גריל בר`      | מסעדות וקפה | מזון וסופר |
-| `המאפיה [רחוב]`       | מסעדות וקפה | מזון וסופר |
-| `שווארמה [עסק] [עיר]` | מסעדות וקפה | מזון וסופר |
-| `[רשת דלק] [עיר]`   | רכב ודלק    | מזון וסופר |
+| Description (anonymized) | Expected    | Predicted  |
+| ------------------------ | ----------- | ---------- |
+| `[שם] גריל בר`           | מסעדות וקפה | מזון וסופר |
+| `המאפיה [רחוב]`          | מסעדות וקפה | מזון וסופר |
+| `שווארמה [עסק] [עיר]`    | מסעדות וקפה | מזון וסופר |
+| `[רשת דלק] [עיר]`        | רכב ודלק    | מזון וסופר |
 
-_Root cause:_ The model associates Hebrew food-related words with supermarkets. "מאפיה" (bakery), "שווארמה", "גריל" are all food-adjacent — the model maps them to מזון וסופר rather than מסעדות וקפה. Without clear chain-brand signal (like "WOLT" or "קפה 5") the restaurant/cafe distinction fails.
+_Root cause:_ The model associates Hebrew food-related words with supermarkets. "מאפיה" (bakery), "שווארמה", "גריל" are all food-adjacent — the model maps them to מזון וסופר rather than מסעדות וקפה. Without a clear chain-brand signal (like "WOLT" or "קפה 5") the restaurant/cafe distinction fails.
 
 **2. Utilities/services not recognized (חשבונות ושירותים → various)**
 
-| Description                 | Expected         | Predicted      |
-| --------------------------- | ---------------- | -------------- |
-| `[חברת סלולר] הו"ק`           | חשבונות ושירותים | מזון וסופר     |
-| `[חברת גז] בע"מ`            | חשבונות ושירותים | אחר            |
-| `[שירות טלוויזיה]`                  | חשבונות ושירותים | אחר            |
-| `[חברת תקשורת] בע"מ (ה` | חשבונות ושירותים | תחבורה ציבורית |
+| Description (anonymized) | Expected         | Predicted      |
+| ------------------------ | ---------------- | -------------- |
+| `[חברת סלולר] הו"ק`      | חשבונות ושירותים | מזון וסופר     |
+| `[חברת גז] בע"מ`         | חשבונות ושירותים | אחר            |
+| `[שירות טלוויזיה]`       | חשבונות ושירותים | אחר            |
+| `[חברת תקשורת] בע"מ (ה`  | חשבונות ושירותים | תחבורה ציבורית |
 
-_Root cause:_ Israeli utility and telecom provider names are opaque to a general-purpose model. "[חברת סלולר]" (Israeli cable/mobile), "[חברת גז]" (gas), "[שירות טלוויזיה]" (satellite TV) require Israel-specific knowledge. The "הו"ק" suffix (standing order) that signals recurring utility billing is not understood.
+_Root cause:_ Israeli telecom/utility/satellite-TV brand names are opaque to a general-purpose model — they require Israel-specific knowledge that the 7B–8B class doesn't carry. The `הו"ק` suffix (standing order, signals recurring utility billing) is also not understood.
 
 **3. Parking lots not recognized as רכב ודלק**
 
-| Description                        | Expected | Predicted |
+| Description (anonymized)           | Expected | Predicted |
 | ---------------------------------- | -------- | --------- |
 | `[חברת חניונים]-חניון [מרכז] בע"מ` | רכב ודלק | אחר       |
-| `חניון רכב [שם] בע"מ`             | רכב ודלק | אחר       |
+| `חניון רכב [שם] בע"מ`              | רכב ודלק | אחר       |
 
 _Root cause:_ "חניון" (parking lot) and "חניון רכב" (car park) should map to רכב ודלק but the model has no signal that parking belongs with fuel and car maintenance. The category hint ("Fuel, car maintenance, parking lots") was present but the model didn't apply it.
 
 **4. Entertainment venues mapped inconsistently**
 
-| Description              | Expected      | Predicted |
-| ------------------------ | ------------- | --------- |
-| `[קבוצה] אצטדיון`      | בילויים ופנאי | בריאות    |
+| Description (anonymized)    | Expected      | Predicted |
+| --------------------------- | ------------- | --------- |
+| `[קבוצה] אצטדיון`           | בילויים ופנאי | בריאות    |
 | `[רשת קולנוע] [עיר]- מזנון` | בילויים ופנאי | אחר       |
-| `[מסעדה]`              | מסעדות וקפה   | אחר       |
+| `[מסעדה]`                   | מסעדות וקפה   | אחר       |
 
-_Root cause:_ "אצטדיון" (stadium) triggered a health association ("Maccabi" is also a health fund brand). "[רשת קולנוע]" requires knowing it's a cinema chain. Restaurant names without chain recognition fall to "אחר".
+_Root cause:_ "אצטדיון" (stadium) triggered a health association (a popular Israeli sports-team prefix is also a health-fund brand name). Cinema-chain names require Israel-specific knowledge. Restaurant names without chain recognition fall to "אחר".
 
 ---
 
@@ -245,8 +247,7 @@ If AI categorization is revisited in Phase 3, the following changes would give b
 
 ## 6. Test Fixture
 
-**Draft (80 items, worker-labeled):** `scripts/spike/fixture-draft.json`  
-**Final (50 items, Shay-corrected):** `scripts/spike/fixture.json`
+The 50-item Hebrew test fixture and the spike's benchmark runner contained real (anonymized in this report) transaction descriptions from the dev DB. They are **gitignored** — only `scripts/spike/fixture.template.json` (a placeholder template) is committed to the public repo. Reproducing the benchmark requires re-creating the fixture locally from the live DB; the methodology above is sufficient to do so.
 
 ### Category coverage in the 50-item fixture
 
@@ -270,12 +271,10 @@ If AI categorization is revisited in Phase 3, the following changes would give b
 
 ביטוח, חינוך, חיסכון, השקעות, מנויים, משכורת, הכנסה אחרת
 
-### Anonymization applied
+### Anonymization
 
-| Original | Replaced with | Reason                                                                                                       |
-| -------- | ------------- | ------------------------------------------------------------------------------------------------------------ |
-| `עאיישה` | `[NAME]`      | Ambiguous: both a common given name and a restaurant name; Shay confirmed it is a restaurant (בילויים ופנאי) |
+Section 4 ("Representative Failures") substitutes specific merchant names, neighborhoods, branch numbers, and street names with bracketed placeholders (e.g. `[חברת סלולר]`, `[רשת קולנוע]`, `[שכונה]`) to keep linguistic patterns analyzable without exposing personal routine. The anonymization preserves the Hebrew word(s) that motivated each model failure (`מאפיה`, `שווארמה`, `אצטדיון`, `הו"ק`, etc.) so the analysis remains valid. One additional name `עאיישה` (ambiguous: both a given name and a restaurant brand) was already replaced with `[NAME]` in the original fixture during the spike.
 
 ### Few-shot overlap
 
-14 of 50 fixture items (28%) have descriptions that appear verbatim in the benchmark prompt's few-shot examples. These are retained intentionally (see methodology). They are flagged `few_shot_overlap: true` in `fixture-draft.json` for reference.
+14 of 50 fixture items (28%) had descriptions appearing verbatim in the benchmark prompt's few-shot examples. They are retained intentionally (see methodology). Tracked in the local fixture file via a `few_shot_overlap: true` flag.

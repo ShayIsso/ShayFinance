@@ -42,4 +42,4 @@ The 84% human baseline using the same prompt confirmed the information was theor
   4. Chain-of-thought prompting.
   5. Confidence thresholding — only surface suggestions above a confidence score, accepting lower recall for higher precision.
 - **Threshold stability:** Phase 3 must clear the same 70% bar, or the threshold must itself be re-justified in a new ADR. Don't ship at 65% on the grounds that "it's better than nothing".
-- **Test fixture preservation:** the 50-item Hebrew fixture in `scripts/spike/fixture.json` is reusable for any Phase 3 retest. Keep it under version control.
+- **Test fixture preservation:** the 50-item Hebrew fixture is gitignored to keep real transaction descriptions out of the public repo. Recreate it locally from the live DB if a Phase 3 retest is run; the methodology in `docs/ai-categorization-spike.md` is sufficient to reproduce.
