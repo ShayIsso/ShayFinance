@@ -8,3 +8,4 @@
 - [Phase 2 Invariants & Orchestrator Mode](project_phase2_invariants.md) — Locked architecture decisions, doc re-read order, Lead Architect operating modes, dynamic-state pointers
 - [Worktree Setup Hygiene](feedback_worktree_setup.md) — Always copy .env into new worktrees; never `docker compose up` from a worktree (creates duplicate empty DB)
 - [Session Management — Context Thresholds & Compact Prompt](reference_session_management.md) — When to compact vs end the session (50/70/85 zones); canonical paste-in compact prompt for resuming as Lead Architect
+- [Worktree Cleanup at End of Work](feedback_worktree_cleanup.md) — After a worker PR merges, proactively run the cleanup sequence (rows, scripts, worktree, branch, transcript dir) without waiting to be asked
