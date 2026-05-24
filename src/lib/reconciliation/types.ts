@@ -22,6 +22,13 @@ export type P2MirrorCandidate = {
   confidence: number;
 };
 
+export type P3InterAccountCandidate = {
+  kind: "p3_inter_account";
+  outgoingSide: ReconciliationTransaction;
+  incomingSide: ReconciliationTransaction;
+  confidence: number;
+};
+
 export type ApplyResult = {
   autoApplied: number;
   queued: number;
