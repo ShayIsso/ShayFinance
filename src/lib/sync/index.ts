@@ -7,6 +7,8 @@ import {
   applyReconciliation,
   detectP2Mirror,
   applyP2Mirror,
+  detectP3InterAccount,
+  applyP3InterAccount,
   drizzleReconciliationStore,
 } from "@/lib/reconciliation";
 import { db } from "@/db";
@@ -82,10 +84,15 @@ export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
   const p2Candidates = detectP2Mirror(recentTxnsAfterP1);
   const p2Result = await applyP2Mirror(p2Candidates, drizzleReconciliationStore);
 
+  // P3: inter-account transfer detection — re-fetch so P2's updates are visible
+  const recentTxnsAfterP2 = await drizzleReconciliationStore.getRecentTransactions(90);
+  const p3Candidates = detectP3InterAccount(recentTxnsAfterP2);
+  const p3Result = await applyP3InterAccount(p3Candidates, drizzleReconciliationStore);
+
   yield {
     type: "reconciliation_summary",
-    autoApplied: p1Result.autoApplied + p2Result.autoApplied,
-    queued: p1Result.queued + p2Result.queued,
+    autoApplied: p1Result.autoApplied + p2Result.autoApplied + p3Result.autoApplied,
+    queued: p1Result.queued + p2Result.queued + p3Result.queued,
   };
 
   yield { type: "sync_complete", summary: { total, byBank: importedByBank } };

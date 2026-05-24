@@ -32,6 +32,19 @@ export interface ReconciliationStore {
     cardSideId: string;
     confidence: number;
   }): Promise<void>;
+  applyAutoInterAccount(args: {
+    groupId: string;
+    outgoingSideId: string;
+    incomingSideId: string;
+    confidence: number;
+    transferCategoryId: string;
+  }): Promise<void>;
+  queueInterAccount(args: {
+    groupId: string;
+    outgoingSideId: string;
+    incomingSideId: string;
+    confidence: number;
+  }): Promise<void>;
 }
 
 export const drizzleReconciliationStore: ReconciliationStore = {
@@ -198,6 +211,68 @@ export const drizzleReconciliationStore: ReconciliationStore = {
           reconciliationConfidence: args.confidence,
         })
         .where(eq(transactions.id, args.cardSideId));
+    });
+  },
+
+  async applyAutoInterAccount(args: {
+    groupId: string;
+    outgoingSideId: string;
+    incomingSideId: string;
+    confidence: number;
+    transferCategoryId: string;
+  }): Promise<void> {
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      // Outgoing side: flip to transfer category, mark as transfer_pair, confirmed
+      await tx
+        .update(transactions)
+        .set({
+          reconciliationGroupId: args.groupId,
+          reconciliationRole: "transfer_pair",
+          reconciliationConfidence: args.confidence,
+          reconciliationConfirmedAt: now,
+          categoryId: args.transferCategoryId,
+        })
+        .where(eq(transactions.id, args.outgoingSideId));
+
+      // Incoming side: also flip to transfer category, mark as transfer_pair, confirmed
+      await tx
+        .update(transactions)
+        .set({
+          reconciliationGroupId: args.groupId,
+          reconciliationRole: "transfer_pair",
+          reconciliationConfidence: args.confidence,
+          reconciliationConfirmedAt: now,
+          categoryId: args.transferCategoryId,
+        })
+        .where(eq(transactions.id, args.incomingSideId));
+    });
+  },
+
+  async queueInterAccount(args: {
+    groupId: string;
+    outgoingSideId: string;
+    incomingSideId: string;
+    confidence: number;
+  }): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(transactions)
+        .set({
+          reconciliationGroupId: args.groupId,
+          reconciliationRole: "transfer_pair",
+          reconciliationConfidence: args.confidence,
+        })
+        .where(eq(transactions.id, args.outgoingSideId));
+
+      await tx
+        .update(transactions)
+        .set({
+          reconciliationGroupId: args.groupId,
+          reconciliationRole: "transfer_pair",
+          reconciliationConfidence: args.confidence,
+        })
+        .where(eq(transactions.id, args.incomingSideId));
     });
   },
 };
