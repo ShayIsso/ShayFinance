@@ -5,6 +5,8 @@ import { importScrapedAccounts } from "@/lib/transactions";
 import {
   detectP1Settlement,
   applyReconciliation,
+  detectP2Mirror,
+  applyP2Mirror,
   drizzleReconciliationStore,
 } from "@/lib/reconciliation";
 import { db } from "@/db";
@@ -70,10 +72,21 @@ export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
     activeOtpHandler = null;
   }
 
+  // P1: credit-card settlement lump detection
   const recentTxns = await drizzleReconciliationStore.getRecentTransactions(90);
-  const candidates = detectP1Settlement(recentTxns);
-  const { autoApplied, queued } = await applyReconciliation(candidates, drizzleReconciliationStore);
-  yield { type: "reconciliation_summary", autoApplied, queued };
+  const p1Candidates = detectP1Settlement(recentTxns);
+  const p1Result = await applyReconciliation(p1Candidates, drizzleReconciliationStore);
+
+  // P2: 1:1 mirror detection — re-fetch so P1's updates are visible
+  const recentTxnsAfterP1 = await drizzleReconciliationStore.getRecentTransactions(90);
+  const p2Candidates = detectP2Mirror(recentTxnsAfterP1);
+  const p2Result = await applyP2Mirror(p2Candidates, drizzleReconciliationStore);
+
+  yield {
+    type: "reconciliation_summary",
+    autoApplied: p1Result.autoApplied + p2Result.autoApplied,
+    queued: p1Result.queued + p2Result.queued,
+  };
 
   yield { type: "sync_complete", summary: { total, byBank: importedByBank } };
 }

@@ -19,6 +19,19 @@ export interface ReconciliationStore {
     cardDetailIds: string[];
     confidence: number;
   }): Promise<void>;
+  applyAutoMirror(args: {
+    groupId: string;
+    bankSideId: string;
+    cardSideId: string;
+    confidence: number;
+    transferCategoryId: string;
+  }): Promise<void>;
+  queueMirror(args: {
+    groupId: string;
+    bankSideId: string;
+    cardSideId: string;
+    confidence: number;
+  }): Promise<void>;
 }
 
 export const drizzleReconciliationStore: ReconciliationStore = {
@@ -124,6 +137,67 @@ export const drizzleReconciliationStore: ReconciliationStore = {
           })
           .where(inArray(transactions.id, args.cardDetailIds));
       }
+    });
+  },
+
+  async applyAutoMirror(args: {
+    groupId: string;
+    bankSideId: string;
+    cardSideId: string;
+    confidence: number;
+    transferCategoryId: string;
+  }): Promise<void> {
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      // Bank side: flip to transfer category, mark as transfer_pair, confirmed
+      await tx
+        .update(transactions)
+        .set({
+          reconciliationGroupId: args.groupId,
+          reconciliationRole: "transfer_pair",
+          reconciliationConfidence: args.confidence,
+          reconciliationConfirmedAt: now,
+          categoryId: args.transferCategoryId,
+        })
+        .where(eq(transactions.id, args.bankSideId));
+
+      // Card side: mark as transfer_pair, confirmed — keep existing category
+      await tx
+        .update(transactions)
+        .set({
+          reconciliationGroupId: args.groupId,
+          reconciliationRole: "transfer_pair",
+          reconciliationConfidence: args.confidence,
+          reconciliationConfirmedAt: now,
+        })
+        .where(eq(transactions.id, args.cardSideId));
+    });
+  },
+
+  async queueMirror(args: {
+    groupId: string;
+    bankSideId: string;
+    cardSideId: string;
+    confidence: number;
+  }): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(transactions)
+        .set({
+          reconciliationGroupId: args.groupId,
+          reconciliationRole: "transfer_pair",
+          reconciliationConfidence: args.confidence,
+        })
+        .where(eq(transactions.id, args.bankSideId));
+
+      await tx
+        .update(transactions)
+        .set({
+          reconciliationGroupId: args.groupId,
+          reconciliationRole: "transfer_pair",
+          reconciliationConfidence: args.confidence,
+        })
+        .where(eq(transactions.id, args.cardSideId));
     });
   },
 };
