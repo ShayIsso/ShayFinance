@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +80,13 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
   return { summary, spending, balances, recent };
 }
 
-export function DashboardPanel({ categories: _categories }: { categories: Category[] }) {
+export function DashboardPanel({
+  categories: _categories,
+  pendingReconCount = 0,
+}: {
+  categories: Category[];
+  pendingReconCount?: number;
+}) {
   const now = new Date();
   const [year, setYear] = React.useState(now.getFullYear());
   const [month, setMonth] = React.useState(now.getMonth() + 1);
@@ -142,6 +148,18 @@ export function DashboardPanel({ categories: _categories }: { categories: Catego
           </Button>
         </div>
       </div>
+
+      {/* Reconciliation pending strip */}
+      {pendingReconCount > 0 && (
+        <Link
+          href="/reconciliation"
+          className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+        >
+          <Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+          <span>{pendingReconCount} התאמות ממתינות לאישור</span>
+          <span className="mr-auto text-xs text-amber-600">לחץ לאישור &#x2190;</span>
+        </Link>
+      )}
 
       {loading && <p className="text-muted-foreground text-sm">טוען נתונים...</p>}
 
