@@ -87,6 +87,10 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
     installmentTotal: r.installmentTotal,
     status: r.status,
     categoryId: r.categoryId,
+    reconciliationGroupId: r.reconciliationGroupId,
+    reconciliationConfirmedAt: r.reconciliationConfirmedAt
+      ? r.reconciliationConfirmedAt.toISOString()
+      : null,
     scrapedAt: r.scrapedAt,
   }));
 }

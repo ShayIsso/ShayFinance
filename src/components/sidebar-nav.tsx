@@ -2,18 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, List, RefreshCw, Settings } from "lucide-react";
+import { LayoutDashboard, List, RefreshCw, Settings, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: number;
+};
+
+const baseNavItems: Omit<NavItem, "badge">[] = [
   { href: "/", label: "לוח בקרה", icon: LayoutDashboard },
   { href: "/transactions", label: "תנועות", icon: List },
+  { href: "/reconciliation", label: "התאמות", icon: Inbox },
   { href: "/sync", label: "סנכרון", icon: RefreshCw },
   { href: "/settings", label: "הגדרות", icon: Settings },
 ];
 
-export function SidebarNav() {
+export function SidebarNav({ pendingReconCount = 0 }: { pendingReconCount?: number }) {
   const pathname = usePathname();
+
+  const navItems: NavItem[] = baseNavItems.map((item) => ({
+    ...item,
+    badge: item.href === "/reconciliation" && pendingReconCount > 0 ? pendingReconCount : undefined,
+  }));
 
   return (
     <aside className="bg-card fixed top-0 right-0 z-10 flex h-full w-56 flex-col border-l">
@@ -35,7 +48,12 @@ export function SidebarNav() {
               )}
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badge !== undefined && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-semibold text-white tabular-nums">
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
             </Link>
           );
         })}

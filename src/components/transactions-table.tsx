@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Search, ChevronRight, ChevronLeft } from "lucide-react";
+import { Search, ChevronRight, ChevronLeft, Link2, Undo2 } from "lucide-react";
+import { undoReconciliationAction } from "@/app/actions/reconciliation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,8 @@ type Transaction = {
   installmentTotal: number | null;
   status: "completed" | "pending";
   categoryId: string | null;
+  reconciliationGroupId: string | null;
+  reconciliationConfirmedAt: string | null;
 };
 
 type Filters = {
@@ -228,6 +231,33 @@ function RuleSuggestionBanner({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ── Undo reconciliation button ────────────────────────────────────────────────
+
+function UndoReconciliationButton({ txnId, onUndone }: { txnId: string; onUndone: () => void }) {
+  const [undoing, setUndoing] = React.useState(false);
+
+  async function handleUndo() {
+    setUndoing(true);
+    const result = await undoReconciliationAction({ txnId });
+    setUndoing(false);
+    if (!result.error) {
+      onUndone();
+    }
+  }
+
+  return (
+    <button
+      onClick={handleUndo}
+      disabled={undoing}
+      title="בטל התאמה"
+      className="text-muted-foreground inline-flex items-center hover:text-red-600 disabled:opacity-50"
+      aria-label="בטל התאמה"
+    >
+      <Undo2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+    </button>
   );
 }
 
@@ -596,13 +626,38 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    {tx.type === "installments" &&
-                      tx.installmentNumber != null &&
-                      tx.installmentTotal != null && (
-                        <Badge variant="secondary" className="text-xs">
-                          {tx.installmentNumber}/{tx.installmentTotal}
-                        </Badge>
+                    <div className="flex items-center gap-1">
+                      {tx.type === "installments" &&
+                        tx.installmentNumber != null &&
+                        tx.installmentTotal != null && (
+                          <Badge variant="secondary" className="text-xs">
+                            {tx.installmentNumber}/{tx.installmentTotal}
+                          </Badge>
+                        )}
+                      {tx.reconciliationGroupId && (
+                        <span title="חלק מקבוצת התאמה" className="inline-flex">
+                          <Link2 className="text-muted-foreground h-3.5 w-3.5" strokeWidth={1.5} />
+                        </span>
                       )}
+                      {tx.reconciliationGroupId && tx.reconciliationConfirmedAt && (
+                        <UndoReconciliationButton
+                          txnId={tx.id}
+                          onUndone={() => {
+                            setTransactions((prev) =>
+                              prev.map((t) =>
+                                t.id === tx.id
+                                  ? {
+                                      ...t,
+                                      reconciliationGroupId: null,
+                                      reconciliationConfirmedAt: null,
+                                    }
+                                  : t,
+                              ),
+                            );
+                          }}
+                        />
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
