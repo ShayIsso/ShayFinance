@@ -11,6 +11,8 @@ function makeStore(overrides: Partial<ReconciliationStore> = {}): Reconciliation
     queueReconciliation: vi.fn().mockResolvedValue(undefined),
     applyAutoMirror: vi.fn().mockResolvedValue(undefined),
     queueMirror: vi.fn().mockResolvedValue(undefined),
+    applyAutoInterAccount: vi.fn().mockResolvedValue(undefined),
+    queueInterAccount: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
