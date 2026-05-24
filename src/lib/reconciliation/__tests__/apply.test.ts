@@ -9,6 +9,8 @@ function makeStore(overrides: Partial<ReconciliationStore> = {}): Reconciliation
     getCategoryIdByName: vi.fn().mockResolvedValue("cat-settlement"),
     applyAutoReconciliation: vi.fn().mockResolvedValue(undefined),
     queueReconciliation: vi.fn().mockResolvedValue(undefined),
+    applyAutoMirror: vi.fn().mockResolvedValue(undefined),
+    queueMirror: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
