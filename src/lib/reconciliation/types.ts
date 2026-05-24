@@ -15,6 +15,13 @@ export type ReconciliationCandidate = {
   confidence: number;
 };
 
+export type P2MirrorCandidate = {
+  kind: "p2_mirror";
+  bankSide: ReconciliationTransaction;
+  cardSide: ReconciliationTransaction;
+  confidence: number;
+};
+
 export type ApplyResult = {
   autoApplied: number;
   queued: number;
