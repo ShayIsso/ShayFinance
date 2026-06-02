@@ -14,6 +14,7 @@ import {
 import { db } from "@/db";
 import { bankAccounts } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { startSyncRun, completeSyncRun, failSyncRun, drizzleSyncRunStore } from "./runs";
 
 // Module-level OTP handler — set during active sync, used by POST /api/sync/otp
 let activeOtpHandler: OtpHandler | null = null;
@@ -44,6 +45,12 @@ export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
     const isFirstSync = !existingAccount;
     const startDate = getSyncStartDate(isFirstSync);
 
+    // Record the start of this per-bank sync run (optimistic: status=success)
+    const runId = await startSyncRun(drizzleSyncRunStore, {
+      bank: bankType as "discount" | "max" | "visaCal",
+      triggeredBy: "manual",
+    }).catch(() => null); // Never let sync_runs write abort the sync loop
+
     const generator = syncBank(rawCreds, bankType as "discount" | "max" | "visaCal", {
       startDate,
       isFirstSync,
@@ -51,24 +58,50 @@ export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
 
     let bankImported = 0;
 
-    for await (const event of generator) {
-      if (event.type === "otp_required") {
-        activeOtpHandler = event.otpHandler;
-        yield { type: "otp_required", bank: event.bank, otpHandler: event.otpHandler };
-        continue;
+    // TODO(S2): detect otp_skipped event from scraper once the scraper emits it,
+    // then call failSyncRun(runId, { status: "otp_skipped" }).
+    try {
+      for await (const event of generator) {
+        if (event.type === "otp_required") {
+          activeOtpHandler = event.otpHandler;
+          yield { type: "otp_required", bank: event.bank, otpHandler: event.otpHandler };
+          continue;
+        }
+
+        if (event.type === "bank_complete") {
+          yield { type: "progress", bank: event.bank, status: "importing" };
+          const counts = await importScrapedAccounts(cred.id, event.accounts);
+          bankImported = counts.inserted + counts.updated;
+          total += bankImported;
+          importedByBank[event.bank] = bankImported;
+          yield { ...event, _credentialId: cred.id };
+          continue;
+        }
+
+        yield event;
       }
 
-      if (event.type === "bank_complete") {
-        yield { type: "progress", bank: event.bank, status: "importing" };
-        const counts = await importScrapedAccounts(cred.id, event.accounts);
-        bankImported = counts.inserted + counts.updated;
-        total += bankImported;
-        importedByBank[event.bank] = bankImported;
-        yield { ...event, _credentialId: cred.id };
-        continue;
+      // Bank completed successfully — record final count
+      if (runId != null) {
+        await completeSyncRun(drizzleSyncRunStore, runId, {
+          transactionsImported: bankImported,
+        }).catch(() => undefined); // Never let sync_runs write abort the sync loop
       }
-
-      yield event;
+    } catch (err) {
+      // Per-bank failure isolation: record the error then continue to next bank
+      if (runId != null) {
+        await failSyncRun(drizzleSyncRunStore, runId, {
+          status: "error",
+          error: String(err),
+        }).catch(() => undefined);
+      }
+      // Re-yield a bank_error event so the SSE stream gets the failure
+      yield {
+        type: "bank_error" as const,
+        bank: bankType,
+        error: "שגיאה בסנכרון",
+        hasScreenshot: false,
+      };
     }
 
     activeOtpHandler = null;

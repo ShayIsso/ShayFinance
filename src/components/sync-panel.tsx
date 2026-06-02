@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -78,7 +79,10 @@ function formatCountdown(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function SyncPanel({ banks }: { banks: Bank[] }) {
+function SyncPanelInner({ banks }: { banks: Bank[] }) {
+  const searchParams = useSearchParams();
+  // ?bank=<bankType> deep-link from LastSyncStrip — highlights the flagged bank
+  const highlightedBank = searchParams.get("bank");
   const [bankStates, setBankStates] = useState<Record<string, BankSyncState>>({});
   const [syncing, setSyncing] = useState(false);
   const [summary, setSummary] = useState<SyncSummary | null>(null);
@@ -241,9 +245,13 @@ export function SyncPanel({ banks }: { banks: Bank[] }) {
           const state = bankStates[bank.bankType];
           const isSpinning = state !== undefined && SPINNING_STATUSES.has(state.status);
           const countdown = otpCountdowns[bank.bankType];
+          const isHighlighted = highlightedBank === bank.bankType;
 
           return (
-            <Card key={bank.id}>
+            <Card
+              key={bank.id}
+              className={isHighlighted ? "border-amber-300 ring-1 ring-amber-200" : undefined}
+            >
               <CardContent className="space-y-3 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -390,5 +398,14 @@ export function SyncPanel({ banks }: { banks: Bank[] }) {
         </Card>
       )}
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary (Next.js App Router requirement)
+export function SyncPanel({ banks }: { banks: Bank[] }) {
+  return (
+    <Suspense fallback={null}>
+      <SyncPanelInner banks={banks} />
+    </Suspense>
   );
 }
