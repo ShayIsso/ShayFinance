@@ -153,3 +153,14 @@ export const syncRuns = pgTable("sync_runs", {
   errorMessage: text("error_message"),
   triggeredBy: syncTriggerEnum("triggered_by").notNull().default("manual"),
 });
+
+/**
+ * Singleton configuration table for the background scheduler.
+ * Always upsert id=1 — never insert additional rows.
+ */
+export const schedulerConfig = pgTable("scheduler_config", {
+  id: integer("id").primaryKey().default(1),
+  enabled: boolean("enabled").notNull().default(false),
+  cronTime: varchar("cron_time", { length: 5 }).notNull().default("07:00"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

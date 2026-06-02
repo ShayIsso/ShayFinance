@@ -42,4 +42,6 @@ export type OtpHandler = {
   resolveOtp: (code: string) => void;
   promise: Promise<string>;
   cancel: () => void;
+  /** Immediately reject the OTP promise with OTP_TIMEOUT — for scheduled runs that should skip banks requiring OTP. */
+  skip: () => void;
 };
