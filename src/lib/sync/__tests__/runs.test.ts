@@ -228,6 +228,7 @@ describe("syncRunStatusForEvent", () => {
         resolveOtp: () => {},
         promise: Promise.resolve(""),
         cancel: () => {},
+        skip: () => {},
       },
     };
     expect(syncRunStatusForEvent(event)).toBeNull();

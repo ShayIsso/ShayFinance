@@ -32,11 +32,26 @@ export function submitOtp(code: string): boolean {
   return true;
 }
 
+export type SyncOptions = {
+  /** Which surface triggered this sync — recorded in sync_runs.triggered_by. Defaults to "manual". */
+  triggeredBy?: "manual" | "scheduled";
+  /**
+   * How to handle OTP requests:
+   * - "interactive" (default): yield otp_required so the frontend can prompt the user.
+   * - "skip": immediately call skip() on the OTP bridge so the scraper yields otp_timeout
+   *   and the bank is skipped. Used by scheduled runs.
+   */
+  otpMode?: "interactive" | "skip";
+};
+
 export type SyncSummaryEvent =
   | (SyncEvent & { _credentialId?: string })
   | { type: "reconciliation_summary"; autoApplied: number; queued: number };
 
-export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
+export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<SyncSummaryEvent> {
+  const triggeredBy = opts.triggeredBy ?? "manual";
+  const otpMode = opts.otpMode ?? "interactive";
+
   const credentials = await listCredentials();
   const importedByBank: Record<string, number> = {};
   let total = 0;
@@ -54,7 +69,7 @@ export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
     // Record the start of this per-bank sync run (optimistic: status=success)
     const runId = await startSyncRun(drizzleSyncRunStore, {
       bank: bankType as "discount" | "max" | "visaCal",
-      triggeredBy: "manual",
+      triggeredBy,
     }).catch(() => null); // Never let sync_runs write abort the sync loop
 
     const generator = syncBank(rawCreds, bankType as "discount" | "max" | "visaCal", {
@@ -72,11 +87,20 @@ export async function* syncAllBanks(): AsyncGenerator<SyncSummaryEvent> {
     // by the events below. The try/catch is a safety net for GENUINE throws
     // (e.g. importScrapedAccounts hitting a DB error).
     //
-    // S1: otp_skipped IS recorded here, via the existing `otp_timeout` event.
-    // TODO(S2): add the attempt-and-skip behavior during *scheduled* runs.
+    // S2: scheduled runs call event.otpHandler.skip() above — which rejects the bridge
+    // promise with OTP_TIMEOUT. The scraper catches that and yields otp_timeout, which
+    // syncRunStatusForEvent maps to otp_skipped below. No special fork needed here.
     try {
       for await (const event of generator) {
         if (event.type === "otp_required") {
+          if (otpMode === "skip") {
+            // Scheduled run: immediately reject so the scraper yields otp_timeout.
+            // The existing otp_timeout handling below records otp_skipped and continues
+            // to the next bank. We do NOT set activeOtpHandler or yield to SSE.
+            event.otpHandler.skip();
+            continue;
+          }
+          // Interactive (manual) path — unchanged.
           activeOtpHandler = event.otpHandler;
           yield { type: "otp_required", bank: event.bank, otpHandler: event.otpHandler };
           continue;
