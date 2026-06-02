@@ -2,6 +2,35 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/**
+ * Design token conventions (Phase 2 F3):
+ *
+ * Palette:
+ *   Neutral base  — zinc/stone family (achromatic oklch, chroma=0)
+ *   Primary accent — emerald-600 (oklch ~0.596 0.145 163)
+ *                    POSITIVE values / balances ONLY. Never decorative.
+ *   Destructive   — muted red (oklch ~0.577 0.245 27)
+ *   Success       — maps to --emerald (same as accent)
+ *   Warning       — amber (oklch ~0.769 0.188 70) — pending states only
+ *
+ * Card convention:
+ *   rounded-xl + ring-1 ring-foreground/10 + no shadow + no gradient.
+ *   See src/components/ui/card.tsx — Card component enforces this.
+ *
+ * Lucide icon convention:
+ *   Default stroke width: 1.5px (Lucide library default — do not override).
+ *   Duo-tone treatment: section headers only, nowhere else.
+ *   See src/components/ui/amount.tsx for the canonical reference comment.
+ *
+ * Motion convention:
+ *   Use .fade-in utility for enter transitions (150ms ease-out).
+ *   No scroll-triggered animations (Phase 3 backlog).
+ *
+ * Numeric displays:
+ *   Use .tabular-nums utility or the <Amount> component for all currency/
+ *   numeric columns so digits align vertically in tables.
+ */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -48,38 +77,47 @@
 }
 
 :root {
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
+  /* ── Neutral base (zinc/stone — achromatic, chroma ≈ 0) ── */
+  --background: oklch(0.985 0 0); /* zinc-50 equivalent */
+  --foreground: oklch(0.145 0 0); /* zinc-950 equivalent */
+  --card: oklch(1 0 0); /* pure white */
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.205 0 0); /* zinc-900 equivalent */
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
+  --secondary: oklch(0.97 0 0); /* zinc-100 equivalent */
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.556 0 0); /* zinc-500 equivalent */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
+  --border: oklch(0.922 0 0); /* zinc-200 equivalent */
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --radius: 0.625rem;
 
-  /* Emerald accent for positive values */
-  --emerald: oklch(0.596 0.145 163.225);
+  /* ── Semantic colors ── */
+
+  /* Destructive — muted red (used for negative values, error states) */
+  --destructive: oklch(0.577 0.245 27.325);
+
+  /* Emerald accent — POSITIVE values and balances ONLY, never decorative */
+  --emerald: oklch(0.596 0.145 163.225); /* emerald-600 */
   --emerald-foreground: oklch(1 0 0);
 
-  /* Chart colors */
-  --chart-1: oklch(0.596 0.145 163.225);
-  --chart-2: oklch(0.488 0.243 264.376);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  /* Warning — amber tone, for pending/in-progress states */
+  --warning: oklch(0.769 0.188 70.08); /* amber-400 equivalent */
+  --warning-foreground: oklch(0.145 0 0);
 
-  /* Sidebar */
+  /* ── Chart palette ── */
+  --chart-1: oklch(0.596 0.145 163.225); /* emerald */
+  --chart-2: oklch(0.488 0.243 264.376); /* blue */
+  --chart-3: oklch(0.769 0.188 70.08); /* amber */
+  --chart-4: oklch(0.627 0.265 303.9); /* violet */
+  --chart-5: oklch(0.645 0.246 16.439); /* red */
+
+  /* ── Sidebar ── */
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -99,5 +137,34 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  /**
+   * .tabular-nums — force tabular (monospaced) digit rendering.
+   * Use on all financial/numeric columns so digits align vertically.
+   * The <Amount> component applies this automatically.
+   */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /**
+   * .fade-in — 150ms ease-out opacity enter animation.
+   * Apply to elements that appear after data load or user action.
+   * No scroll-triggered animations (Phase 3 backlog).
+   */
+  .fade-in {
+    animation: fade-in 150ms ease-out both;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }

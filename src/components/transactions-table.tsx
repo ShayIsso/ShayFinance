@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Category } from "@/lib/categories";
+import { Amount } from "@/components/ui/amount";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -59,25 +60,6 @@ type RuleSuggestion = {
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-const CURRENCY_SYMBOL_TO_CODE: Record<string, string> = {
-  "₪": "ILS",
-  $: "USD",
-  "€": "EUR",
-  "£": "GBP",
-};
-
-function normalizeCurrency(currency: string): string {
-  return CURRENCY_SYMBOL_TO_CODE[currency] ?? currency;
-}
-
-function formatAmount(amount: number, currency: string = "ILS"): string {
-  return new Intl.NumberFormat("he-IL", {
-    style: "currency",
-    currency: normalizeCurrency(currency),
-    minimumFractionDigits: 2,
-  }).format(amount);
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -588,16 +570,19 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
                     <DescriptionCell transaction={tx} onSave={handleDescriptionSave} />
                   </TableCell>
                   <TableCell className="text-left">
-                    <span
-                      className={`text-sm font-medium ${
-                        tx.chargedAmount < 0 ? "text-red-600" : "text-emerald-600"
-                      }`}
-                    >
-                      {formatAmount(tx.chargedAmount, tx.chargedCurrency ?? "ILS")}
-                    </span>
+                    <Amount
+                      amount={tx.chargedAmount}
+                      currency={tx.chargedCurrency ?? "ILS"}
+                      colorize
+                      className="text-sm font-medium"
+                    />
                     {tx.originalCurrency !== "ILS" && (
                       <div className="text-muted-foreground text-xs">
-                        {formatAmount(tx.originalAmount, tx.originalCurrency)}
+                        <Amount
+                          amount={tx.originalAmount}
+                          currency={tx.originalCurrency}
+                          colorize={false}
+                        />
                       </div>
                     )}
                   </TableCell>

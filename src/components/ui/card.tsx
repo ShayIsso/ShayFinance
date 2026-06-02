@@ -2,6 +2,17 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Card convention (Phase 2 F3):
+ *   - Shape  : rounded-xl (all four corners)
+ *   - Border : ring-1 ring-foreground/10  (1px subtle ring, no box-shadow)
+ *   - Surface: bg-card (pure white)
+ *   - Shadow : none — use ring only
+ *   - Gradient: none — flat surfaces only
+ *
+ * Do not add shadow or gradient classes to Card. If you need elevation,
+ * increase ring opacity (e.g. ring-foreground/15) rather than adding shadow.
+ */
 function Card({
   className,
   size = "default",
