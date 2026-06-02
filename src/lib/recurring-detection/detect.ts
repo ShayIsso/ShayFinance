@@ -153,7 +153,7 @@ export function detectPatterns(txns: DetectionTransaction[]): RecurringPattern[]
       const expectedAmount = rollingAvgLast3(amounts);
 
       const merchant = cluster.representative;
-      const fingerprint = buildFingerprint(merchant, expectedAmount, cadence);
+      const fingerprint = buildFingerprint(merchant, cadence);
       const lastMatchedTxnId = sorted[sorted.length - 1].id;
 
       const pattern: RecurringPattern = {
