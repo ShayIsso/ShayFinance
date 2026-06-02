@@ -49,6 +49,10 @@ export const syncRunStatusEnum = pgEnum("sync_run_status", ["success", "otp_skip
 
 export const syncTriggerEnum = pgEnum("sync_trigger", ["manual", "scheduled"]);
 
+export const recurringCadenceEnum = pgEnum("recurring_cadence", ["monthly", "quarterly", "annual"]);
+
+export const recurringStatusEnum = pgEnum("recurring_status", ["active", "paused", "canceled"]);
+
 // Tables
 export const bankCredentials = pgTable("bank_credentials", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -153,6 +157,24 @@ export const syncRuns = pgTable("sync_runs", {
   errorMessage: text("error_message"),
   triggeredBy: syncTriggerEnum("triggered_by").notNull().default("manual"),
 });
+
+export const recurringExpenses = pgTable(
+  "recurring_expenses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    patternFingerprint: text("pattern_fingerprint").notNull(),
+    merchant: text("merchant").notNull(),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+    expectedAmount: decimal("expected_amount", { precision: 12, scale: 2 }).notNull(),
+    expectedCadence: recurringCadenceEnum("expected_cadence").notNull(),
+    nextExpectedDate: date("next_expected_date").notNull(),
+    lastMatchedTxnId: uuid("last_matched_txn_id").references(() => transactions.id),
+    status: recurringStatusEnum("status").notNull().default("active"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("uq_recurring_fingerprint").on(table.patternFingerprint)],
+);
 
 /**
  * Singleton configuration table for the background scheduler.
