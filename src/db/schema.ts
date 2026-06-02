@@ -45,6 +45,10 @@ export const reconciliationRoleEnum = pgEnum("reconciliation_role", [
   "transfer_pair",
 ]);
 
+export const syncRunStatusEnum = pgEnum("sync_run_status", ["success", "otp_skipped", "error"]);
+
+export const syncTriggerEnum = pgEnum("sync_trigger", ["manual", "scheduled"]);
+
 // Tables
 export const bankCredentials = pgTable("bank_credentials", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -137,4 +141,15 @@ export const categoryRules = pgTable("category_rules", {
   matchType: matchTypeEnum("match_type").notNull(),
   pattern: varchar("pattern", { length: 500 }).notNull(),
   priority: integer("priority").default(0).notNull(),
+});
+
+export const syncRuns = pgTable("sync_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  bank: bankTypeEnum("bank").notNull(),
+  status: syncRunStatusEnum("status").notNull().default("success"),
+  transactionsImported: integer("transactions_imported").notNull().default(0),
+  errorMessage: text("error_message"),
+  triggeredBy: syncTriggerEnum("triggered_by").notNull().default("manual"),
 });

@@ -20,6 +20,8 @@ import type {
   AccountBalance,
   RecentTransaction,
 } from "@/lib/analytics";
+import { LastSyncStrip } from "@/components/last-sync-strip";
+import type { SyncRunSummary } from "@/lib/sync/runs";
 
 const HEBREW_MONTHS = [
   "ינואר",
@@ -60,24 +62,27 @@ type DashboardData = {
   spending: CategorySpending[];
   balances: AccountBalance[];
   recent: RecentTransaction[];
+  lastSyncRuns: SyncRunSummary[];
 };
 
 async function fetchDashboardData(year: number, month: number): Promise<DashboardData> {
-  const [summaryRes, spendingRes, balancesRes, recentRes] = await Promise.all([
+  const [summaryRes, spendingRes, balancesRes, recentRes, syncRunsRes] = await Promise.all([
     fetch(`/api/analytics/monthly?year=${year}&month=${month}`),
     fetch(`/api/analytics/spending-by-category?year=${year}&month=${month}`),
     fetch(`/api/analytics/balances`),
     fetch(`/api/analytics/recent?limit=15`),
+    fetch(`/api/sync-runs`),
   ]);
 
-  const [summary, spending, balances, recent] = await Promise.all([
+  const [summary, spending, balances, recent, lastSyncRuns] = await Promise.all([
     summaryRes.ok ? summaryRes.json() : null,
     spendingRes.ok ? spendingRes.json() : [],
     balancesRes.ok ? balancesRes.json() : [],
     recentRes.ok ? recentRes.json() : [],
+    syncRunsRes.ok ? syncRunsRes.json() : [],
   ]);
 
-  return { summary, spending, balances, recent };
+  return { summary, spending, balances, recent, lastSyncRuns };
 }
 
 export function DashboardPanel({
@@ -95,6 +100,7 @@ export function DashboardPanel({
     spending: [],
     balances: [],
     recent: [],
+    lastSyncRuns: [],
   });
   const [loading, setLoading] = React.useState(true);
 
@@ -124,7 +130,7 @@ export function DashboardPanel({
     }
   }
 
-  const { summary, spending, balances, recent } = data;
+  const { summary, spending, balances, recent, lastSyncRuns } = data;
 
   const chartConfig: ChartConfig = spending.reduce<ChartConfig>((cfg, item) => {
     cfg[item.categoryId] = { label: item.categoryName, color: item.color };
@@ -160,6 +166,9 @@ export function DashboardPanel({
           <span className="mr-auto text-xs text-amber-600">לחץ לאישור &#x2190;</span>
         </Link>
       )}
+
+      {/* Last sync strip */}
+      {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
 
       {loading && <p className="text-muted-foreground text-sm">טוען נתונים...</p>}
 
