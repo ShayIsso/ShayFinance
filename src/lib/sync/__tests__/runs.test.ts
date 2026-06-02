@@ -1,6 +1,13 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { startSyncRun, completeSyncRun, failSyncRun, getLastRunPerBank } from "../runs";
+import { describe, it, expect } from "vitest";
+import {
+  startSyncRun,
+  completeSyncRun,
+  failSyncRun,
+  getLastRunPerBank,
+  syncRunStatusForEvent,
+} from "../runs";
 import type { SyncRunStore, SyncRunRow, SyncRunSummary } from "../runs";
+import type { SyncEvent } from "@/lib/scraper";
 
 // ── In-memory store ───────────────────────────────────────────────────────────
 
@@ -183,5 +190,46 @@ describe("getLastRunPerBank", () => {
 
     const banks = results.map((r) => r.bank).sort();
     expect(banks).toEqual(["discount", "max", "visaCal"]);
+  });
+});
+
+describe("syncRunStatusForEvent", () => {
+  it("maps bank_error → error", () => {
+    const event: SyncEvent = {
+      type: "bank_error",
+      bank: "discount",
+      error: "LOGIN_FAILED",
+      hasScreenshot: true,
+      screenshotFilename: "discount-123.png",
+    };
+    expect(syncRunStatusForEvent(event)).toBe("error");
+  });
+
+  it("maps otp_timeout → otp_skipped", () => {
+    const event: SyncEvent = { type: "otp_timeout", bank: "max" };
+    expect(syncRunStatusForEvent(event)).toBe("otp_skipped");
+  });
+
+  it("maps bank_complete → null (not terminal — success decided after the loop)", () => {
+    const event: SyncEvent = { type: "bank_complete", bank: "visaCal", accounts: [] };
+    expect(syncRunStatusForEvent(event)).toBeNull();
+  });
+
+  it("maps progress → null", () => {
+    const event: SyncEvent = { type: "progress", bank: "discount", status: "scraping" };
+    expect(syncRunStatusForEvent(event)).toBeNull();
+  });
+
+  it("maps otp_required → null", () => {
+    const event: SyncEvent = {
+      type: "otp_required",
+      bank: "max",
+      otpHandler: {
+        resolveOtp: () => {},
+        promise: Promise.resolve(""),
+        cancel: () => {},
+      },
+    };
+    expect(syncRunStatusForEvent(event)).toBeNull();
   });
 });

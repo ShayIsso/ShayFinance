@@ -1,4 +1,5 @@
 import { redact } from "@/lib/logging";
+import type { SyncEvent } from "@/lib/scraper";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -155,4 +156,20 @@ export async function failSyncRun(
  */
 export async function getLastRunPerBank(store: SyncRunStore): Promise<SyncRunSummary[]> {
   return store.getLastRunPerBank();
+}
+
+/**
+ * Maps a scraper event to the terminal sync-run status it implies.
+ *
+ * The scraper does NOT throw on bank failure — it yields a terminal event and
+ * returns. This helper is the single source of truth for translating those
+ * yielded events into a `sync_runs` outcome:
+ *   - `bank_error`  → "error"        (login/scrape failure; common path)
+ *   - `otp_timeout` → "otp_skipped"  (OTP not submitted in time)
+ *   - everything else → null         (not terminal; success is decided after the loop)
+ */
+export function syncRunStatusForEvent(event: SyncEvent): "error" | "otp_skipped" | null {
+  if (event.type === "bank_error") return "error";
+  if (event.type === "otp_timeout") return "otp_skipped";
+  return null;
 }
