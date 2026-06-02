@@ -11,6 +11,7 @@ import {
   applyP3InterAccount,
   drizzleReconciliationStore,
 } from "@/lib/reconciliation";
+import { runDetection, drizzleRecurringStore } from "@/lib/recurring-detection";
 import { db } from "@/db";
 import { bankAccounts } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -194,6 +195,15 @@ export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<Sync
     autoApplied: p1Result.autoApplied + p2Result.autoApplied + p3Result.autoApplied,
     queued: p1Result.queued + p2Result.queued + p3Result.queued,
   };
+
+  // Recurring detection: runs after reconciliation so category-flipped transactions
+  // are already settled. Wrapped in try/catch so a detection failure never breaks
+  // sync completion — detection results surface on /subscriptions, not the SSE stream.
+  try {
+    await runDetection(drizzleRecurringStore);
+  } catch {
+    // Detection failure is non-fatal. The sync_complete event still fires below.
+  }
 
   yield { type: "sync_complete", summary: { total, byBank: importedByBank } };
 }
