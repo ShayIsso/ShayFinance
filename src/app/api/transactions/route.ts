@@ -8,8 +8,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const filters = transactionFiltersSchema.parse(Object.fromEntries(searchParams));
-    const data = await getTransactions(filters);
-    return NextResponse.json(data);
+    return NextResponse.json(await getTransactions(filters));
   } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json({ error: formatZodError(err) }, { status: 400 });
