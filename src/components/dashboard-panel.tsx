@@ -266,8 +266,16 @@ export function DashboardPanel({
   const { summary, spending, balances, recent, lastSyncRuns, upcomingCharges, upcomingTotal } =
     data;
 
+  // A brand-new account returns a zeroed summary object (not null), so checking
+  // `summary === null` alone never fires. Treat an all-zero summary as empty too;
+  // the other clauses (no balances/recent/spending/upcoming) keep an existing user
+  // viewing a quiet month out of this branch — they still have bank balances.
+  const summaryIsEmpty =
+    summary === null ||
+    (summary.income === 0 && summary.expenses === 0 && summary.investmentTotal === 0);
+
   const hasNoData =
-    summary === null &&
+    summaryIsEmpty &&
     spending.length === 0 &&
     balances.length === 0 &&
     recent.length === 0 &&
