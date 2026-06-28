@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Inbox } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Repeat, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Amount } from "@/components/ui/amount";
 import {
   ChartContainer,
   ChartTooltip,
@@ -57,32 +58,152 @@ function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
+type UpcomingCharge = {
+  id: string;
+  merchant: string;
+  expectedAmount: number;
+  cadence: "monthly" | "quarterly" | "annual";
+  nextExpectedDate: string;
+};
+
 type DashboardData = {
   summary: MonthlySummary | null;
   spending: CategorySpending[];
   balances: AccountBalance[];
   recent: RecentTransaction[];
   lastSyncRuns: SyncRunSummary[];
+  upcomingCharges: UpcomingCharge[];
+  upcomingTotal: number;
 };
 
 async function fetchDashboardData(year: number, month: number): Promise<DashboardData> {
-  const [summaryRes, spendingRes, balancesRes, recentRes, syncRunsRes] = await Promise.all([
-    fetch(`/api/analytics/monthly?year=${year}&month=${month}`),
-    fetch(`/api/analytics/spending-by-category?year=${year}&month=${month}`),
-    fetch(`/api/analytics/balances`),
-    fetch(`/api/analytics/recent?limit=15`),
-    fetch(`/api/sync-runs`),
-  ]);
+  const [summaryRes, spendingRes, balancesRes, recentRes, syncRunsRes, upcomingRes] =
+    await Promise.all([
+      fetch(`/api/analytics/monthly?year=${year}&month=${month}`),
+      fetch(`/api/analytics/spending-by-category?year=${year}&month=${month}`),
+      fetch(`/api/analytics/balances`),
+      fetch(`/api/analytics/recent?limit=15`),
+      fetch(`/api/sync-runs`),
+      fetch(`/api/recurring-upcoming`),
+    ]);
 
-  const [summary, spending, balances, recent, lastSyncRuns] = await Promise.all([
+  const [summary, spending, balances, recent, lastSyncRuns, upcomingData] = await Promise.all([
     summaryRes.ok ? summaryRes.json() : null,
     spendingRes.ok ? spendingRes.json() : [],
     balancesRes.ok ? balancesRes.json() : [],
     recentRes.ok ? recentRes.json() : [],
     syncRunsRes.ok ? syncRunsRes.json() : [],
+    upcomingRes.ok ? upcomingRes.json() : { upcoming: [], total: 0 },
   ]);
 
-  return { summary, spending, balances, recent, lastSyncRuns };
+  return {
+    summary,
+    spending,
+    balances,
+    recent,
+    lastSyncRuns,
+    upcomingCharges: upcomingData.upcoming ?? [],
+    upcomingTotal: upcomingData.total ?? 0,
+  };
+}
+
+// ── Hebrew cadence labels ─────────────────────────────────────────────────────
+
+const CADENCE_LABELS: Record<UpcomingCharge["cadence"], string> = {
+  monthly: "חודשי",
+  quarterly: "רבעוני",
+  annual: "שנתי",
+};
+
+// ── Upcoming charges card ─────────────────────────────────────────────────────
+// Dates formatted client-side to avoid hydration mismatch (CLAUDE.md rule)
+
+function formatUpcomingDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Intl.DateTimeFormat("he-IL", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(year, month - 1, day));
+}
+
+function UpcomingChargesCard({ charges, total }: { charges: UpcomingCharge[]; total: number }) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Repeat className="h-4 w-4 text-emerald-600" strokeWidth={1.5} />
+            <CardTitle className="text-base font-semibold">חיובים קרובים</CardTitle>
+          </div>
+          {charges.length > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground text-xs">7 ימים הקרובים</span>
+              <Amount
+                amount={total}
+                currency="ILS"
+                colorize={false}
+                className="text-sm font-semibold tabular-nums"
+              />
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {charges.length === 0 ? (
+          <p className="text-muted-foreground text-sm">אין חיובים חוזרים צפויים בשבוע הקרוב</p>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground text-sm">
+                {charges.length} חיוב{charges.length !== 1 ? "ים" : ""} צפוי
+                {charges.length !== 1 ? "ים" : ""}
+              </span>
+              <button
+                onClick={() => setExpanded((e) => !e)}
+                className="text-muted-foreground hover:text-foreground flex items-center gap-0.5 text-xs"
+                aria-expanded={expanded}
+              >
+                {expanded ? (
+                  <>
+                    הסתר
+                    <ChevronUp className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  </>
+                ) : (
+                  <>
+                    הצג פירוט
+                    <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  </>
+                )}
+              </button>
+            </div>
+            {expanded && (
+              <div className="divide-y rounded-md border">
+                {charges.map((charge) => (
+                  <div key={charge.id} className="flex items-center justify-between px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{charge.merchant}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {CADENCE_LABELS[charge.cadence]} &middot;{" "}
+                        {formatUpcomingDate(charge.nextExpectedDate)}
+                      </p>
+                    </div>
+                    <Amount
+                      amount={charge.expectedAmount}
+                      currency="ILS"
+                      colorize={false}
+                      className="text-sm tabular-nums"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export function DashboardPanel({
@@ -101,6 +222,8 @@ export function DashboardPanel({
     balances: [],
     recent: [],
     lastSyncRuns: [],
+    upcomingCharges: [],
+    upcomingTotal: 0,
   });
   const [loading, setLoading] = React.useState(true);
 
@@ -130,7 +253,8 @@ export function DashboardPanel({
     }
   }
 
-  const { summary, spending, balances, recent, lastSyncRuns } = data;
+  const { summary, spending, balances, recent, lastSyncRuns, upcomingCharges, upcomingTotal } =
+    data;
 
   const chartConfig: ChartConfig = spending.reduce<ChartConfig>((cfg, item) => {
     cfg[item.categoryId] = { label: item.categoryName, color: item.color };
@@ -248,6 +372,9 @@ export function DashboardPanel({
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming charges */}
+      <UpcomingChargesCard charges={upcomingCharges} total={upcomingTotal} />
 
       {/* Account balances */}
       {balances.length > 0 && (
