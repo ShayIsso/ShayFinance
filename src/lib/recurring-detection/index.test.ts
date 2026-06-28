@@ -180,20 +180,18 @@ describe("detectPatterns", () => {
   });
 
   describe("fuzzy merchant matching", () => {
-    it("clusters NETFLIX.COM and נטפליקס as separate merchants (low similarity)", () => {
-      // These are genuinely different strings with low JW² score, should NOT merge
+    it("clusters cross-script Netflix variants (NETFLIX.COM and נטפליקס) as one merchant (#85)", () => {
+      // Cross-script aliasing: these resolve to the same canonical brand, so
+      // scoreSimilarity short-circuits to 1.0 and they cluster together.
       const txns = [
         makeTxn("1", "NETFLIX.COM", 39.9, "2025-01-15"),
-        makeTxn("2", "NETFLIX.COM", 39.9, "2025-02-15"),
+        makeTxn("2", "נטפליקס ישראל", 39.9, "2025-02-15"),
         makeTxn("3", "NETFLIX.COM", 39.9, "2025-03-15"),
-        makeTxn("4", "נטפליקס ישראל", 39.9, "2025-01-16"),
-        makeTxn("5", "נטפליקס ישראל", 39.9, "2025-02-16"),
-        makeTxn("6", "נטפליקס ישראל", 39.9, "2025-03-16"),
       ];
       const patterns = detectPatterns(txns);
-      // Two distinct merchant clusters → should detect 2 separate patterns (or 1 if similarity is high enough to merge)
-      // We expect at least 1 pattern — NETFLIX.COM ones definitely qualify
-      expect(patterns.length).toBeGreaterThanOrEqual(1);
+      // Single merged merchant cluster → exactly one monthly pattern.
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].cadence).toBe("monthly");
     });
 
     it("clusters identical descriptions into one pattern", () => {

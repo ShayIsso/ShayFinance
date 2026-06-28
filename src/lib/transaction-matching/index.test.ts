@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { datesWithin, amountsMatch, sumMatches, extractMerchant, scoreSimilarity } from "./index";
+import {
+  datesWithin,
+  amountsMatch,
+  sumMatches,
+  extractMerchant,
+  scoreSimilarity,
+  canonicalizeMerchant,
+} from "./index";
 
 describe("datesWithin", () => {
   it("returns true for the same day (window = 0)", () => {
@@ -169,5 +176,55 @@ describe("scoreSimilarity", () => {
 
   it("returns > 0.5 for same single Hebrew word in longer phrase", () => {
     expect(scoreSimilarity("ויזה", "ויזה")).toBe(1.0);
+  });
+
+  it("returns 1 for cross-script Netflix (Hebrew name vs Latin name)", () => {
+    expect(scoreSimilarity("נטפליקס ישראל", "NETFLIX.COM")).toBe(1);
+  });
+
+  it("returns 1 for cross-script Spotify (Hebrew name vs Latin name)", () => {
+    expect(scoreSimilarity("ספוטיפיי", "SPOTIFY")).toBe(1);
+  });
+
+  it("returns 1 for cross-script Google (Hebrew name vs Latin name)", () => {
+    expect(scoreSimilarity("גוגל", "GOOGLE")).toBe(1);
+  });
+
+  it("does NOT merge two distinct seeded brands (Netflix vs Spotify)", () => {
+    expect(scoreSimilarity("נטפליקס", "SPOTIFY")).toBeLessThan(0.7);
+  });
+});
+
+describe("canonicalizeMerchant", () => {
+  it("maps Hebrew and Latin Netflix aliases to the same canonical key", () => {
+    expect(canonicalizeMerchant("נטפליקס ישראל")).toBe(canonicalizeMerchant("netflix"));
+  });
+
+  it("maps Hebrew and Latin Spotify aliases to the same canonical key", () => {
+    expect(canonicalizeMerchant("ספוטיפיי")).toBe(canonicalizeMerchant("spotify"));
+  });
+
+  it("maps Hebrew and Latin Google aliases to the same canonical key", () => {
+    expect(canonicalizeMerchant("גוגל")).toBe(canonicalizeMerchant("google"));
+  });
+
+  it("maps Hebrew and Latin YouTube aliases to the same canonical key", () => {
+    expect(canonicalizeMerchant("יוטיוב")).toBe(canonicalizeMerchant("youtube"));
+  });
+
+  it("maps Hebrew and Latin Apple aliases to the same canonical key", () => {
+    expect(canonicalizeMerchant("אפל")).toBe(canonicalizeMerchant("apple"));
+  });
+
+  it("returns an unseeded Hebrew-only merchant unchanged", () => {
+    expect(canonicalizeMerchant("סופרמרקט רמי לוי")).toBe("סופרמרקט רמי לוי");
+  });
+
+  it("returns an unseeded Latin-only merchant unchanged", () => {
+    expect(canonicalizeMerchant("amazon")).toBe("amazon");
+  });
+
+  it("gives distinct canonical keys to distinct seeded brands", () => {
+    expect(canonicalizeMerchant("נטפליקס")).not.toBe(canonicalizeMerchant("ספוטיפיי"));
   });
 });

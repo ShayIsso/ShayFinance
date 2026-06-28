@@ -413,18 +413,11 @@ describe("occurrenceDates", () => {
 
 describe("fuzzy merchant grouping (spec probe)", () => {
   /**
-   * KNOWN LIMITATION (skipped) — cross-script merchant aliasing.
-   *
-   * ARCHITECTURE.md §2 aspires to treat "NETFLIX.COM" and "נטפליקס ישראל" as the
-   * same merchant. But the shared `scoreSimilarity` primitive (F2, shipped) is
-   * Jaro-Winkler over characters — Latin "netflix" and Hebrew "נטפליקס" share no
-   * code points, so it scores ~0 and cannot bridge scripts. Closing this needs a
-   * transliteration/alias map inside `transaction-matching` (a closed module),
-   * which is out of RD1's scope. Same-script grouping — including Hebrew PREFIXES
-   * on a Latin merchant core (see "Hebrew prefix stripping" below) — works today.
-   * Tracked as a follow-up; un-skip when the primitive gains cross-script aliasing.
+   * Cross-script merchant aliasing (#85). `scoreSimilarity` now short-circuits to
+   * 1.0 when both extracted merchants map to the same canonical brand key, so
+   * "NETFLIX.COM" and "נטפליקס ישראל" cluster as one merchant.
    */
-  it.skip("groups 'תשלום ב-NETFLIX.COM' and 'נטפליקס ישראל' as the same merchant pattern", () => {
+  it("groups 'תשלום ב-NETFLIX.COM' and 'נטפליקס ישראל' as the same merchant pattern", () => {
     const txns = [
       txn("f1", "תשלום ב-NETFLIX.COM", 35.9, "2025-01-05"),
       txn("f2", "נטפליקס ישראל", 35.9, "2025-02-05"),

@@ -1,4 +1,5 @@
 import { extractMerchant } from "./merchant";
+import { canonicalizeMerchant } from "./canonicalize";
 
 function jaro(s1: string, s2: string): number {
   if (s1 === s2) return 1;
@@ -55,6 +56,13 @@ export function scoreSimilarity(a: string, b: string): number {
 
   if (normA === "" && normB === "") return 1;
   if (normA === "" || normB === "") return 0;
+
+  // Cross-script alias short-circuit: if both extracted merchants map to the same
+  // canonical brand key (e.g. "נטפליקס ישראל" and "netflix"), treat them as an
+  // exact merchant match. Falls through to Jaro-Winkler for all non-aliased pairs.
+  const canonA = canonicalizeMerchant(normA);
+  const canonB = canonicalizeMerchant(normB);
+  if (canonA !== "" && canonB !== "" && canonA === canonB) return 1;
 
   // Square the JW score to increase discrimination between moderate and high matches
   const jw = jaroWinkler(normA, normB);
