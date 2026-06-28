@@ -83,7 +83,10 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
 
   return rows.map((r) => {
     const txnMerchant = extractMerchant(r.description);
-    const txnAmount = Number(r.chargedAmount);
+    // Detection stores expectedAmount as an absolute (positive) value, while
+    // expense chargedAmounts are negative. amountsMatch rejects opposite signs,
+    // so compare on absolute value or no expense would ever match.
+    const txnAmount = Math.abs(Number(r.chargedAmount));
     const matched = activeRecurring.find(
       (re) => re.merchant === txnMerchant && amountsMatch(txnAmount, Number(re.expectedAmount)),
     );
