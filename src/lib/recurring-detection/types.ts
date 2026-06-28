@@ -79,6 +79,23 @@ export type MissedPaymentAlert = {
   daysOverdue: number;
 };
 
+/**
+ * Alert raised when a pattern is so far past its expected date that it is
+ * likely cancelled/dormant rather than merely a one-off missed payment.
+ * Derived at view-time only — never persisted.
+ */
+export type DormantAlert = {
+  type: "dormant";
+  patternId: string;
+  merchant: string;
+  /** The date the next payment was expected. */
+  nextExpectedDate: Date;
+  /** How many days overdue (today - nextExpectedDate, whole days). */
+  daysOverdue: number;
+  /** The pattern's cadence — drives the dormancy threshold. */
+  cadence: Cadence;
+};
+
 /** Alert raised for patterns that have not yet been confirmed by the user. */
 export type NewlyDetectedAlert = {
   type: "newly_detected";

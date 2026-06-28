@@ -5,12 +5,33 @@ import type {
   PriceChangeAlert,
   MissedPaymentAlert,
   NewlyDetectedAlert,
+  DormantAlert,
+  Cadence,
 } from "./types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PRICE_CHANGE_THRESHOLD = 0.15; // strictly greater than 15%
 const MISSED_PAYMENT_GRACE_DAYS = 7; // exactly 7 days is NOT missed; 8+ is missed
+const MS_PER_DAY = 86_400_000;
+
+/** Nominal interval length (days) per cadence — basis for the dormancy threshold. */
+const CADENCE_BASE_DAYS: Record<Cadence, number> = {
+  monthly: 30,
+  quarterly: 91,
+  annual: 365,
+};
+
+/** A pattern is "dormant" once it is overdue by ≥ base × this multiplier. */
+const DORMANT_MULTIPLIER = 1.5;
+
+/**
+ * Days-overdue at/above which a pattern is treated as dormant (likely cancelled)
+ * rather than a missed payment. monthly ~45d, quarterly ~137d, annual ~548d.
+ */
+function dormancyThreshold(cadence: Cadence): number {
+  return Math.round(CADENCE_BASE_DAYS[cadence] * DORMANT_MULTIPLIER);
+}
 
 // ── detectPriceChanges ────────────────────────────────────────────────────────
 
@@ -72,12 +93,15 @@ export function detectPriceChanges(
 // ── detectMissedPayments ──────────────────────────────────────────────────────
 
 /**
- * Detects active patterns where today is strictly more than 7 days past the
- * nextExpectedDate (i.e. today > nextExpectedDate + 7 days).
+ * Detects active patterns that are overdue past the grace window but NOT yet
+ * dormant. Missed and dormant are mutually exclusive:
+ *   MISSED_PAYMENT_GRACE_DAYS < daysOverdue < dormancyThreshold(cadence)
  *
  * Pure function — pass `today` in; never calls new Date() internally.
  *
- * Boundary: exactly 7 days overdue is NOT missed; 8+ days is missed.
+ * Boundary: exactly 7 days overdue is NOT missed; 8+ days is missed. Once a
+ * pattern reaches its cadence dormancy threshold it is reported by
+ * detectDormant instead (e.g. 8 days → missed; 8 months → dormant only).
  * Comparison uses UTC dates (integer day-floor arithmetic), mirroring the
  * datesWithin semantics in src/lib/transaction-matching/dates.ts.
  */
@@ -86,7 +110,6 @@ export function detectMissedPayments(
   today: Date,
 ): MissedPaymentAlert[] {
   const alerts: MissedPaymentAlert[] = [];
-  const MS_PER_DAY = 86_400_000;
 
   for (const pattern of patterns) {
     if (pattern.status !== "active") continue;
@@ -94,14 +117,54 @@ export function detectMissedPayments(
     const diffMs = today.getTime() - pattern.nextExpectedDate.getTime();
     const daysOverdue = Math.floor(diffMs / MS_PER_DAY);
 
-    // Strictly more than 7 days — exactly 7 is NOT missed
-    if (daysOverdue > MISSED_PAYMENT_GRACE_DAYS) {
+    // Strictly more than 7 days, but strictly less than the dormancy threshold —
+    // a longer overdue is "dormant", not "missed".
+    if (
+      daysOverdue > MISSED_PAYMENT_GRACE_DAYS &&
+      daysOverdue < dormancyThreshold(pattern.cadence)
+    ) {
       alerts.push({
         type: "missed_payment",
         patternId: pattern.id,
         merchant: pattern.merchant,
         nextExpectedDate: pattern.nextExpectedDate,
         daysOverdue,
+      });
+    }
+  }
+
+  return alerts;
+}
+
+// ── detectDormant ─────────────────────────────────────────────────────────────
+
+/**
+ * Detects active patterns that are so far past nextExpectedDate that they are
+ * likely cancelled rather than a one-off missed payment. Fires when
+ * daysOverdue >= dormancyThreshold(cadence) (monthly ~45d, quarterly ~137d,
+ * annual ~548d). Mutually exclusive with detectMissedPayments.
+ *
+ * Pure function — pass `today` in; never calls new Date() internally. Mirrors
+ * the UTC integer day-floor arithmetic and status guard of detectMissedPayments.
+ * View-time derived only — nothing is persisted.
+ */
+export function detectDormant(patterns: PersistedRecurringPattern[], today: Date): DormantAlert[] {
+  const alerts: DormantAlert[] = [];
+
+  for (const pattern of patterns) {
+    if (pattern.status !== "active") continue;
+
+    const diffMs = today.getTime() - pattern.nextExpectedDate.getTime();
+    const daysOverdue = Math.floor(diffMs / MS_PER_DAY);
+
+    if (daysOverdue >= dormancyThreshold(pattern.cadence)) {
+      alerts.push({
+        type: "dormant",
+        patternId: pattern.id,
+        merchant: pattern.merchant,
+        nextExpectedDate: pattern.nextExpectedDate,
+        daysOverdue,
+        cadence: pattern.cadence,
       });
     }
   }

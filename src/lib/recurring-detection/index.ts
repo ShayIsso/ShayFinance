@@ -14,5 +14,11 @@ export type {
   PriceChangeAlert,
   MissedPaymentAlert,
   NewlyDetectedAlert,
+  DormantAlert,
 } from "./types";
-export { detectPriceChanges, detectMissedPayments, detectNewlyDetected } from "./anomalies";
+export {
+  detectPriceChanges,
+  detectMissedPayments,
+  detectNewlyDetected,
+  detectDormant,
+} from "./anomalies";

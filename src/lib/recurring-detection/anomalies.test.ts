@@ -6,7 +6,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { detectPriceChanges, detectMissedPayments, detectNewlyDetected } from "./anomalies";
+import {
+  detectPriceChanges,
+  detectMissedPayments,
+  detectNewlyDetected,
+  detectDormant,
+} from "./anomalies";
 import type { PersistedRecurringPattern, DetectionTransaction } from "./types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -339,5 +344,112 @@ describe("detectNewlyDetected", () => {
       const alerts = detectNewlyDetected([pausedUnconfirmed], []);
       expect(alerts).toHaveLength(1);
     });
+  });
+});
+
+// ── detectDormant + missed/dormant mutual exclusivity ──────────────────────────
+
+describe("detectDormant", () => {
+  const nextExpected = new Date("2025-05-01T00:00:00.000Z");
+
+  // dormancyThreshold = round(base * 1.5): monthly 45, quarterly 137, annual 548.
+  describe("monthly cadence (threshold = 45 days)", () => {
+    const monthly = makePattern({
+      id: "d-m",
+      merchant: "netflix",
+      cadence: "monthly",
+      nextExpectedDate: nextExpected,
+    });
+
+    it("does NOT fire dormant just below threshold (44 days overdue)", () => {
+      const today = addDays(nextExpected, 44);
+      expect(detectDormant([monthly], today)).toHaveLength(0);
+    });
+
+    it("fires dormant at exactly the threshold (45 days overdue)", () => {
+      const today = addDays(nextExpected, 45);
+      const alerts = detectDormant([monthly], today);
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0].type).toBe("dormant");
+      expect(alerts[0].patternId).toBe("d-m");
+      expect(alerts[0].cadence).toBe("monthly");
+      expect(alerts[0].daysOverdue).toBe(45);
+    });
+
+    it("fires dormant well above threshold (8 months overdue)", () => {
+      const today = addDays(nextExpected, 240);
+      expect(detectDormant([monthly], today)).toHaveLength(1);
+    });
+
+    it("does NOT fire for paused/canceled patterns", () => {
+      const paused = makePattern({
+        id: "d-p",
+        cadence: "monthly",
+        nextExpectedDate: nextExpected,
+        status: "paused",
+      });
+      const today = addDays(nextExpected, 240);
+      expect(detectDormant([paused], today)).toHaveLength(0);
+    });
+  });
+
+  describe("quarterly cadence (threshold = 137 days)", () => {
+    const quarterly = makePattern({
+      id: "d-q",
+      cadence: "quarterly",
+      nextExpectedDate: nextExpected,
+    });
+
+    it("does NOT fire at 136 days; fires at 137 days", () => {
+      expect(detectDormant([quarterly], addDays(nextExpected, 136))).toHaveLength(0);
+      expect(detectDormant([quarterly], addDays(nextExpected, 137))).toHaveLength(1);
+    });
+  });
+
+  describe("annual cadence (threshold = 548 days)", () => {
+    const annual = makePattern({
+      id: "d-a",
+      cadence: "annual",
+      nextExpectedDate: nextExpected,
+    });
+
+    it("does NOT fire at 547 days; fires at 548 days", () => {
+      expect(detectDormant([annual], addDays(nextExpected, 547))).toHaveLength(0);
+      expect(detectDormant([annual], addDays(nextExpected, 548))).toHaveLength(1);
+    });
+  });
+});
+
+describe("missed / dormant mutual exclusivity (monthly, threshold = 45 days)", () => {
+  const nextExpected = new Date("2025-05-01T00:00:00.000Z");
+  const monthly = makePattern({
+    id: "x1",
+    merchant: "spotify",
+    cadence: "monthly",
+    nextExpectedDate: nextExpected,
+  });
+
+  it("just below threshold (44 days) → missed only, NOT dormant", () => {
+    const today = addDays(nextExpected, 44);
+    expect(detectMissedPayments([monthly], today)).toHaveLength(1);
+    expect(detectDormant([monthly], today)).toHaveLength(0);
+  });
+
+  it("at threshold (45 days) → dormant only, NOT missed", () => {
+    const today = addDays(nextExpected, 45);
+    expect(detectMissedPayments([monthly], today)).toHaveLength(0);
+    expect(detectDormant([monthly], today)).toHaveLength(1);
+  });
+
+  it("long overdue (8 months) → dormant only; missed no longer fires", () => {
+    const today = addDays(nextExpected, 240);
+    expect(detectMissedPayments([monthly], today)).toHaveLength(0);
+    expect(detectDormant([monthly], today)).toHaveLength(1);
+  });
+
+  it("8 days overdue still fires missed (well inside the missed window)", () => {
+    const today = addDays(nextExpected, 8);
+    expect(detectMissedPayments([monthly], today)).toHaveLength(1);
+    expect(detectDormant([monthly], today)).toHaveLength(0);
   });
 });
