@@ -8,6 +8,7 @@ import {
   detectPriceChanges,
   detectMissedPayments,
   detectNewlyDetected,
+  detectDormant,
   drizzleRecurringStore,
 } from "@/lib/recurring-detection";
 import type {
@@ -15,6 +16,7 @@ import type {
   PriceChangeAlert,
   MissedPaymentAlert,
   NewlyDetectedAlert,
+  DormantAlert,
 } from "@/lib/recurring-detection";
 import { getCategories } from "@/lib/categories";
 import type { Category } from "@/lib/categories";
@@ -36,6 +38,7 @@ export type AnomalyAlerts = {
   priceChanges: PriceChangeAlert[];
   missedPayments: MissedPaymentAlert[];
   newlyDetected: NewlyDetectedAlert[];
+  dormant: DormantAlert[];
 };
 
 export default async function SubscriptionsPage() {
@@ -92,8 +95,9 @@ export default async function SubscriptionsPage() {
   const priceChanges = detectPriceChanges(patterns, recentTxns);
   const missedPayments = detectMissedPayments(patterns, today);
   const newlyDetected = detectNewlyDetected(patterns, recentTxns);
+  const dormant = detectDormant(patterns, today);
 
-  const alerts: AnomalyAlerts = { priceChanges, missedPayments, newlyDetected };
+  const alerts: AnomalyAlerts = { priceChanges, missedPayments, newlyDetected, dormant };
 
   // Fetch categories for the naming dialog's optional category dropdown.
   const categories: Category[] = await getCategories();
