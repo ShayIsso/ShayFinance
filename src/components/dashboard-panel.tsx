@@ -2,10 +2,20 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Inbox, Repeat, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
+  Repeat,
+  ChevronDown,
+  ChevronUp,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
 import { Amount } from "@/components/ui/amount";
 import {
   ChartContainer,
@@ -256,6 +266,13 @@ export function DashboardPanel({
   const { summary, spending, balances, recent, lastSyncRuns, upcomingCharges, upcomingTotal } =
     data;
 
+  const hasNoData =
+    summary === null &&
+    spending.length === 0 &&
+    balances.length === 0 &&
+    recent.length === 0 &&
+    upcomingCharges.length === 0;
+
   const chartConfig: ChartConfig = spending.reduce<ChartConfig>((cfg, item) => {
     cfg[item.categoryId] = { label: item.categoryName, color: item.color };
     return cfg;
@@ -294,219 +311,286 @@ export function DashboardPanel({
       {/* Last sync strip */}
       {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
 
-      {loading && <p className="text-muted-foreground text-sm">טוען נתונים...</p>}
-
-      {/* Savings summary — 3 cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">חיסכון נטו</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p
-              className={`text-2xl font-bold ${
-                summary && summary.netSavings >= 0 ? "text-emerald-600" : "text-red-600"
-              }`}
-            >
-              {summary ? formatCurrency(summary.netSavings) : "—"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">אחוז חיסכון</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p
-              className={`text-2xl font-bold ${
-                summary && summary.savingsRate >= 0 ? "text-emerald-600" : "text-red-600"
-              }`}
-            >
-              {summary ? formatPercent(summary.savingsRate) : "—"}
-            </p>
-            {summary && (
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="h-full rounded-full bg-emerald-500 transition-all"
-                  style={{ width: `${Math.min(Math.max(summary.savingsRate, 0), 100)}%` }}
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">הושקע</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-blue-600">
-              {summary ? formatCurrency(summary.investmentTotal) : "—"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Income / Expenses — 2 cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">הכנסות</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-emerald-600">
-              {summary ? formatCurrency(summary.income) : "—"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">הוצאות</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-red-600">
-              {summary ? formatCurrency(summary.expenses) : "—"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Upcoming charges */}
-      <UpcomingChargesCard charges={upcomingCharges} total={upcomingTotal} />
-
-      {/* Account balances */}
-      {balances.length > 0 && (
-        <div>
-          <h3 className="mb-3 text-base font-semibold">יתרות חשבון</h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {balances.map((acc) => (
-              <Card key={acc.id}>
-                <CardContent className="pt-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{acc.displayName}</p>
-                      <p className="text-muted-foreground text-xs">
-                        ****{acc.accountNumber.slice(-4)}
-                      </p>
-                    </div>
-                    <div className="text-left">
-                      <Badge variant="outline" className="mb-1 text-xs">
-                        {BANK_LABELS[acc.bankType] ?? acc.bankType}
-                      </Badge>
-                      <p
-                        className={`text-sm font-semibold ${
-                          acc.balance !== null && acc.balance >= 0
-                            ? "text-emerald-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {acc.balance !== null ? formatCurrency(acc.balance) : "—"}
-                      </p>
-                    </div>
-                  </div>
+      {loading ? (
+        <div className="space-y-6">
+          {/* Summary cards skeleton */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={`sk-summary-${i}`}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-32" />
                 </CardContent>
               </Card>
             ))}
           </div>
+          {/* Income / Expenses skeleton */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Card key={`sk-ie-${i}`}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-4 w-20" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-28" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          {/* Chart skeleton */}
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-5 w-40" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-64 w-full" />
+            </CardContent>
+          </Card>
+          {/* Recent transactions skeleton */}
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={`sk-tx-${i}`} className="flex items-center justify-between px-1 py-2">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
         </div>
-      )}
-
-      {/* Spending by category chart */}
-      {spending.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">הוצאות לפי קטגוריה</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-64 w-full">
-              <BarChart
-                data={spending.map((s) => ({
-                  name: s.categoryName,
-                  amount: s.amount,
-                  id: s.categoryId,
-                  color: s.color,
-                }))}
-                layout="vertical"
-                margin={{ top: 0, right: 16, bottom: 0, left: 8 }}
-              >
-                <XAxis
-                  type="number"
-                  tickFormatter={(v: number) => formatCurrency(v)}
-                  tick={{ fontSize: 11 }}
-                />
-                <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />
-                  }
-                />
-                <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
-                  {spending.map((s) => (
-                    <Cell key={s.categoryId} fill={s.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Recent transactions */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold">עסקאות אחרונות</h3>
-          <Link href="/transactions" className="text-muted-foreground text-sm hover:underline">
-            צפה בהכל
-          </Link>
-        </div>
+      ) : hasNoData ? (
         <Card>
           <CardContent className="p-0">
-            {recent.length === 0 ? (
-              <p className="text-muted-foreground p-4 text-sm">אין עסקאות להצגה</p>
-            ) : (
-              <div className="divide-y">
-                {recent.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {tx.customDescription ?? tx.description}
-                      </p>
-                      <p className="text-muted-foreground text-xs">{tx.date}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {tx.categoryName && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs"
-                          style={
-                            tx.categoryColor
-                              ? {
-                                  borderColor: tx.categoryColor,
-                                  color: tx.categoryColor,
-                                }
-                              : undefined
-                          }
-                        >
-                          {tx.categoryName}
-                        </Badge>
-                      )}
-                      <span
-                        className={`text-sm font-semibold tabular-nums ${
-                          tx.chargedAmount >= 0 ? "text-emerald-600" : "text-red-600"
-                        }`}
-                      >
-                        {formatCurrency(tx.chargedAmount)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <EmptyState
+              icon={Wallet}
+              heading="אין נתונים"
+              explainer="לא נטענו עסקאות. התחבר לבנק הראשון שלך כדי להתחיל."
+              cta={{ label: "עבור להגדרות", href: "/settings" }}
+            />
           </CardContent>
         </Card>
-      </div>
+      ) : (
+        <div className="space-y-6 transition-opacity duration-150">
+          {/* Savings summary — 3 cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-muted-foreground text-sm font-medium">
+                  חיסכון נטו
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p
+                  className={`text-2xl font-bold ${
+                    summary && summary.netSavings >= 0 ? "text-emerald-600" : "text-red-600"
+                  }`}
+                >
+                  {summary ? formatCurrency(summary.netSavings) : "—"}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-muted-foreground text-sm font-medium">
+                  אחוז חיסכון
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p
+                  className={`text-2xl font-bold ${
+                    summary && summary.savingsRate >= 0 ? "text-emerald-600" : "text-red-600"
+                  }`}
+                >
+                  {summary ? formatPercent(summary.savingsRate) : "—"}
+                </p>
+                {summary && (
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${Math.min(Math.max(summary.savingsRate, 0), 100)}%` }}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-muted-foreground text-sm font-medium">הושקע</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-blue-600">
+                  {summary ? formatCurrency(summary.investmentTotal) : "—"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Income / Expenses — 2 cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-muted-foreground text-sm font-medium">הכנסות</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {summary ? formatCurrency(summary.income) : "—"}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-muted-foreground text-sm font-medium">הוצאות</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-red-600">
+                  {summary ? formatCurrency(summary.expenses) : "—"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Upcoming charges */}
+          <UpcomingChargesCard charges={upcomingCharges} total={upcomingTotal} />
+
+          {/* Account balances */}
+          {balances.length > 0 && (
+            <div>
+              <h3 className="mb-3 text-base font-semibold">יתרות חשבון</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {balances.map((acc) => (
+                  <Card key={acc.id}>
+                    <CardContent className="pt-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{acc.displayName}</p>
+                          <p className="text-muted-foreground text-xs">
+                            ****{acc.accountNumber.slice(-4)}
+                          </p>
+                        </div>
+                        <div className="text-left">
+                          <Badge variant="outline" className="mb-1 text-xs">
+                            {BANK_LABELS[acc.bankType] ?? acc.bankType}
+                          </Badge>
+                          <p
+                            className={`text-sm font-semibold ${
+                              acc.balance !== null && acc.balance >= 0
+                                ? "text-emerald-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {acc.balance !== null ? formatCurrency(acc.balance) : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Spending by category chart */}
+          {spending.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">הוצאות לפי קטגוריה</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={chartConfig} className="h-64 w-full">
+                  <BarChart
+                    data={spending.map((s) => ({
+                      name: s.categoryName,
+                      amount: s.amount,
+                      id: s.categoryId,
+                      color: s.color,
+                    }))}
+                    layout="vertical"
+                    margin={{ top: 0, right: 16, bottom: 0, left: 8 }}
+                  >
+                    <XAxis
+                      type="number"
+                      tickFormatter={(v: number) => formatCurrency(v)}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />
+                      }
+                    />
+                    <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
+                      {spending.map((s) => (
+                        <Cell key={s.categoryId} fill={s.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Recent transactions */}
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold">עסקאות אחרונות</h3>
+              <Link href="/transactions" className="text-muted-foreground text-sm hover:underline">
+                צפה בהכל
+              </Link>
+            </div>
+            <Card>
+              <CardContent className="p-0">
+                {recent.length === 0 ? (
+                  <p className="text-muted-foreground p-4 text-sm">אין עסקאות להצגה</p>
+                ) : (
+                  <div className="divide-y">
+                    {recent.map((tx) => (
+                      <div
+                        key={tx.id}
+                        className="flex items-center justify-between gap-3 px-4 py-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {tx.customDescription ?? tx.description}
+                          </p>
+                          <p className="text-muted-foreground text-xs">{tx.date}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {tx.categoryName && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs"
+                              style={
+                                tx.categoryColor
+                                  ? {
+                                      borderColor: tx.categoryColor,
+                                      color: tx.categoryColor,
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {tx.categoryName}
+                            </Badge>
+                          )}
+                          <span
+                            className={`text-sm font-semibold tabular-nums ${
+                              tx.chargedAmount >= 0 ? "text-emerald-600" : "text-red-600"
+                            }`}
+                          >
+                            {formatCurrency(tx.chargedAmount)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
