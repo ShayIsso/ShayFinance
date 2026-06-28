@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Check, X } from "lucide-react";
+import { Check, X, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/empty-state";
 import {
   approveReconciliationAction,
   rejectReconciliationAction,
@@ -332,10 +333,12 @@ export function ReconciliationInbox({ groups: initialGroups }: Props) {
       {/* Group list */}
       {groups.length === 0 ? (
         <Card>
-          <CardContent className="py-16 text-center">
-            <p className="text-muted-foreground text-sm">
-              אין התאמות ממתינות לאישור. כל ההתאמות טופלו.
-            </p>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={Inbox}
+              heading="אין התאמות לאישור"
+              explainer="כל ההתאמות טופלו. התאמות חדשות יופיעו כאן לאחר הסנכרון הבא."
+            />
           </CardContent>
         </Card>
       ) : (

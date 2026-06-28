@@ -12,6 +12,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { EmptyState } from "@/components/empty-state";
+import { Tags } from "lucide-react";
 import { previewRetroactiveApplyAction, applyRetroactivelyAction } from "@/app/actions/rules";
 
 type MatchType = "contains" | "starts_with" | "exact" | "regex";
@@ -207,7 +209,12 @@ export function RulesSection({
 
       <div className="divide-y rounded-lg border">
         {rules.length === 0 && (
-          <p className="text-muted-foreground px-4 py-6 text-center text-sm">אין כללים מוגדרים</p>
+          <EmptyState
+            icon={Tags}
+            heading="לא נוצרו כללי קטגוריה"
+            explainer="צור כלל כדי לקטלג עסקאות באופן אוטומטי לפי תיאור."
+            cta={{ label: "הוסף כלל", onClick: openAdd }}
+          />
         )}
         {rules.map((rule) => (
           <div key={rule.id} className="flex items-center justify-between gap-3 px-4 py-3">

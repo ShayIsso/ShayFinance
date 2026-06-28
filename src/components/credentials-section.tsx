@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
 import {
   Dialog,
   DialogContent,
@@ -183,11 +185,31 @@ export function CredentialsSection() {
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground text-sm">טוען...</p>
-      ) : credentials.length === 0 ? (
-        <p className="text-muted-foreground text-sm">אין חשבונות בנק מוגדרים.</p>
-      ) : (
         <div className="space-y-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Card key={`skeleton-${i}`} size="sm">
+              <CardContent className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <Skeleton className="h-7 w-7 rounded-md" />
+                  <Skeleton className="h-7 w-7 rounded-md" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : credentials.length === 0 ? (
+        <EmptyState
+          icon={Landmark}
+          heading="לא הוגדרו חשבונות בנק"
+          explainer="הוסף את הבנק הראשון שלך כדי להתחיל לסנכרן עסקאות."
+          cta={{ label: "הוסף חשבון", onClick: openAdd }}
+        />
+      ) : (
+        <div className="space-y-2 transition-opacity duration-150">
           {credentials.map((cred) => (
             <Card key={cred.id} size="sm">
               <CardContent className="flex items-center justify-between py-3">

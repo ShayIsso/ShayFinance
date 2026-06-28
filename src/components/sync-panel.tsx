@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/empty-state";
 
 type BankSyncState = {
   status:
@@ -239,6 +240,19 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
         </Button>
         {connectionError && <p className="text-destructive text-sm">שגיאת חיבור. נסה שוב.</p>}
       </div>
+
+      {!syncing && !summary && Object.keys(bankStates).length === 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={RefreshCw}
+              heading="עדיין לא בוצע סנכרון"
+              explainer="הפעל סנכרון כדי להוריד את העסקאות האחרונות מחשבונות הבנק שלך."
+              cta={{ label: "סנכרן עכשיו", onClick: startSync }}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="space-y-3">
         {banks.map((bank) => {

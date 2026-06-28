@@ -1,12 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { Search, ChevronRight, ChevronLeft, Link2, Undo2, Repeat } from "lucide-react";
+import {
+  Search,
+  ChevronRight,
+  ChevronLeft,
+  Link2,
+  Undo2,
+  Repeat,
+  SearchX,
+  Inbox,
+} from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import {
   Table,
@@ -559,7 +570,11 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
       )}
 
       {/* Table */}
-      <div className="rounded-lg border">
+      <div
+        className={`rounded-lg border transition-opacity duration-150 ${
+          loading ? "opacity-70" : "opacity-100"
+        }`}
+      >
         <Table>
           <TableHeader>
             <TableRow>
@@ -576,15 +591,49 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground py-12 text-center">
-                  טוען...
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 8 }).map((_, i) => (
+                <TableRow key={`skeleton-${i}`}>
+                  <TableCell>
+                    <Skeleton className="h-4 w-4" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-20" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-48" />
+                  </TableCell>
+                  <TableCell className="text-left">
+                    <Skeleton className="ml-auto h-4 w-16" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-24 rounded-full" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-8" />
+                  </TableCell>
+                </TableRow>
+              ))
             ) : transactions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground py-12 text-center">
-                  אין תנועות להצגה. סנכרן חשבונות בנק כדי לייבא תנועות.
+                <TableCell colSpan={7} className="p-0">
+                  {hasActiveFilters ? (
+                    <EmptyState
+                      icon={SearchX}
+                      heading="לא נמצאו עסקאות התואמות את הסינון"
+                      explainer="נסה לשנות את מסנני התאריך, הקטגוריה או החיפוש."
+                      cta={{ label: "נקה סינון", onClick: clearFilters }}
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={Inbox}
+                      heading="אין עסקאות להצגה"
+                      explainer="סנכרן את חשבונות הבנק שלך כדי לייבא עסקאות."
+                      cta={{ label: "עבור לסנכרון", href: "/sync" }}
+                    />
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
