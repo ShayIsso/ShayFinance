@@ -70,6 +70,9 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
       limit: pageSize,
       offset,
     }),
+    // Recurring badges are a non-essential overlay. Isolate this query so a
+    // failure (e.g. recurring_expenses not yet migrated) degrades to "no
+    // badges" instead of 500ing the entire transactions list.
     db
       .select({
         id: recurringExpenses.id,
@@ -78,7 +81,16 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
         expectedCadence: recurringExpenses.expectedCadence,
       })
       .from(recurringExpenses)
-      .where(eq(recurringExpenses.status, "active")),
+      .where(eq(recurringExpenses.status, "active"))
+      .catch(
+        () =>
+          [] as Array<{
+            id: string;
+            merchant: string;
+            expectedAmount: string;
+            expectedCadence: "monthly" | "quarterly" | "annual";
+          }>,
+      ),
   ]);
 
   return rows.map((r) => {
