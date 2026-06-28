@@ -70,6 +70,7 @@ export const drizzleRecurringStore: RecurringStore = {
         target: recurringExpenses.patternFingerprint,
         set: {
           // Update dynamic fields only — DO NOT touch status (preserves canceled/paused)
+          // DO NOT touch confirmedAt — preserves user review state across re-detection
           expectedAmount: String(pattern.expectedAmount),
           nextExpectedDate: nextDateStr,
           lastMatchedTxnId: pattern.lastMatchedTxnId,

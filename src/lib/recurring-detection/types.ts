@@ -33,3 +33,55 @@ export type DetectionTransaction = {
   chargedAmount: number;
   date: string; // ISO date string "YYYY-MM-DD"
 };
+
+/**
+ * A recurring pattern as it lives in the DB — extends RecurringPattern with
+ * the DB row id, status, and confirmedAt so anomaly detectors can work on
+ * persisted data without fetching full DB rows.
+ */
+export type PersistedRecurringPattern = RecurringPattern & {
+  /** DB primary key (UUID). */
+  id: string;
+  /** User-facing status. Active patterns are checked for anomalies. */
+  status: "active" | "paused" | "canceled";
+  /**
+   * Null = newly detected, not yet confirmed by the user.
+   * Non-null = user has confirmed this pattern at the stored timestamp.
+   */
+  confirmedAt: Date | null;
+};
+
+// ── Anomaly alert types ───────────────────────────────────────────────────────
+
+/** Alert raised when a pattern's latest charge deviates > 15% from expectedAmount. */
+export type PriceChangeAlert = {
+  type: "price_change";
+  patternId: string;
+  merchant: string;
+  /** The pattern's stored expectedAmount before the change. */
+  oldAmount: number;
+  /** The latest observed charge amount (absolute value). */
+  newAmount: number;
+  /** Signed percentage change: (newAmount - oldAmount) / oldAmount. */
+  pctChange: number;
+};
+
+/** Alert raised when a payment is overdue by more than 7 days. */
+export type MissedPaymentAlert = {
+  type: "missed_payment";
+  patternId: string;
+  merchant: string;
+  /** The date the next payment was expected. */
+  nextExpectedDate: Date;
+  /** How many days overdue (today - nextExpectedDate, whole days). */
+  daysOverdue: number;
+};
+
+/** Alert raised for patterns that have not yet been confirmed by the user. */
+export type NewlyDetectedAlert = {
+  type: "newly_detected";
+  patternId: string;
+  merchant: string;
+  expectedAmount: number;
+  cadence: Cadence;
+};

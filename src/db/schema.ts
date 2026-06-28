@@ -170,6 +170,8 @@ export const recurringExpenses = pgTable(
     nextExpectedDate: date("next_expected_date").notNull(),
     lastMatchedTxnId: uuid("last_matched_txn_id").references(() => transactions.id),
     status: recurringStatusEnum("status").notNull().default("active"),
+    /** Null = newly detected / needs user review. Set when user confirms the pattern. */
+    confirmedAt: timestamp("confirmed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
