@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { transactions, recurringExpenses } from "@/db/schema";
-import { ne, gte } from "drizzle-orm";
+import { transactions, recurringExpenses, categories } from "@/db/schema";
+import { and, or, eq, gte, lt, isNull, notInArray } from "drizzle-orm";
 import type { DetectionTransaction, RecurringPattern } from "./types";
 
 // ── Store interface ───────────────────────────────────────────────────────────
@@ -31,6 +31,11 @@ export const drizzleRecurringStore: RecurringStore = {
     cutoff.setMonth(cutoff.getMonth() - 18);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
 
+    // Detection only considers money-OUT, non-internal transactions:
+    //  - chargedAmount < 0  → expenses are negative; income/refunds are positive.
+    //  - category type is NOT transfer/ignore/investment (internal/non-spend flows).
+    //    Uncategorized rows (categoryId IS NULL → category.type IS NULL) are KEPT,
+    //    since most subscriptions are uncategorized before rules exist.
     const rows = await db
       .select({
         id: transactions.id,
@@ -39,7 +44,17 @@ export const drizzleRecurringStore: RecurringStore = {
         date: transactions.date,
       })
       .from(transactions)
-      .where(gte(transactions.date, cutoffStr));
+      .leftJoin(categories, eq(transactions.categoryId, categories.id))
+      .where(
+        and(
+          gte(transactions.date, cutoffStr),
+          lt(transactions.chargedAmount, "0"),
+          or(
+            isNull(categories.type),
+            notInArray(categories.type, ["transfer", "ignore", "investment"]),
+          ),
+        ),
+      );
 
     return rows.map((row) => ({
       id: row.id,
