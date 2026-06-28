@@ -227,4 +227,24 @@ describe("canonicalizeMerchant", () => {
   it("gives distinct canonical keys to distinct seeded brands", () => {
     expect(canonicalizeMerchant("נטפליקס")).not.toBe(canonicalizeMerchant("ספוטיפיי"));
   });
+
+  // Regression: matching is whole-token, not substring. A short alias token that
+  // happens to be a substring of an unrelated word must NOT trigger a merge.
+  it("does NOT canonicalize a merchant that merely CONTAINS a Hebrew alias substring", () => {
+    // "אפל" (Apple) is a substring of "אפליקציה" — must stay unchanged.
+    expect(canonicalizeMerchant("אפליקציה דיגיטל")).toBe("אפליקציה דיגיטל");
+    expect(canonicalizeMerchant("אפליקציה דיגיטל")).not.toBe(canonicalizeMerchant("apple"));
+  });
+
+  it("does NOT canonicalize a merchant that merely CONTAINS a Latin alias substring", () => {
+    // "apple" is a substring of "snapple" — must stay unchanged.
+    expect(canonicalizeMerchant("snapple")).toBe("snapple");
+    expect(canonicalizeMerchant("snapple")).not.toBe(canonicalizeMerchant("apple"));
+  });
+
+  it("matches an alias that is a whole token amid other words and separators", () => {
+    // hyphen/dot separators still tokenize: "google-pay" contains the token "google".
+    expect(canonicalizeMerchant("google pay")).toBe(canonicalizeMerchant("google"));
+    expect(canonicalizeMerchant("נטפליקס ישראל")).toBe(canonicalizeMerchant("netflix"));
+  });
 });
