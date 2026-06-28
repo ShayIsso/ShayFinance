@@ -28,6 +28,7 @@ function makePattern(
     lastMatchedTxnId: overrides.lastMatchedTxnId ?? "txn-abc",
     patternFingerprint: overrides.patternFingerprint ?? `${overrides.id ?? "netflix"}::monthly`,
     nextExpectedDate: overrides.nextExpectedDate ?? nextExpectedDate,
+    displayName: overrides.displayName ?? null,
     status: overrides.status ?? "active",
     confirmedAt: overrides.confirmedAt !== undefined ? overrides.confirmedAt : new Date(),
   };

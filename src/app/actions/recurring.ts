@@ -107,8 +107,8 @@ export async function pauseRecurringAction(data: unknown): Promise<{ error?: str
 
 /**
  * Confirms a newly-detected pattern.
- * Sets merchant to the provided name, assigns optional categoryId,
- * stamps confirmedAt, and keeps status = 'active'.
+ * Sets displayName to the provided name (merchant stays the match key),
+ * assigns optional categoryId, stamps confirmedAt, and keeps status = 'active'.
  */
 export async function confirmNewlyDetectedAction(data: unknown): Promise<{ error?: string }> {
   const parsed = confirmNewlyDetectedSchema.safeParse(data);
@@ -118,7 +118,9 @@ export async function confirmNewlyDetectedAction(data: unknown): Promise<{ error
   await db
     .update(recurringExpenses)
     .set({
-      merchant: parsed.data.name,
+      // Store the user's name as displayName; merchant stays the immutable
+      // normalized match key so RD2 badge matching keeps working after naming.
+      displayName: parsed.data.name,
       categoryId: parsed.data.categoryId ?? null,
       confirmedAt: now,
       status: "active",

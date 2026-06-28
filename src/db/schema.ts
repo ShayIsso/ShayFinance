@@ -163,7 +163,10 @@ export const recurringExpenses = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     patternFingerprint: text("pattern_fingerprint").notNull(),
+    /** Immutable normalized match key (extractMerchant output). Used by RD2 badge matching + fingerprint. Never user-edited. */
     merchant: text("merchant").notNull(),
+    /** Optional user-friendly name set on confirm. Display prefers this over merchant; matching never uses it. */
+    displayName: text("display_name"),
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
     expectedAmount: decimal("expected_amount", { precision: 12, scale: 2 }).notNull(),
     expectedCadence: recurringCadenceEnum("expected_cadence").notNull(),

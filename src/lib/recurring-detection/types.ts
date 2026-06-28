@@ -42,6 +42,8 @@ export type DetectionTransaction = {
 export type PersistedRecurringPattern = RecurringPattern & {
   /** DB primary key (UUID). */
   id: string;
+  /** Optional user-friendly name set on confirm. UI prefers this over merchant; matching never uses it. */
+  displayName: string | null;
   /** User-facing status. Active patterns are checked for anomalies. */
   status: "active" | "paused" | "canceled";
   /**
