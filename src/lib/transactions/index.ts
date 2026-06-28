@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { bankAccounts, transactions } from "@/db/schema";
+import { bankAccounts, transactions, recurringExpenses } from "@/db/schema";
 import { eq, and, gte, lte, ilike, inArray } from "drizzle-orm";
 import { categorizeTransaction } from "@/lib/categories/rules";
 import type { ScrapedAccount } from "@/lib/scraper/types";
@@ -7,6 +7,7 @@ import { importTransaction } from "./import";
 import { createDbStore } from "./store";
 import type { transactionFiltersSchema } from "./schemas";
 import type { z } from "zod";
+import { extractMerchant, amountsMatch } from "@/lib/transaction-matching";
 
 export async function importScrapedAccounts(
   credentialId: string,
@@ -62,37 +63,62 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
   if (status) conditions.push(eq(transactions.status, status));
   if (search) conditions.push(ilike(transactions.description, `%${search}%`));
 
-  const rows = await db.query.transactions.findMany({
-    where: conditions.length > 0 ? and(...conditions) : undefined,
-    orderBy: (t, { desc }) => [desc(t.date), desc(t.createdAt)],
-    limit: pageSize,
-    offset,
-  });
+  const [rows, activeRecurring] = await Promise.all([
+    db.query.transactions.findMany({
+      where: conditions.length > 0 ? and(...conditions) : undefined,
+      orderBy: (t, { desc }) => [desc(t.date), desc(t.createdAt)],
+      limit: pageSize,
+      offset,
+    }),
+    db
+      .select({
+        id: recurringExpenses.id,
+        merchant: recurringExpenses.merchant,
+        expectedAmount: recurringExpenses.expectedAmount,
+        expectedCadence: recurringExpenses.expectedCadence,
+      })
+      .from(recurringExpenses)
+      .where(eq(recurringExpenses.status, "active")),
+  ]);
 
-  return rows.map((r) => ({
-    id: r.id,
-    bankAccountId: r.bankAccountId,
-    externalId: r.externalId,
-    date: r.date,
-    processedDate: r.processedDate,
-    description: r.description,
-    customDescription: r.customDescription,
-    memo: r.memo,
-    originalAmount: Number(r.originalAmount),
-    originalCurrency: r.originalCurrency,
-    chargedAmount: Number(r.chargedAmount),
-    chargedCurrency: r.chargedCurrency,
-    type: r.type,
-    installmentNumber: r.installmentNumber,
-    installmentTotal: r.installmentTotal,
-    status: r.status,
-    categoryId: r.categoryId,
-    reconciliationGroupId: r.reconciliationGroupId,
-    reconciliationConfirmedAt: r.reconciliationConfirmedAt
-      ? r.reconciliationConfirmedAt.toISOString()
-      : null,
-    scrapedAt: r.scrapedAt,
-  }));
+  return rows.map((r) => {
+    const txnMerchant = extractMerchant(r.description);
+    // Detection stores expectedAmount as an absolute (positive) value, while
+    // expense chargedAmounts are negative. amountsMatch rejects opposite signs,
+    // so compare on absolute value or no expense would ever match.
+    const txnAmount = Math.abs(Number(r.chargedAmount));
+    const matched = activeRecurring.find(
+      (re) => re.merchant === txnMerchant && amountsMatch(txnAmount, Number(re.expectedAmount)),
+    );
+    return {
+      id: r.id,
+      bankAccountId: r.bankAccountId,
+      externalId: r.externalId,
+      date: r.date,
+      processedDate: r.processedDate,
+      description: r.description,
+      customDescription: r.customDescription,
+      memo: r.memo,
+      originalAmount: Number(r.originalAmount),
+      originalCurrency: r.originalCurrency,
+      chargedAmount: Number(r.chargedAmount),
+      chargedCurrency: r.chargedCurrency,
+      type: r.type,
+      installmentNumber: r.installmentNumber,
+      installmentTotal: r.installmentTotal,
+      status: r.status,
+      categoryId: r.categoryId,
+      reconciliationGroupId: r.reconciliationGroupId,
+      reconciliationConfirmedAt: r.reconciliationConfirmedAt
+        ? r.reconciliationConfirmedAt.toISOString()
+        : null,
+      scrapedAt: r.scrapedAt,
+      recurringExpenseId: matched?.id ?? null,
+      recurringExpense: matched
+        ? { id: matched.id, merchant: matched.merchant, cadence: matched.expectedCadence }
+        : null,
+    };
+  });
 }
 
 export async function updateTransaction(

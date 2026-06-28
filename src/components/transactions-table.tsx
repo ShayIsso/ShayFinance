@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, ChevronRight, ChevronLeft, Link2, Undo2 } from "lucide-react";
+import { Search, ChevronRight, ChevronLeft, Link2, Undo2, Repeat } from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,12 @@ import { Amount } from "@/components/ui/amount";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
+type RecurringInfo = {
+  id: string;
+  merchant: string;
+  cadence: "monthly" | "quarterly" | "annual";
+};
+
 type Transaction = {
   id: string;
   bankAccountId: string;
@@ -38,6 +44,8 @@ type Transaction = {
   categoryId: string | null;
   reconciliationGroupId: string | null;
   reconciliationConfirmedAt: string | null;
+  recurringExpenseId: string | null;
+  recurringExpense: RecurringInfo | null;
 };
 
 type Filters = {
@@ -61,6 +69,12 @@ function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
+
+const CADENCE_LABELS: Record<RecurringInfo["cadence"], string> = {
+  monthly: "חודשי",
+  quarterly: "רבעוני",
+  annual: "שנתי",
+};
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
@@ -116,18 +130,30 @@ function DescriptionCell({
     );
   }
 
+  const re = transaction.recurringExpense;
+  const tooltipText = re
+    ? `הוצאה חוזרת: ${re.merchant} (${CADENCE_LABELS[re.cadence]})`
+    : undefined;
+
   return (
-    <button
-      onClick={() => setEditing(true)}
-      className="group flex w-full flex-col items-start gap-0.5 text-right"
-    >
-      <span className="text-sm font-medium group-hover:underline">
-        {transaction.customDescription ?? transaction.description}
-      </span>
-      {transaction.customDescription && (
-        <span className="text-muted-foreground text-xs">{transaction.description}</span>
+    <div className="flex items-start gap-1.5">
+      {re && (
+        <span title={tooltipText} aria-label={tooltipText} className="mt-0.5 shrink-0">
+          <Repeat className="h-3.5 w-3.5 text-emerald-600" strokeWidth={1.5} />
+        </span>
       )}
-    </button>
+      <button
+        onClick={() => setEditing(true)}
+        className="group flex min-w-0 flex-1 flex-col items-start gap-0.5 text-right"
+      >
+        <span className="text-sm font-medium group-hover:underline">
+          {transaction.customDescription ?? transaction.description}
+        </span>
+        {transaction.customDescription && (
+          <span className="text-muted-foreground text-xs">{transaction.description}</span>
+        )}
+      </button>
+    </div>
   );
 }
 
