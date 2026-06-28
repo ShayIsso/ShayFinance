@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   BellOff,
   Sparkles,
+  CircleSlash,
 } from "lucide-react";
 import { Amount } from "@/components/ui/amount";
 import { Button } from "@/components/ui/button";
@@ -47,13 +48,20 @@ const STATUS_LABELS: Record<SubscriptionRow["status"], string> = {
 
 // ── Filter tabs ───────────────────────────────────────────────────────────────
 
-type FilterTab = "all" | "price_change" | "missed_payment" | "newly_detected" | "active";
+type FilterTab =
+  | "all"
+  | "price_change"
+  | "missed_payment"
+  | "newly_detected"
+  | "dormant"
+  | "active";
 
 const FILTER_LABELS: Record<FilterTab, string> = {
   all: "הכל",
   price_change: "שינוי במחיר",
   missed_payment: "תשלום שלא בוצע",
   newly_detected: "זוהה חדש",
+  dormant: "לא פעיל",
   active: "פעיל",
 };
 
@@ -129,7 +137,10 @@ function AnomalyStrip({
   activeFilter: FilterTab;
 }) {
   const totalAnomalies =
-    alerts.priceChanges.length + alerts.missedPayments.length + alerts.newlyDetected.length;
+    alerts.priceChanges.length +
+    alerts.missedPayments.length +
+    alerts.newlyDetected.length +
+    alerts.dormant.length;
 
   if (totalAnomalies === 0) return null;
 
@@ -183,6 +194,21 @@ function AnomalyStrip({
             <Sparkles className="h-3.5 w-3.5" />
             <span className="font-medium">{alerts.newlyDetected.length}</span>
             <span>זוהו חדש</span>
+          </button>
+        )}
+        {alerts.dormant.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onFilterChange(activeFilter === "dormant" ? "all" : "dormant")}
+            className={`flex items-center gap-1.5 rounded px-2 py-1 transition-colors ${
+              activeFilter === "dormant"
+                ? "bg-zinc-200 text-zinc-800"
+                : "text-zinc-600 hover:bg-zinc-100"
+            }`}
+          >
+            <CircleSlash className="h-3.5 w-3.5" />
+            <span className="font-medium">{alerts.dormant.length}</span>
+            <span>לא פעילים</span>
           </button>
         )}
       </div>
@@ -308,8 +334,9 @@ function AnomalyDetail({
   const priceAlert = alerts.priceChanges.find((a) => a.patternId === rowId);
   const missedAlert = alerts.missedPayments.find((a) => a.patternId === rowId);
   const newAlert = alerts.newlyDetected.find((a) => a.patternId === rowId);
+  const dormantAlert = alerts.dormant.find((a) => a.patternId === rowId);
 
-  if (!priceAlert && !missedAlert && !newAlert) return null;
+  if (!priceAlert && !missedAlert && !newAlert && !dormantAlert) return null;
 
   return (
     <div className="mt-1 space-y-1.5 text-xs">
@@ -378,6 +405,26 @@ function AnomalyDetail({
           </div>
         </div>
       )}
+      {dormantAlert && (
+        <div className="rounded border border-zinc-200 bg-zinc-50 p-2">
+          <p className="mb-1.5 font-medium text-zinc-700">
+            {"לא זוהה חיוב מאז "}
+            {formatDateObj(dormantAlert.nextExpectedDate)}
+            {` (מעל ${dormantAlert.daysOverdue} ימים) — ייתכן שהמנוי בוטל`}
+          </p>
+          <div className="flex gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 border-zinc-300 text-xs text-zinc-700 hover:bg-zinc-100"
+              disabled={isPending}
+              onClick={() => onCancel(rowId)}
+            >
+              בטל מנוי
+            </Button>
+          </div>
+        </div>
+      )}
       {newAlert && (
         <div className="rounded border border-blue-200 bg-blue-50 p-2">
           <p className="mb-1.5 font-medium text-blue-800">
@@ -420,6 +467,7 @@ function AnomalyDetail({
 
 function AnomalyBadge({ rowId, alerts }: { rowId: string; alerts: AnomalyAlerts }) {
   const hasPriceChange = alerts.priceChanges.some((a) => a.patternId === rowId);
+  const hasDormant = alerts.dormant.some((a) => a.patternId === rowId);
   const hasMissed = alerts.missedPayments.some((a) => a.patternId === rowId);
   const hasNew = alerts.newlyDetected.some((a) => a.patternId === rowId);
 
@@ -427,6 +475,15 @@ function AnomalyBadge({ rowId, alerts }: { rowId: string; alerts: AnomalyAlerts 
     return (
       <Badge variant="outline" className="border-amber-400 bg-amber-50 text-xs text-amber-700">
         שינוי מחיר
+      </Badge>
+    );
+  }
+  // Dormant takes priority over missed: a long-overdue pattern is "likely
+  // cancelled", not merely a one-off missed payment.
+  if (hasDormant) {
+    return (
+      <Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-xs text-zinc-600">
+        לא פעיל
       </Badge>
     );
   }
@@ -539,19 +596,24 @@ export function SubscriptionsTable({
   const priceChangeIds = new Set(alerts.priceChanges.map((a) => a.patternId));
   const missedIds = new Set(alerts.missedPayments.map((a) => a.patternId));
   const newlyDetectedIds = new Set(alerts.newlyDetected.map((a) => a.patternId));
+  const dormantIds = new Set(alerts.dormant.map((a) => a.patternId));
 
   function matchesFilter(row: SubscriptionRow): boolean {
     switch (activeFilter) {
       case "all":
-        return true;
+        // Dormant patterns appear ONLY under the dormant tab.
+        return !dormantIds.has(row.id);
       case "price_change":
         return priceChangeIds.has(row.id);
       case "missed_payment":
         return missedIds.has(row.id);
       case "newly_detected":
         return newlyDetectedIds.has(row.id);
+      case "dormant":
+        return dormantIds.has(row.id);
       case "active":
-        return row.status === "active";
+        // Dormant patterns appear ONLY under the dormant tab.
+        return row.status === "active" && !dormantIds.has(row.id);
     }
   }
 
@@ -561,7 +623,8 @@ export function SubscriptionsTable({
   const hasAnomalies =
     alerts.priceChanges.length > 0 ||
     alerts.missedPayments.length > 0 ||
-    alerts.newlyDetected.length > 0;
+    alerts.newlyDetected.length > 0 ||
+    alerts.dormant.length > 0;
 
   return (
     <div className="space-y-4">
@@ -572,14 +635,22 @@ export function SubscriptionsTable({
       {hasAnomalies && (
         <div className="flex flex-wrap gap-1 border-b border-zinc-200 pb-2">
           {(
-            ["all", "price_change", "missed_payment", "newly_detected", "active"] as FilterTab[]
+            [
+              "all",
+              "price_change",
+              "missed_payment",
+              "newly_detected",
+              "dormant",
+              "active",
+            ] as FilterTab[]
           ).map((tab) => {
             const isVisible =
               tab === "all" ||
               tab === "active" ||
               (tab === "price_change" && alerts.priceChanges.length > 0) ||
               (tab === "missed_payment" && alerts.missedPayments.length > 0) ||
-              (tab === "newly_detected" && alerts.newlyDetected.length > 0);
+              (tab === "newly_detected" && alerts.newlyDetected.length > 0) ||
+              (tab === "dormant" && alerts.dormant.length > 0);
 
             if (!isVisible) return null;
 

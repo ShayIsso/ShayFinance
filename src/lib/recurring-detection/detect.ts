@@ -46,6 +46,15 @@ function classifyCadence(sortedDates: Date[]): Cadence | null {
 const STRONG_MATCH_THRESHOLD = 0.7;
 
 /**
+ * Minimum share of a merchant's total money-out activity that an amount-group
+ * must represent to be treated as a genuine recurring pattern. Rejects
+ * habitual-purchase false positives (e.g. a ₪25 bakery visited 3× among ~20
+ * varied charges) while keeping real subscriptions (one stable amount, every
+ * charge in the same bucket → ratio 1.0).
+ */
+const MERCHANT_EXCLUSIVITY_RATIO = 0.5;
+
+/**
  * Groups transactions by fuzzy merchant similarity.
  * Each group contains transactions that likely belong to the same merchant.
  *
@@ -133,7 +142,14 @@ function rollingAvgLast3(amounts: number[]): number {
 export function detectPatterns(txns: DetectionTransaction[]): RecurringPattern[] {
   if (!txns.length) return [];
 
-  const merchantClusters = clusterByMerchant(txns);
+  // Input filter: detection only considers money-OUT transactions. Income,
+  // refunds, and credits (chargedAmount >= 0) are never recurring expenses.
+  // Belt-and-suspenders alongside the store-level SQL filter, and it keeps the
+  // pure function unit-testable without a DB.
+  const expenseTxns = txns.filter((t) => t.chargedAmount < 0);
+  if (!expenseTxns.length) return [];
+
+  const merchantClusters = clusterByMerchant(expenseTxns);
   const patterns: RecurringPattern[] = [];
 
   for (const cluster of merchantClusters.values()) {
@@ -141,6 +157,15 @@ export function detectPatterns(txns: DetectionTransaction[]): RecurringPattern[]
 
     for (const group of amountGroups) {
       if (group.txns.length < 3) continue;
+
+      // Merchant-exclusivity heuristic: reject an amount-group that is only a
+      // minority of this merchant's total money-out activity in the window.
+      // A real subscription always charges the same amount (ratio → 1.0); a
+      // habitual purchase produces a small same-amount cluster among many
+      // varied charges (ratio → low). Boundary: exactly 0.5 is KEPT.
+      if (group.txns.length / cluster.txns.length < MERCHANT_EXCLUSIVITY_RATIO) {
+        continue;
+      }
 
       // Sort by date ascending
       const sorted = [...group.txns].sort((a, b) => a.date.localeCompare(b.date));

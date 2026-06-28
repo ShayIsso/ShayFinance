@@ -16,13 +16,17 @@ import type { DetectionTransaction, RecurringPattern, Cadence } from "@/lib/recu
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Detection only considers money-OUT transactions (chargedAmount < 0). Fixtures
+// pass positive magnitudes for readability; the helper negates so they read as
+// expenses. (Downstream the algorithm uses Math.abs, so the sign is immaterial
+// to cadence/amount logic — it only satisfies the money-out input filter.)
 function txn(
   id: string,
   description: string,
   chargedAmount: number,
   date: string,
 ): DetectionTransaction {
-  return { id, description, chargedAmount, date };
+  return { id, description, chargedAmount: -Math.abs(chargedAmount), date };
 }
 
 /** Returns a Date for a given YYYY-MM-DD string */

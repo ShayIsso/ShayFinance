@@ -5,13 +5,17 @@ import type { DetectionTransaction, RecurringPattern } from "./types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Detection only considers money-OUT transactions (chargedAmount < 0). The
+// existing fixtures express amounts as positive magnitudes for readability, so
+// the helper stores them as negative (expense) amounts. New tests that need an
+// explicit sign (income, mixed-sign clusters) build raw objects directly.
 function makeTxn(
   id: string,
   description: string,
   chargedAmount: number,
   date: string,
 ): DetectionTransaction {
-  return { id, description, chargedAmount, date };
+  return { id, description, chargedAmount: -Math.abs(chargedAmount), date };
 }
 
 /** Builds N monthly occurrences starting from startDate (format: "YYYY-MM-DD"). */
@@ -256,6 +260,81 @@ describe("detectPatterns", () => {
       ];
       const patterns = detectPatterns(txns);
       expect(patterns).toHaveLength(0);
+    });
+  });
+
+  describe("money-out filter (excludes income/credits)", () => {
+    it("produces NO patterns from positive-amount transactions (e.g. monthly salary)", () => {
+      // Salary recurs monthly with a stable amount, but chargedAmount is positive
+      // (money IN) so it must never be treated as a recurring expense.
+      const salary: DetectionTransaction[] = [
+        { id: "s1", description: "משכורת", chargedAmount: 12000, date: "2025-01-01" },
+        { id: "s2", description: "משכורת", chargedAmount: 12000, date: "2025-02-01" },
+        { id: "s3", description: "משכורת", chargedAmount: 12000, date: "2025-03-01" },
+      ];
+      expect(detectPatterns(salary)).toHaveLength(0);
+    });
+
+    it("ignores the positive-amount occurrences in a mixed-sign cluster", () => {
+      // Same merchant: 2 real expenses (negative) + recurring positive refunds.
+      // After dropping the positives only 2 expenses remain → below threshold.
+      const mixed: DetectionTransaction[] = [
+        { id: "m1", description: "NETFLIX.COM", chargedAmount: -39.9, date: "2025-01-15" },
+        { id: "m2", description: "NETFLIX.COM", chargedAmount: -39.9, date: "2025-02-15" },
+        { id: "r1", description: "NETFLIX.COM", chargedAmount: 39.9, date: "2025-01-20" },
+        { id: "r2", description: "NETFLIX.COM", chargedAmount: 39.9, date: "2025-02-20" },
+        { id: "r3", description: "NETFLIX.COM", chargedAmount: 39.9, date: "2025-03-20" },
+      ];
+      expect(detectPatterns(mixed)).toHaveLength(0);
+    });
+  });
+
+  describe("merchant-exclusivity heuristic", () => {
+    it("rejects a habitual-purchase cluster (3 same-amount among many varied charges)", () => {
+      // Bakery visited often: 3 coincidental ₪25 monthly charges among ~17 other
+      // varied charges at the same merchant → 3/20 = 0.15 < 0.5 → rejected.
+      const txns: DetectionTransaction[] = [
+        // The 3 "recurring-looking" ₪25 charges, monthly cadence.
+        makeTxn("b1", "מאפיית הבוקר", 25, "2025-01-05"),
+        makeTxn("b2", "מאפיית הבוקר", 25, "2025-02-05"),
+        makeTxn("b3", "מאפיית הבוקר", 25, "2025-03-05"),
+      ];
+      // 17 more varied-amount charges at the same merchant (different buckets).
+      const varied = [12, 48, 7, 33, 61, 19, 88, 41, 15, 54, 9, 72, 28, 95, 38, 63, 21];
+      varied.forEach((amount, i) => {
+        txns.push(
+          makeTxn(
+            `v${i}`,
+            "מאפיית הבוקר",
+            amount,
+            `2025-04-${String((i % 27) + 1).padStart(2, "0")}`,
+          ),
+        );
+      });
+      const patterns = detectPatterns(txns);
+      expect(patterns).toHaveLength(0);
+    });
+
+    it("keeps a clean subscription where every charge is in one amount bucket", () => {
+      // Netflix only ever charges ₪45, 5× → 5/5 = 1.0 ≥ 0.5 → kept.
+      const txns = monthlyOccurrences("NETFLIX.COM", 45, "2025-01-15", 5);
+      const patterns = detectPatterns(txns);
+      expect(patterns).toHaveLength(1);
+    });
+
+    it("keeps an amount-group at exactly the 0.5 boundary (not a minority)", () => {
+      // 6 charges at one merchant: 3 at ₪40, 3 at ₪80. Each group is 3/6 = 0.5,
+      // which is NOT < 0.5 → both kept → 2 patterns.
+      const txns = [
+        makeTxn("a1", "GYM CLUB", 40, "2025-01-10"),
+        makeTxn("a2", "GYM CLUB", 40, "2025-02-10"),
+        makeTxn("a3", "GYM CLUB", 40, "2025-03-10"),
+        makeTxn("b1", "GYM CLUB", 80, "2025-01-12"),
+        makeTxn("b2", "GYM CLUB", 80, "2025-02-12"),
+        makeTxn("b3", "GYM CLUB", 80, "2025-03-12"),
+      ];
+      const patterns = detectPatterns(txns);
+      expect(patterns).toHaveLength(2);
     });
   });
 
