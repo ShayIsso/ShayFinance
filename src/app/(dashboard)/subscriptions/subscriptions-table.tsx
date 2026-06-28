@@ -334,8 +334,9 @@ function AnomalyDetail({
   const priceAlert = alerts.priceChanges.find((a) => a.patternId === rowId);
   const missedAlert = alerts.missedPayments.find((a) => a.patternId === rowId);
   const newAlert = alerts.newlyDetected.find((a) => a.patternId === rowId);
+  const dormantAlert = alerts.dormant.find((a) => a.patternId === rowId);
 
-  if (!priceAlert && !missedAlert && !newAlert) return null;
+  if (!priceAlert && !missedAlert && !newAlert && !dormantAlert) return null;
 
   return (
     <div className="mt-1 space-y-1.5 text-xs">
@@ -396,6 +397,26 @@ function AnomalyDetail({
               variant="ghost"
               size="sm"
               className="text-muted-foreground hover:text-destructive h-6 text-xs"
+              disabled={isPending}
+              onClick={() => onCancel(rowId)}
+            >
+              בטל מנוי
+            </Button>
+          </div>
+        </div>
+      )}
+      {dormantAlert && (
+        <div className="rounded border border-zinc-200 bg-zinc-50 p-2">
+          <p className="mb-1.5 font-medium text-zinc-700">
+            {"לא זוהה חיוב מאז "}
+            {formatDateObj(dormantAlert.nextExpectedDate)}
+            {` (מעל ${dormantAlert.daysOverdue} ימים) — ייתכן שהמנוי בוטל`}
+          </p>
+          <div className="flex gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 border-zinc-300 text-xs text-zinc-700 hover:bg-zinc-100"
               disabled={isPending}
               onClick={() => onCancel(rowId)}
             >
