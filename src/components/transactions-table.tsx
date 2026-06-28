@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import type { Category } from "@/lib/categories";
 import { Amount } from "@/components/ui/amount";
+import { pageRange } from "@/lib/transactions/pagination";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,13 @@ type Filters = {
 type RuleSuggestion = {
   description: string;
   categoryId: string;
+};
+
+type TransactionsResponse = {
+  data: Transaction[];
+  total: number;
+  page: number;
+  pageSize: number;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -275,6 +283,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [totalPages, setTotalPages] = React.useState(1);
+  const [total, setTotal] = React.useState(0);
   const [filters, setFilters] = React.useState<Filters>({
     dateFrom: "",
     dateTo: "",
@@ -297,7 +306,9 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
     const params = new URLSearchParams();
     if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
     if (filters.dateTo) params.set("dateTo", filters.dateTo);
-    if (filters.categoryId && filters.categoryId !== "__uncategorized__") {
+    if (filters.categoryId === "__uncategorized__") {
+      params.set("uncategorized", "true");
+    } else if (filters.categoryId) {
       params.set("categoryId", filters.categoryId);
     }
     if (filters.status) params.set("status", filters.status);
@@ -307,13 +318,10 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
 
     fetch(`/api/transactions?${params.toString()}`, { signal: controller.signal })
       .then((r) => r.json())
-      .then((data: Transaction[]) => {
-        let rows = data;
-        if (filters.categoryId === "__uncategorized__") {
-          rows = data.filter((t) => !t.categoryId);
-        }
-        setTransactions(rows);
-        setTotalPages(data.length === filters.pageSize ? filters.page + 1 : filters.page);
+      .then((res: TransactionsResponse) => {
+        setTransactions(res.data);
+        setTotal(res.total);
+        setTotalPages(Math.max(1, Math.ceil(res.total / filters.pageSize)));
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -698,6 +706,14 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
           </Select>
         </div>
         <div className="flex items-center gap-2">
+          {(() => {
+            const { from, to } = pageRange(filters.page, filters.pageSize, total);
+            return (
+              <span className="text-muted-foreground text-sm">
+                מציג {from}–{to} מתוך {total}
+              </span>
+            );
+          })()}
           <span className="text-muted-foreground text-sm">
             עמוד {filters.page} מתוך {totalPages}
           </span>
