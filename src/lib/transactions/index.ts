@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { bankAccounts, transactions, recurringExpenses } from "@/db/schema";
-import { eq, and, gte, lte, ilike, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, ilike, inArray, isNull, count } from "drizzle-orm";
 import { categorizeTransaction } from "@/lib/categories/rules";
 import type { ScrapedAccount } from "@/lib/scraper/types";
 import { importTransaction } from "./import";
@@ -51,21 +51,76 @@ export async function importScrapedAccounts(
   return { inserted, updated, skipped };
 }
 
+// ── Pure helpers (DB-free, unit-tested) ──────────────────────────────────────
+
+export type CategoryFilterIntent =
+  | { mode: "uncategorized" }
+  | { mode: "category"; categoryId: string }
+  | { mode: "all" };
+
+/**
+ * Resolves how to filter by category. `uncategorized` always wins: when true we
+ * match rows with no category and IGNORE any categoryId. Otherwise a concrete
+ * categoryId selects that category, and neither means no category constraint.
+ */
+export function resolveCategoryFilter(input: {
+  uncategorized?: boolean;
+  categoryId?: string;
+}): CategoryFilterIntent {
+  if (input.uncategorized) return { mode: "uncategorized" };
+  if (input.categoryId) return { mode: "category", categoryId: input.categoryId };
+  return { mode: "all" };
+}
+
+export type PaginatedResult<T> = {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+/** Assembles the paginated API response shape from its parts. */
+export function buildPaginatedResult<T>(
+  data: T[],
+  total: number,
+  page: number,
+  pageSize: number,
+): PaginatedResult<T> {
+  return { data, total, page, pageSize };
+}
+
 export async function getTransactions(filters: z.infer<typeof transactionFiltersSchema>) {
-  const { dateFrom, dateTo, bankAccountId, categoryId, status, search, page, pageSize } = filters;
+  const {
+    dateFrom,
+    dateTo,
+    bankAccountId,
+    categoryId,
+    status,
+    search,
+    uncategorized,
+    page,
+    pageSize,
+  } = filters;
   const offset = (page - 1) * pageSize;
 
   const conditions = [];
   if (dateFrom) conditions.push(gte(transactions.date, dateFrom));
   if (dateTo) conditions.push(lte(transactions.date, dateTo));
   if (bankAccountId) conditions.push(eq(transactions.bankAccountId, bankAccountId));
-  if (categoryId) conditions.push(eq(transactions.categoryId, categoryId));
+  const categoryFilter = resolveCategoryFilter({ uncategorized, categoryId });
+  if (categoryFilter.mode === "uncategorized") {
+    conditions.push(isNull(transactions.categoryId));
+  } else if (categoryFilter.mode === "category") {
+    conditions.push(eq(transactions.categoryId, categoryFilter.categoryId));
+  }
   if (status) conditions.push(eq(transactions.status, status));
   if (search) conditions.push(ilike(transactions.description, `%${search}%`));
 
-  const [rows, activeRecurring] = await Promise.all([
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [rows, activeRecurring, totalResult] = await Promise.all([
     db.query.transactions.findMany({
-      where: conditions.length > 0 ? and(...conditions) : undefined,
+      where: whereClause,
       orderBy: (t, { desc }) => [desc(t.date), desc(t.createdAt)],
       limit: pageSize,
       offset,
@@ -91,9 +146,13 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
             expectedCadence: "monthly" | "quarterly" | "annual";
           }>,
       ),
+    // Total count across all active filters (same conditions), run in parallel.
+    db.select({ count: count() }).from(transactions).where(whereClause),
   ]);
 
-  return rows.map((r) => {
+  const total = totalResult[0]?.count ?? 0;
+
+  const data = rows.map((r) => {
     const txnMerchant = extractMerchant(r.description);
     // Detection stores expectedAmount as an absolute (positive) value, while
     // expense chargedAmounts are negative. amountsMatch rejects opposite signs,
@@ -131,6 +190,8 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
         : null,
     };
   });
+
+  return buildPaginatedResult(data, total, page, pageSize);
 }
 
 export async function updateTransaction(
