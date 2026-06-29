@@ -17,13 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Amount } from "@/components/ui/amount";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import { Bar, BarChart, Cell, XAxis, YAxis } from "recharts";
+import { SpendingChart } from "@/components/spending-chart";
 import type { Category } from "@/lib/categories";
 import type {
   MonthlySummary,
@@ -281,11 +275,6 @@ export function DashboardPanel({
     recent.length === 0 &&
     upcomingCharges.length === 0;
 
-  const chartConfig: ChartConfig = spending.reduce<ChartConfig>((cfg, item) => {
-    cfg[item.categoryId] = { label: item.categoryName, color: item.color };
-    return cfg;
-  }, {});
-
   return (
     <div className="space-y-6">
       {/* Month navigation */}
@@ -501,44 +490,14 @@ export function DashboardPanel({
           )}
 
           {/* Spending by category chart */}
-          {spending.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">הוצאות לפי קטגוריה</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-64 w-full">
-                  <BarChart
-                    data={spending.map((s) => ({
-                      name: s.categoryName,
-                      amount: s.amount,
-                      id: s.categoryId,
-                      color: s.color,
-                    }))}
-                    layout="vertical"
-                    margin={{ top: 0, right: 16, bottom: 0, left: 8 }}
-                  >
-                    <XAxis
-                      type="number"
-                      tickFormatter={(v: number) => formatCurrency(v)}
-                      tick={{ fontSize: 11 }}
-                    />
-                    <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
-                    <ChartTooltip
-                      content={
-                        <ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />
-                      }
-                    />
-                    <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
-                      {spending.map((s) => (
-                        <Cell key={s.categoryId} fill={s.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">הוצאות לפי קטגוריה</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SpendingChart spending={spending} />
+            </CardContent>
+          </Card>
 
           {/* Recent transactions */}
           <div>
