@@ -11,6 +11,8 @@ import {
   type FieldError,
   type FieldPath,
   type FieldValues,
+  type Path,
+  type UseFormReturn,
 } from "react-hook-form";
 
 import { cn } from "@/lib/utils";
@@ -201,6 +203,29 @@ function FormSubmit({
   );
 }
 
+/**
+ * Routes a Server Action's failure result into the form: fieldErrors whose
+ * keys exist in the form's values become inline field errors (the same
+ * mechanism client validation uses); anything else lands on "root".
+ */
+function applyActionErrors<TFieldValues extends FieldValues>(
+  form: UseFormReturn<TFieldValues>,
+  result: { error?: string; fieldErrors?: Record<string, string> },
+  fallbackMessage = "שגיאה בשמירה",
+) {
+  const values = form.getValues();
+  let appliedFieldError = false;
+  for (const [field, message] of Object.entries(result.fieldErrors ?? {})) {
+    if (field in values) {
+      form.setError(field as Path<TFieldValues>, { message });
+      appliedFieldError = true;
+    }
+  }
+  if (!appliedFieldError) {
+    form.setError("root", { message: result.error ?? fallbackMessage });
+  }
+}
+
 export {
   Form,
   FormField,
@@ -210,5 +235,6 @@ export {
   FormMessage,
   FormRootError,
   FormSubmit,
+  applyActionErrors,
   useFormField,
 };

@@ -22,6 +22,7 @@ import {
   deleteCategoryAction,
 } from "@/app/actions/categories";
 import { createCategorySchema } from "@/lib/categories/schemas";
+import { DefaultCategoryDeletionError } from "@/lib/categories/errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 const VALID_INPUT = {
@@ -161,6 +162,14 @@ describe("updateCategoryAction", () => {
     expect(updateCategory).toHaveBeenCalledWith(VALID_ID, { name: "שם חדש" });
   });
 
+  it("rejects an update with no fields to change without touching the module", async () => {
+    const result = await updateCategoryAction({ id: VALID_ID });
+
+    expect(result.error).toBe("לא סופקו שדות לעדכון");
+    expect(updateCategory).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
   it("surfaces a duplicate-name violation as an inline field error", async () => {
     vi.mocked(updateCategory).mockRejectedValue(uniqueViolation());
 
@@ -191,7 +200,8 @@ describe("deleteCategoryAction", () => {
   });
 
   it("returns a Hebrew error for default-category deletion without revalidating", async () => {
-    vi.mocked(deleteCategory).mockRejectedValue(new Error("Cannot delete a default category"));
+    // Typed sentinel from the module's public error surface — not a string match.
+    vi.mocked(deleteCategory).mockRejectedValue(new DefaultCategoryDeletionError());
 
     const result = await deleteCategoryAction({ id: VALID_ID });
 

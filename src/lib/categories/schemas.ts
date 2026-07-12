@@ -15,7 +15,12 @@ export const categoryIdSchema = z.object({
   id: z.string().uuid("מזהה קטגוריה לא תקין"),
 });
 
-export const updateCategoryActionSchema = updateCategorySchema.extend(categoryIdSchema.shape);
+export const updateCategoryActionSchema = updateCategorySchema
+  .extend(categoryIdSchema.shape)
+  .refine(
+    (data) => Object.entries(data).some(([key, value]) => key !== "id" && value !== undefined),
+    { message: "לא סופקו שדות לעדכון" },
+  );
 
 export const createRuleSchema = z.object({
   categoryId: z.string().uuid(),

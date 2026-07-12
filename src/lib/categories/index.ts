@@ -1,6 +1,9 @@
 import { db } from "@/db";
 import { categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { DefaultCategoryDeletionError } from "./errors";
+
+export { DefaultCategoryDeletionError } from "./errors";
 
 export type Category = {
   id: string;
@@ -48,7 +51,7 @@ export async function deleteCategory(id: string): Promise<void> {
 
   if (!row) return;
   if (row.isDefault) {
-    throw new Error("Cannot delete a default category");
+    throw new DefaultCategoryDeletionError();
   }
 
   await db.delete(categories).where(eq(categories.id, id));

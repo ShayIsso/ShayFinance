@@ -1,30 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { ZodError } from "zod";
-import { formatZodError } from "@/lib/api-utils";
+import { formatZodError, formatZodFieldErrors, type FieldErrors } from "@/lib/api-utils";
 import { createCategory, updateCategory, deleteCategory } from "@/lib/categories";
+// Imported from the dedicated errors module (not the mocked barrel) so
+// instanceof keeps working in action-seam tests that mock "@/lib/categories".
+import { DefaultCategoryDeletionError } from "@/lib/categories/errors";
 import {
   createCategorySchema,
   updateCategoryActionSchema,
   categoryIdSchema,
 } from "@/lib/categories/schemas";
 
-// ── Result shape ──────────────────────────────────────────────────────────────
-
-export type CategoryFieldErrors = Record<string, string>;
-
 const DUPLICATE_NAME_MESSAGE = "קטגוריה בשם זה כבר קיימת";
 const DEFAULT_CATEGORY_DELETE_MESSAGE = "לא ניתן למחוק קטגוריית ברירת מחדל";
-
-function fieldErrorsOf(error: ZodError): CategoryFieldErrors {
-  const out: CategoryFieldErrors = {};
-  for (const issue of error.issues) {
-    const key = issue.path.join(".") || "root";
-    if (!(key in out)) out[key] = issue.message;
-  }
-  return out;
-}
 
 /**
  * postgres.js surfaces unique-constraint violations with SQLSTATE 23505.
@@ -61,10 +50,10 @@ function revalidateCategoryPages() {
 
 export async function createCategoryAction(
   data: unknown,
-): Promise<{ id?: string; error?: string; fieldErrors?: CategoryFieldErrors }> {
+): Promise<{ id?: string; error?: string; fieldErrors?: FieldErrors }> {
   const parsed = createCategorySchema.safeParse(data);
   if (!parsed.success) {
-    return { error: formatZodError(parsed.error), fieldErrors: fieldErrorsOf(parsed.error) };
+    return { error: formatZodError(parsed.error), fieldErrors: formatZodFieldErrors(parsed.error) };
   }
 
   try {
@@ -79,10 +68,10 @@ export async function createCategoryAction(
 
 export async function updateCategoryAction(
   data: unknown,
-): Promise<{ updated?: boolean; error?: string; fieldErrors?: CategoryFieldErrors }> {
+): Promise<{ updated?: boolean; error?: string; fieldErrors?: FieldErrors }> {
   const parsed = updateCategoryActionSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: formatZodError(parsed.error), fieldErrors: fieldErrorsOf(parsed.error) };
+    return { error: formatZodError(parsed.error), fieldErrors: formatZodFieldErrors(parsed.error) };
   }
 
   const { id, ...changes } = parsed.data;
@@ -108,7 +97,7 @@ export async function deleteCategoryAction(
   try {
     await deleteCategory(parsed.data.id);
   } catch (err) {
-    if (err instanceof Error && err.message === "Cannot delete a default category") {
+    if (err instanceof DefaultCategoryDeletionError) {
       return { error: DEFAULT_CATEGORY_DELETE_MESSAGE };
     }
     throw err;

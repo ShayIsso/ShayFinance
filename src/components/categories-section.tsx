@@ -56,6 +56,7 @@ import {
   FormMessage,
   FormRootError,
   FormSubmit,
+  applyActionErrors,
 } from "@/components/ui/form";
 import { createCategorySchema } from "@/lib/categories/schemas";
 import {
@@ -173,8 +174,6 @@ const EMPTY_FORM: CategoryFormValues = {
   color: "#6366f1",
 };
 
-const FORM_FIELDS = ["name", "type", "icon", "color"] as const;
-
 export function CategoriesSection({ initialCategories }: { initialCategories: Category[] }) {
   const [categories, setCategories] = React.useState<Category[]>(initialCategories);
   const [formOpen, setFormOpen] = React.useState(false);
@@ -208,20 +207,6 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
     setDeleteOpen(true);
   }
 
-  /** Server-side validation lands in the same inline mechanism as client errors. */
-  function applyServerErrors(result: { error?: string; fieldErrors?: Record<string, string> }) {
-    let appliedFieldError = false;
-    for (const [field, message] of Object.entries(result.fieldErrors ?? {})) {
-      if ((FORM_FIELDS as readonly string[]).includes(field)) {
-        form.setError(field as keyof CategoryFormValues, { message });
-        appliedFieldError = true;
-      }
-    }
-    if (!appliedFieldError) {
-      form.setError("root", { message: result.error ?? "שגיאה בשמירה" });
-    }
-  }
-
   function onSubmit(values: CategoryFormValues) {
     startTransition(async () => {
       const result = editing
@@ -229,7 +214,8 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
         : await createCategoryAction(values);
 
       if (result.error || result.fieldErrors) {
-        applyServerErrors(result);
+        // Server-side validation lands in the same inline mechanism as client errors.
+        applyActionErrors(form, result);
         return;
       }
 
@@ -347,7 +333,7 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
                       >
                         <FormControl>
                           <SelectTrigger className="w-full">
-                            <span>{TYPE_LABELS[field.value as CategoryType]}</span>
+                            <span>{TYPE_LABELS[field.value]}</span>
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
