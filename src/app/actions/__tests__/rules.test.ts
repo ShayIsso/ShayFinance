@@ -188,6 +188,24 @@ describe("updateRuleAction", () => {
     expect(result).toEqual({ updated: true });
     expect(updateRule).toHaveBeenCalledWith(VALID_RULE_ID, { priority: 5 });
   });
+
+  // pattern and matchType must travel together — otherwise a partial update
+  // could smuggle an uncompilable pattern under an existing regex rule (or
+  // flip a rule to regex without re-validating its pattern).
+
+  it("rejects a pattern update that omits the match type", async () => {
+    const result = await updateRuleAction({ id: VALID_RULE_ID, pattern: "שופרסל(" });
+
+    expect(result.fieldErrors?.matchType).toBe("תבנית וסוג התאמה מתעדכנים יחד");
+    expect(updateRule).not.toHaveBeenCalled();
+  });
+
+  it("rejects a match-type update that omits the pattern", async () => {
+    const result = await updateRuleAction({ id: VALID_RULE_ID, matchType: "regex" });
+
+    expect(result.fieldErrors?.pattern).toBe("תבנית וסוג התאמה מתעדכנים יחד");
+    expect(updateRule).not.toHaveBeenCalled();
+  });
 });
 
 // ── deleteRuleAction ──────────────────────────────────────────────────────────

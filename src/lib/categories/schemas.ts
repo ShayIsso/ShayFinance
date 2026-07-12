@@ -67,4 +67,17 @@ export const updateRuleActionSchema = ruleFieldsSchema
     (data) => Object.entries(data).some(([key, value]) => key !== "id" && value !== undefined),
     { message: "לא סופקו שדות לעדכון" },
   )
+  .superRefine((data, ctx) => {
+    // pattern and matchType must travel together: the regex-compile check
+    // below needs both, so a partial update can never smuggle an
+    // uncompilable pattern under an existing regex rule (or flip a rule to
+    // regex without re-validating its pattern).
+    if ((data.pattern === undefined) !== (data.matchType === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "תבנית וסוג התאמה מתעדכנים יחד",
+        path: [data.pattern === undefined ? "pattern" : "matchType"],
+      });
+    }
+  })
   .superRefine(regexPatternCompiles);
