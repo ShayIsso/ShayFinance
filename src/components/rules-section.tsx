@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -12,9 +14,27 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  FormRootError,
+  FormSubmit,
+  applyActionErrors,
+} from "@/components/ui/form";
 import { EmptyState } from "@/components/empty-state";
 import { Tags } from "lucide-react";
-import { previewRetroactiveApplyAction, applyRetroactivelyAction } from "@/app/actions/rules";
+import { createRuleSchema } from "@/lib/categories/schemas";
+import {
+  previewRetroactiveApplyAction,
+  applyRetroactivelyAction,
+  createRuleAction,
+  updateRuleAction,
+  deleteRuleAction,
+} from "@/app/actions/rules";
 
 type MatchType = "contains" | "starts_with" | "exact" | "regex";
 
@@ -45,14 +65,9 @@ const MATCH_TYPE_CLASSES: Record<MatchType, string> = {
   regex: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
-type FormState = {
-  categoryId: string;
-  matchType: MatchType;
-  pattern: string;
-  priority: number;
-};
+type RuleFormValues = z.infer<typeof createRuleSchema>;
 
-function emptyForm(categories: Category[]): FormState {
+function emptyForm(categories: Category[]): RuleFormValues {
   return {
     categoryId: categories[0]?.id ?? "",
     matchType: "contains",
@@ -77,9 +92,16 @@ export function RulesSection({
   const [applying, setApplying] = React.useState<CategoryRule | null>(null);
   const [applyPreviewCount, setApplyPreviewCount] = React.useState<number | null>(null);
   const [applySuccess, setApplySuccess] = React.useState<string | null>(null);
-  const [form, setForm] = React.useState<FormState>(() => emptyForm(categories));
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [isPending, startTransition] = React.useTransition();
+  const [isDeletePending, startDeleteTransition] = React.useTransition();
+
+  const form = useForm<RuleFormValues>({
+    resolver: zodResolver(createRuleSchema),
+    defaultValues: emptyForm(categories),
+  });
 
   const categoryMap = React.useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c.name])),
@@ -88,25 +110,24 @@ export function RulesSection({
 
   function openAdd() {
     setEditing(null);
-    setForm(emptyForm(categories));
-    setError(null);
+    form.reset(emptyForm(categories));
     setFormOpen(true);
   }
 
   function openEdit(rule: CategoryRule) {
     setEditing(rule);
-    setForm({
+    form.reset({
       categoryId: rule.categoryId,
       matchType: rule.matchType,
       pattern: rule.pattern,
       priority: rule.priority,
     });
-    setError(null);
     setFormOpen(true);
   }
 
   function openDelete(rule: CategoryRule) {
     setDeleting(rule);
+    setDeleteError(null);
     setDeleteOpen(true);
   }
 
@@ -124,57 +145,44 @@ export function RulesSection({
     }
   }
 
-  async function handleSave() {
-    if (!form.pattern.trim()) {
-      setError("תבנית היא שדה חובה");
-      return;
-    }
-    if (!form.categoryId) {
-      setError("יש לבחור קטגוריה");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
+  function onSubmit(values: RuleFormValues) {
+    startTransition(async () => {
+      const result = editing
+        ? await updateRuleAction({ id: editing.id, ...values })
+        : await createRuleAction(values);
+
+      if (result.error || result.fieldErrors) {
+        // Server-side validation lands in the same inline mechanism as client errors.
+        applyActionErrors(form, result);
+        return;
+      }
+
+      // Optimistic local state, layered on top of the server revalidation.
       if (editing) {
-        const res = await fetch(`/api/category-rules/${editing.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
-        });
-        if (!res.ok) throw new Error("שגיאה בשמירה");
-        setRules((prev) => prev.map((r) => (r.id === editing.id ? { ...r, ...form } : r)));
-      } else {
-        const res = await fetch("/api/category-rules", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
-        });
-        if (!res.ok) throw new Error("שגיאה ביצירה");
-        const { id } = await res.json();
-        setRules((prev) => [...prev, { id, ...form }].sort((a, b) => b.priority - a.priority));
+        setRules((prev) =>
+          prev
+            .map((r) => (r.id === editing.id ? { ...r, ...values } : r))
+            .sort((a, b) => b.priority - a.priority),
+        );
+      } else if ("id" in result && result.id) {
+        const id = result.id;
+        setRules((prev) => [...prev, { id, ...values }].sort((a, b) => b.priority - a.priority));
       }
       setFormOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה");
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!deleting) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/category-rules/${deleting.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("שגיאה במחיקה");
+    startDeleteTransition(async () => {
+      const result = await deleteRuleAction({ id: deleting.id });
+      if (result.error) {
+        setDeleteError(result.error);
+        return;
+      }
       setRules((prev) => prev.filter((r) => r.id !== deleting.id));
       setDeleteOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה");
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   async function handleApply() {
@@ -260,83 +268,126 @@ export function RulesSection({
           <DialogHeader>
             <DialogTitle>{editing ? "ערוך כלל" : "הוסף כלל"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>קטגוריה</Label>
-              <Select
-                value={form.categoryId}
-                onValueChange={(v) => {
-                  if (v) setForm((f) => ({ ...f, categoryId: v }));
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <span>{categoryMap[form.categoryId] ?? "בחר קטגוריה"}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+              <div className="space-y-4 py-2">
+                <FormField
+                  control={form.control}
+                  name="categoryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>קטגוריה</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          if (v) field.onChange(v);
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <span>{categoryMap[field.value] ?? "בחר קטגוריה"}</span>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="space-y-1.5">
-              <Label>סוג התאמה</Label>
-              <Select
-                value={form.matchType}
-                onValueChange={(v) => {
-                  if (v) setForm((f) => ({ ...f, matchType: v as MatchType }));
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <span>{MATCH_TYPE_LABELS[form.matchType]}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(MATCH_TYPE_LABELS) as MatchType[]).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {MATCH_TYPE_LABELS[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <FormField
+                  control={form.control}
+                  name="matchType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סוג התאמה</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          if (v) field.onChange(v);
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <span>{MATCH_TYPE_LABELS[field.value]}</span>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {(Object.keys(MATCH_TYPE_LABELS) as MatchType[]).map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {MATCH_TYPE_LABELS[t]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="space-y-1.5">
-              <Label htmlFor="rule-pattern">תבנית</Label>
-              <Input
-                id="rule-pattern"
-                value={form.pattern}
-                onChange={(e) => setForm((f) => ({ ...f, pattern: e.target.value }))}
-                placeholder="לדוגמה: שופרסל"
-                dir="auto"
-              />
-            </div>
+                <FormField
+                  control={form.control}
+                  name="pattern"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>תבנית</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="לדוגמה: שופרסל" dir="auto" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="space-y-1.5">
-              <Label htmlFor="rule-priority">עדיפות</Label>
-              <Input
-                id="rule-priority"
-                type="number"
-                min={0}
-                value={form.priority}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, priority: Math.max(0, parseInt(e.target.value) || 0) }))
-                }
-              />
-            </div>
+                <FormField
+                  control={form.control}
+                  name="priority"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>עדיפות</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={Number.isNaN(field.value) ? "" : field.value}
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value === "" ? Number.NaN : Number(e.target.value),
+                            )
+                          }
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
-              ביטול
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "שומר..." : "שמור"}
-            </Button>
-          </DialogFooter>
+                <FormRootError />
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFormOpen(false)}
+                  disabled={isPending}
+                >
+                  ביטול
+                </Button>
+                <FormSubmit pending={isPending} pendingText="שומר...">
+                  שמור
+                </FormSubmit>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -349,17 +400,21 @@ export function RulesSection({
           <p className="text-muted-foreground py-2 text-sm">
             האם למחוק את הכלל עבור &quot;{deleting?.pattern}&quot;?
           </p>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {deleteError && <p className="text-destructive text-sm">{deleteError}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={saving}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={isDeletePending}
+            >
               ביטול
             </Button>
             <Button
               onClick={handleDelete}
-              disabled={saving}
+              disabled={isDeletePending}
               className="bg-red-600 text-white hover:bg-red-700"
             >
-              {saving ? "מוחק..." : "מחק"}
+              {isDeletePending ? "מוחק..." : "מחק"}
             </Button>
           </DialogFooter>
         </DialogContent>

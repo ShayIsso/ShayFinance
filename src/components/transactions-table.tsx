@@ -12,6 +12,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
+import { createRuleAction } from "@/app/actions/rules";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -391,15 +392,11 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
 
   async function handleCreateRule() {
     if (!ruleSuggestion) return;
-    await fetch("/api/category-rules", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        categoryId: ruleSuggestion.categoryId,
-        matchType: "contains",
-        pattern: ruleSuggestion.description,
-        priority: 0,
-      }),
+    await createRuleAction({
+      categoryId: ruleSuggestion.categoryId,
+      matchType: "contains",
+      pattern: ruleSuggestion.description,
+      priority: 0,
     });
     setRuleSuggestion(null);
   }
