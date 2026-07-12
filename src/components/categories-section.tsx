@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   Banknote,
   CirclePlus,
@@ -36,7 +39,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -45,7 +47,23 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  FormRootError,
+  FormSubmit,
+  applyActionErrors,
+} from "@/components/ui/form";
+import { createCategorySchema } from "@/lib/categories/schemas";
+import {
+  createCategoryAction,
+  updateCategoryAction,
+  deleteCategoryAction,
+} from "@/app/actions/categories";
 
 type CategoryType = "income" | "expense" | "investment" | "transfer" | "ignore";
 
@@ -147,14 +165,9 @@ function CategoryIcon({ name, color }: { name: string; color: string }) {
   return <Icon className="size-4" style={{ color }} />;
 }
 
-type FormState = {
-  name: string;
-  type: CategoryType;
-  icon: string;
-  color: string;
-};
+type CategoryFormValues = z.infer<typeof createCategorySchema>;
 
-const EMPTY_FORM: FormState = {
+const EMPTY_FORM: CategoryFormValues = {
   name: "",
   type: "expense",
   icon: "MoreHorizontal",
@@ -167,76 +180,67 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Category | null>(null);
   const [deleting, setDeleting] = React.useState<Category | null>(null);
-  const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [isPending, startTransition] = React.useTransition();
+  const [isDeletePending, startDeleteTransition] = React.useTransition();
+
+  const form = useForm<CategoryFormValues>({
+    resolver: zodResolver(createCategorySchema),
+    defaultValues: EMPTY_FORM,
+  });
 
   function openAdd() {
     setEditing(null);
-    setForm(EMPTY_FORM);
-    setError(null);
+    form.reset(EMPTY_FORM);
     setFormOpen(true);
   }
 
   function openEdit(cat: Category) {
     setEditing(cat);
-    setForm({ name: cat.name, type: cat.type, icon: cat.icon, color: cat.color });
-    setError(null);
+    form.reset({ name: cat.name, type: cat.type, icon: cat.icon, color: cat.color });
     setFormOpen(true);
   }
 
   function openDelete(cat: Category) {
     setDeleting(cat);
+    setDeleteError(null);
     setDeleteOpen(true);
   }
 
-  async function handleSave() {
-    if (!form.name.trim()) {
-      setError("שם הקטגוריה הוא שדה חובה");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
+  function onSubmit(values: CategoryFormValues) {
+    startTransition(async () => {
+      const result = editing
+        ? await updateCategoryAction({ id: editing.id, ...values })
+        : await createCategoryAction(values);
+
+      if (result.error || result.fieldErrors) {
+        // Server-side validation lands in the same inline mechanism as client errors.
+        applyActionErrors(form, result);
+        return;
+      }
+
+      // Optimistic local state, layered on top of the server revalidation.
       if (editing) {
-        const res = await fetch(`/api/categories/${editing.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
-        });
-        if (!res.ok) throw new Error("שגיאה בשמירה");
-        setCategories((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...form } : c)));
-      } else {
-        const res = await fetch("/api/categories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
-        });
-        if (!res.ok) throw new Error("שגיאה ביצירה");
-        const { id } = await res.json();
-        setCategories((prev) => [...prev, { id, ...form, isDefault: false }]);
+        setCategories((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...values } : c)));
+      } else if ("id" in result && result.id) {
+        const id = result.id;
+        setCategories((prev) => [...prev, { id, ...values, isDefault: false }]);
       }
       setFormOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה");
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!deleting) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/categories/${deleting.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("שגיאה במחיקה");
+    startDeleteTransition(async () => {
+      const result = await deleteCategoryAction({ id: deleting.id });
+      if (result.error) {
+        setDeleteError(result.error);
+        return;
+      }
       setCategories((prev) => prev.filter((c) => c.id !== deleting.id));
       setDeleteOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה");
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   return (
@@ -298,93 +302,135 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
           <DialogHeader>
             <DialogTitle>{editing ? "ערוך קטגוריה" : "הוסף קטגוריה"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="cat-name">שם</Label>
-              <Input
-                id="cat-name"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="שם הקטגוריה"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>סוג</Label>
-              <Select
-                value={form.type}
-                onValueChange={(v) => {
-                  if (v) setForm((f) => ({ ...f, type: v as CategoryType }));
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <span>{TYPE_LABELS[form.type]}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(TYPE_LABELS) as CategoryType[]).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {TYPE_LABELS[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>אייקון</Label>
-              <Select
-                value={form.icon}
-                onValueChange={(v) => {
-                  if (v) setForm((f) => ({ ...f, icon: v as string }));
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <span className="flex items-center gap-2">
-                    {(() => {
-                      const Icon = ICON_MAP[form.icon] ?? MoreHorizontal;
-                      return <Icon className="size-4" />;
-                    })()}
-                    {ICON_LABELS[form.icon] ?? form.icon}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_ICONS.map((iconName) => {
-                    const Icon = ICON_MAP[iconName]!;
-                    return (
-                      <SelectItem key={iconName} value={iconName}>
-                        <Icon className="size-4" />
-                        {ICON_LABELS[iconName] ?? iconName}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="cat-color">צבע</Label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="cat-color"
-                  type="color"
-                  value={form.color}
-                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                  className="h-9 w-12 cursor-pointer rounded border p-1"
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+              <div className="space-y-4 py-2">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שם</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="שם הקטגוריה" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                <span className="text-muted-foreground text-sm">{form.color}</span>
-              </div>
-            </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
-              ביטול
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "שומר..." : "שמור"}
-            </Button>
-          </DialogFooter>
+                <FormField
+                  control={form.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סוג</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          if (v) field.onChange(v);
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <span>{TYPE_LABELS[field.value]}</span>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {(Object.keys(TYPE_LABELS) as CategoryType[]).map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {TYPE_LABELS[t]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="icon"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>אייקון</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          if (v) field.onChange(v);
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <span className="flex items-center gap-2">
+                              {(() => {
+                                const Icon = ICON_MAP[field.value] ?? MoreHorizontal;
+                                return <Icon className="size-4" />;
+                              })()}
+                              {ICON_LABELS[field.value] ?? field.value}
+                            </span>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {AVAILABLE_ICONS.map((iconName) => {
+                            const Icon = ICON_MAP[iconName]!;
+                            return (
+                              <SelectItem key={iconName} value={iconName}>
+                                <Icon className="size-4" />
+                                {ICON_LABELS[iconName] ?? iconName}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="color"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>צבע</FormLabel>
+                      <div className="flex items-center gap-2">
+                        <FormControl>
+                          <input
+                            type="color"
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                            className="h-9 w-12 cursor-pointer rounded border p-1"
+                          />
+                        </FormControl>
+                        <span className="text-muted-foreground text-sm">{field.value}</span>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormRootError />
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFormOpen(false)}
+                  disabled={isPending}
+                >
+                  ביטול
+                </Button>
+                <FormSubmit pending={isPending} pendingText="שומר...">
+                  שמור
+                </FormSubmit>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -397,17 +443,21 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
           <p className="text-muted-foreground py-2 text-sm">
             האם למחוק את הקטגוריה &quot;{deleting?.name}&quot;? עסקאות משויכות יאבדו את הסיווג שלהן.
           </p>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {deleteError && <p className="text-destructive text-sm">{deleteError}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={saving}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={isDeletePending}
+            >
               ביטול
             </Button>
             <Button
               onClick={handleDelete}
-              disabled={saving}
+              disabled={isDeletePending}
               className="bg-red-600 text-white hover:bg-red-700"
             >
-              {saving ? "מוחק..." : "מחק"}
+              {isDeletePending ? "מוחק..." : "מחק"}
             </Button>
           </DialogFooter>
         </DialogContent>
