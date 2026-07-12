@@ -1,6 +1,6 @@
 # ADR-0006: Use `db:push` for schema changes until Phase 2 stabilises
 
-**Status:** Accepted (interim). Will be superseded by an ADR introducing generated migrations once Phase 2 accumulates 3+ schema-changing slices.
+**Status:** Superseded by [ADR-0009](./0009-generated-migrations-from-baseline.md) (2026-07-12): the bootstrap chore is done — baseline marked applied, all schema changes now ship as generated migrations, `db:push` retired.
 **Date:** 2026-04-22 (R1 reconciliation schema work, PR #66)
 **Related:** [`BACKLOG.md`](../../BACKLOG.md) §"Bootstrap Drizzle Migration System"
 

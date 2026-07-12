@@ -11,9 +11,10 @@ One file per binding architectural decision. Format: `NNNN-kebab-title.md`, numb
 | [0003](./0003-sequential-bank-scraping-with-failure-isolation.md) | Sequential bank scraping with per-bank failure isolation      | Accepted                                       |
 | [0004](./0004-feature-branches-only.md)                           | Feature branches only — never commit to main                  | Accepted                                       |
 | [0005](./0005-defer-ai-categorization-to-phase-3.md)              | Defer AI categorization to Phase 3                            | Accepted; local-only clause superseded by 0008 |
-| [0006](./0006-db-push-until-phase-2-stabilises.md)                | Use `db:push` for schema changes until Phase 2 stabilises     | Accepted                                       |
+| [0006](./0006-db-push-until-phase-2-stabilises.md)                | Use `db:push` for schema changes until Phase 2 stabilises     | Superseded by 0009                             |
 | [0007](./0007-deep-modules-with-store-pattern.md)                 | Deep modules with pure functional core + Store pattern        | Accepted                                       |
 | [0008](./0008-redaction-gated-external-categorization.md)         | Redaction-gated external AI categorization                    | Accepted                                       |
+| [0009](./0009-generated-migrations-from-baseline.md)              | Generated migrations from a marked-applied baseline           | Accepted                                       |
 
 ## Format
 
