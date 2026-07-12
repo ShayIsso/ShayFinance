@@ -1,12 +1,12 @@
 # ADR-0005: Defer AI categorization to Phase 3 (70% accuracy threshold not met)
 
-**Status:** Accepted (Phase 2). May be superseded if Phase 3 retest clears the same bar with new methodology.
+**Status:** Accepted (Phase 2). **Local-only clause superseded by [ADR-0008](./0008-redaction-gated-external-categorization.md)** (2026-07-12): the "no third-party APIs" constraint is replaced by a redaction boundary; the deferral decision and the 70% threshold stand.
 **Date:** 2026-04-28 (spike conclusion, recorded 2026-05-05)
 **Evidence:** [`docs/ai-categorization-spike.md`](../ai-categorization-spike.md), GitHub issues [#42](https://github.com/ShayIsso/ShayFinance/issues/42) (spike), [#52](https://github.com/ShayIsso/ShayFinance/issues/52) (deferred implementation)
 
 ## Context
 
-Phase 2 considered adding LLM-based categorization for transactions the rule engine fails to match (`category_id IS NULL`). Privacy posture mandates a local-only model — no third-party APIs. The spike (issue #42) benchmarked two locally-runnable Ollama models against a 50-item Hebrew transaction fixture covering 13 of the 20 default categories.
+Phase 2 considered adding LLM-based categorization for transactions the rule engine fails to match (`category_id IS NULL`). Privacy posture mandates a local-only model — no third-party APIs. _(Superseded 2026-07-12: ADR-0008 replaces this clause with a redaction-gated boundary that permits external providers for redacted merchant descriptors only.)_ The spike (issue #42) benchmarked two locally-runnable Ollama models against a 50-item Hebrew transaction fixture covering 13 of the 20 default categories.
 
 **Go/no-go threshold set upfront:** ≥70% overall accuracy. Below this, the model produces enough wrong suggestions to erode user trust in the categorisation UX.
 
