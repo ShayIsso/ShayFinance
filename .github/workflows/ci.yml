@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, phase-3]
   pull_request:
-    branches: [main]
+    branches: [main, phase-3]
 
 jobs:
   ci:
@@ -34,6 +34,24 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
+
+      - name: Check for schema/migration drift
+        env:
+          # drizzle-kit generate diffs src/db/schema.ts against the committed
+          # drizzle/ snapshot offline — it never opens a DB connection for
+          # this command. This value only satisfies drizzle.config.ts's
+          # non-null assertion on DATABASE_URL at config-load time.
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+        run: |
+          npx drizzle-kit generate
+          if [ -n "$(git status --porcelain drizzle/)" ]; then
+            echo "::error::Schema/migration drift detected: src/db/schema.ts and drizzle/ are out of sync."
+            echo "Run 'npm run db:generate' locally, review the generated SQL, and commit it with this slice."
+            git status --porcelain drizzle/
+            git add -N drizzle/
+            git diff drizzle/
+            exit 1
+          fi
 
       - name: Build
         run: npm run build

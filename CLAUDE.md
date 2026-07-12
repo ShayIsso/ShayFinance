@@ -99,6 +99,16 @@ These are non-negotiable:
 - **Installments:** Individual rows per monthly charge. `installment_number` / `installment_total` fields.
 - **Custom descriptions:** `custom_description` (nullable) overrides display. Original `description` is never modified.
 
+### Migration Workflow (ADR-0009 — binding)
+
+- **Schema changes go in `src/db/schema.ts`.** Never hand-write SQL and never hand-apply DDL against a live DB.
+- **`npm run db:generate` produces the migration.** Review the generated SQL file and commit it with the slice that needed the schema change — migrations ship alongside the code that depends on them, not as a follow-up.
+- **Applying migrations (`npm run db:migrate`) is owner-only (Shay).** Workers generate and commit migration files; they never run `db:migrate` against the shared dev DB. An apply is always preceded by a `pg_dump` backup and verified after with `to_regclass`/`information_schema`.
+- **`npm run db:push` is retired.** It bypasses migration history and desynchronizes the committed snapshot from the live DB. The script stays in `package.json` for emergency owner use only — workers must never reach for it.
+- **Migration files are immutable once merged.** A wrong migration is fixed forward with a new migration, never by editing or deleting a committed one.
+- **Fresh environments** (new dev DB, production container) build their schema by running `npm run db:migrate` from empty — never `db:push`.
+- **CI enforces this:** a drift check runs `drizzle-kit generate` and fails the build if it produces or modifies anything under `drizzle/`, catching a hand-applied change or a skipped generate at PR time. Full rationale and bootstrap history: `docs/adr/0009-generated-migrations-from-baseline.md`.
+
 ## UI/Design Rules
 
 - **RTL** (`dir="rtl"`) is mandatory. Primary language: Hebrew.
@@ -154,6 +164,7 @@ These are non-negotiable:
 - Use Zod for all API input validation.
 - Follow existing patterns in the codebase (check similar modules first).
 - Never log credentials, OTP codes, or bank data.
+- Schema changes follow the Migration Workflow section above: `npm run db:generate` + commit the SQL with the slice; never `db:push` or `db:migrate`.
 
 ## Agent skills
 
@@ -180,6 +191,7 @@ Single-context layout: `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents
 - **Middleware file must be `src/middleware.ts` exporting `middleware`.** Next.js 16 shows a deprecation warning suggesting `proxy.ts`, but `proxy.ts` does not reliably intercept requests — routes will be unprotected. Ignore the warning and keep `middleware.ts`.
 - **`puppeteer-core` version mismatch.** The scraper library bundles its own puppeteer-core. We use `as unknown as ScraperBrowser` to bridge types. Pin versions when possible.
 - **Discount scraper is patched locally.** `israeli-bank-scrapers-core@6.7.4` doesn't recognize Discount's `apollo/retail3/` post-login URL — we add it via `patches/israeli-bank-scrapers-core+6.7.4.patch` (auto-applied by the `postinstall` hook). See `patches/README.md` for the drop condition.
+- **Never run `npm run db:push` or `npm run db:migrate` as a worker.** Applying schema changes is owner-only — the Migration Workflow section has the full rules. CI's drift check fails the PR if `src/db/schema.ts` and `drizzle/` disagree, so always run `db:generate` after touching the schema and commit the result.
 
 ## Testing Priorities
 
