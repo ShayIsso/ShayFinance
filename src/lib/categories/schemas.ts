@@ -22,11 +22,49 @@ export const updateCategoryActionSchema = updateCategorySchema
     { message: "לא סופקו שדות לעדכון" },
   );
 
-export const createRuleSchema = z.object({
-  categoryId: z.string().uuid(),
-  matchType: z.enum(["contains", "starts_with", "exact", "regex"]),
+const INVALID_REGEX_MESSAGE = "ביטוי רגולרי לא תקין";
+
+/**
+ * A regex-type rule must carry a compilable pattern — validated here at the
+ * boundary (form resolver + Server Action) so a broken pattern can never
+ * reach the matcher and crash categorization later. Compiled with the same
+ * "i" flag `categorize()` uses.
+ */
+function regexPatternCompiles(
+  data: { matchType?: string; pattern?: string },
+  ctx: z.RefinementCtx,
+) {
+  if (data.matchType !== "regex" || typeof data.pattern !== "string") return;
+  try {
+    new RegExp(data.pattern, "i");
+  } catch {
+    ctx.addIssue({ code: "custom", message: INVALID_REGEX_MESSAGE, path: ["pattern"] });
+  }
+}
+
+const ruleFieldsSchema = z.object({
+  categoryId: z.string().uuid("יש לבחור קטגוריה"),
+  matchType: z.enum(["contains", "starts_with", "exact", "regex"], {
+    message: "יש לבחור סוג התאמה",
+  }),
   pattern: z.string().min(1, "תבנית חובה"),
-  priority: z.number().int().min(0).default(0),
+  priority: z
+    .number({ message: "עדיפות חייבת להיות מספר" })
+    .int("עדיפות חייבת להיות מספר שלם")
+    .min(0, "עדיפות לא יכולה להיות שלילית"),
 });
 
-export const updateRuleSchema = createRuleSchema.partial();
+export const createRuleSchema = ruleFieldsSchema.superRefine(regexPatternCompiles);
+
+export const ruleIdSchema = z.object({
+  id: z.string().uuid("מזהה כלל לא תקין"),
+});
+
+export const updateRuleActionSchema = ruleFieldsSchema
+  .partial()
+  .extend(ruleIdSchema.shape)
+  .refine(
+    (data) => Object.entries(data).some(([key, value]) => key !== "id" && value !== undefined),
+    { message: "לא סופקו שדות לעדכון" },
+  )
+  .superRefine(regexPatternCompiles);
