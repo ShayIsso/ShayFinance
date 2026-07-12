@@ -203,10 +203,21 @@ function FormSubmit({
   );
 }
 
+/** True when a (possibly dotted, e.g. "credentials.id") path exists in the form values. */
+function hasFieldPath(values: FieldValues, path: string): boolean {
+  let current: unknown = values;
+  for (const part of path.split(".")) {
+    if (typeof current !== "object" || current === null || !(part in current)) return false;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return true;
+}
+
 /**
  * Routes a Server Action's failure result into the form: fieldErrors whose
- * keys exist in the form's values become inline field errors (the same
- * mechanism client validation uses); anything else lands on "root".
+ * keys exist in the form's values (dotted paths for nested fields) become
+ * inline field errors (the same mechanism client validation uses); anything
+ * else lands on "root".
  */
 function applyActionErrors<TFieldValues extends FieldValues>(
   form: UseFormReturn<TFieldValues>,
@@ -216,7 +227,7 @@ function applyActionErrors<TFieldValues extends FieldValues>(
   const values = form.getValues();
   let appliedFieldError = false;
   for (const [field, message] of Object.entries(result.fieldErrors ?? {})) {
-    if (field in values) {
+    if (hasFieldPath(values, field)) {
       form.setError(field as Path<TFieldValues>, { message });
       appliedFieldError = true;
     }

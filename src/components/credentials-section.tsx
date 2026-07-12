@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import * as React from "react";
+import { useForm, type Resolver } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Pencil, Trash2, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,13 +17,24 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  FormRootError,
+  FormSubmit,
+  applyActionErrors,
+} from "@/components/ui/form";
+import { addCredentialSchema, editCredentialSchema } from "@/lib/credentials/schemas";
+import {
+  addCredentialAction,
+  updateCredentialAction,
+  deleteCredentialAction,
+} from "@/app/actions/credentials";
 
 type BankType = "discount" | "max" | "visaCal";
 
@@ -39,34 +51,56 @@ const BANK_LABELS: Record<BankType, string> = {
   visaCal: "Cal",
 };
 
-type FormState = {
+/**
+ * Superset of both per-bank field shapes so a single RHF instance backs the
+ * form; the module-owned discriminated-union schema validates only the
+ * selected bank's fields.
+ */
+type CredentialFormValues = {
   bankType: BankType;
   displayName: string;
-  discountId: string;
-  discountNum: string;
-  username: string;
-  password: string;
+  credentials: { id: string; num: string; username: string; password: string };
 };
 
-const EMPTY_FORM: FormState = {
+const EMPTY_CREDENTIAL_FIELDS = { id: "", num: "", username: "", password: "" };
+
+const EMPTY_FORM: CredentialFormValues = {
   bankType: "discount",
   displayName: "",
-  discountId: "",
-  discountNum: "",
-  username: "",
-  password: "",
+  credentials: EMPTY_CREDENTIAL_FIELDS,
 };
 
 export function CredentialsSection() {
-  const [credentials, setCredentials] = useState<Credential[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [formOpen, setFormOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Credential | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [credentials, setCredentials] = React.useState<Credential[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [formOpen, setFormOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<Credential | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<Credential | null>(null);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [isPending, startTransition] = React.useTransition();
+  const [isDeletePending, startDeleteTransition] = React.useTransition();
+
+  // The resolver reads the current mode through a ref so one stable RHF
+  // instance can validate with the add schema (password required) or the
+  // edit schema (blank password = keep the stored one).
+  const editingRef = React.useRef(false);
+  const resolver = React.useMemo<Resolver<CredentialFormValues>>(() => {
+    // The union's input type is narrower per-branch than the superset form
+    // values, hence the cast; the schemas are module-owned and shared with
+    // the Server Actions, so parity is asserted in tests, not here.
+    const addResolver = zodResolver(
+      addCredentialSchema,
+    ) as unknown as Resolver<CredentialFormValues>;
+    const editResolver = zodResolver(
+      editCredentialSchema,
+    ) as unknown as Resolver<CredentialFormValues>;
+    return (values, context, options) =>
+      (editingRef.current ? editResolver : addResolver)(values, context, options);
+  }, []);
+
+  const form = useForm<CredentialFormValues>({ resolver, defaultValues: EMPTY_FORM });
+  const bankType = form.watch("bankType");
 
   async function fetchCredentials() {
     const res = await fetch("/api/credentials");
@@ -76,102 +110,94 @@ export function CredentialsSection() {
     setLoading(false);
   }
 
-  useEffect(() => {
+  React.useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- removed during Phase 2 Server Actions migration (see PRD issue #35)
     fetchCredentials();
   }, []);
 
   function openAdd() {
-    setEditingId(null);
-    setForm(EMPTY_FORM);
-    setError(null);
+    editingRef.current = false;
+    setEditing(null);
+    form.reset(EMPTY_FORM);
     setFormOpen(true);
   }
 
   async function openEdit(cred: Credential) {
-    setEditingId(cred.id);
-    setError(null);
-    setForm({ ...EMPTY_FORM, bankType: cred.bankType, displayName: cred.displayName });
+    editingRef.current = true;
+    setEditing(cred);
+    form.reset({
+      bankType: cred.bankType,
+      displayName: cred.displayName,
+      credentials: EMPTY_CREDENTIAL_FIELDS,
+    });
     setFormOpen(true);
 
+    // Prefill the non-password fields; the password field always starts blank
+    // and the stored password is never sent to the client.
     const res = await fetch(`/api/credentials/${cred.id}`);
     if (res.ok) {
       const data = await res.json();
-      setForm((prev) => ({
-        ...prev,
-        discountId: data.safeFields?.id ?? "",
-        discountNum: data.safeFields?.num ?? "",
-        username: data.safeFields?.username ?? "",
-      }));
+      form.setValue("credentials.id", data.safeFields?.id ?? "");
+      form.setValue("credentials.num", data.safeFields?.num ?? "");
+      form.setValue("credentials.username", data.safeFields?.username ?? "");
     }
   }
 
   function openDelete(cred: Credential) {
     setDeleteTarget(cred);
+    setDeleteError(null);
     setDeleteOpen(true);
   }
 
-  async function handleSubmit() {
-    setSubmitting(true);
-    setError(null);
-    try {
-      if (editingId) {
-        const body: { displayName?: string; credentials?: Record<string, string> } = {
-          displayName: form.displayName,
-        };
-        if (form.password !== "") {
-          body.credentials =
-            form.bankType === "discount"
-              ? { id: form.discountId, password: form.password, num: form.discountNum }
-              : { username: form.username, password: form.password };
-        }
-        const res = await fetch(`/api/credentials/${editingId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error ?? "שגיאה בעדכון");
-        }
-      } else {
-        const credentials =
-          form.bankType === "discount"
-            ? { id: form.discountId, password: form.password, num: form.discountNum }
-            : { username: form.username, password: form.password };
-        const res = await fetch("/api/credentials", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bankType: form.bankType,
-            displayName: form.displayName,
-            credentials,
-          }),
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error ?? "שגיאה בהוספה");
-        }
+  function onSubmit(values: CredentialFormValues) {
+    startTransition(async () => {
+      // Only the selected bank's fields leave the client.
+      const bankCredentials =
+        values.bankType === "discount"
+          ? {
+              id: values.credentials.id,
+              password: values.credentials.password,
+              num: values.credentials.num,
+            }
+          : { username: values.credentials.username, password: values.credentials.password };
+
+      const result = editing
+        ? await updateCredentialAction({
+            id: editing.id,
+            bankType: values.bankType,
+            displayName: values.displayName,
+            // A blank password means "keep the stored credentials" — the
+            // payload then carries no credential fields at all.
+            ...(values.credentials.password === "" ? {} : { credentials: bankCredentials }),
+          })
+        : await addCredentialAction({
+            bankType: values.bankType,
+            displayName: values.displayName,
+            credentials: bankCredentials,
+          });
+
+      if (result.error || result.fieldErrors) {
+        // Server-side validation lands in the same inline mechanism as client errors.
+        applyActionErrors(form, result);
+        return;
       }
+
       setFormOpen(false);
       await fetchCredentials();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!deleteTarget) return;
-    setSubmitting(true);
-    try {
-      await fetch(`/api/credentials/${deleteTarget.id}`, { method: "DELETE" });
+    startDeleteTransition(async () => {
+      const result = await deleteCredentialAction({ id: deleteTarget.id });
+      if (result.error) {
+        setDeleteError(result.error);
+        return;
+      }
       setDeleteOpen(false);
       await fetchCredentials();
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   return (
@@ -237,111 +263,164 @@ export function CredentialsSection() {
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingId ? "ערוך חשבון בנק" : "הוסף חשבון בנק"}</DialogTitle>
+            <DialogTitle>{editing ? "ערוך חשבון בנק" : "הוסף חשבון בנק"}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
-            {!editingId && (
-              <div className="space-y-1.5">
-                <Label htmlFor="bankType">סוג בנק</Label>
-                <Select
-                  value={form.bankType}
-                  onValueChange={(val) =>
-                    setForm({
-                      ...EMPTY_FORM,
-                      bankType: val as BankType,
-                      displayName: form.displayName,
-                    })
-                  }
-                >
-                  <SelectTrigger id="bankType" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="discount">Bank Discount</SelectItem>
-                    <SelectItem value="max">Max</SelectItem>
-                    <SelectItem value="visaCal">Cal</SelectItem>
-                  </SelectContent>
-                </Select>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+              <div className="space-y-4 pt-2">
+                {!editing && (
+                  <FormField
+                    control={form.control}
+                    name="bankType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>סוג בנק</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            if (!v) return;
+                            field.onChange(v);
+                            // Bank switch swaps the field set — start it clean.
+                            form.setValue("credentials", EMPTY_CREDENTIAL_FIELDS);
+                            form.clearErrors([
+                              "credentials.id",
+                              "credentials.num",
+                              "credentials.username",
+                              "credentials.password",
+                            ]);
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <span>{BANK_LABELS[field.value]}</span>
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="discount">Bank Discount</SelectItem>
+                            <SelectItem value="max">Max</SelectItem>
+                            <SelectItem value="visaCal">Cal</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="displayName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שם תצוגה</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="לדוגמה: חשבון עיקרי" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {bankType === "discount" ? (
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="credentials.id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>תעודת זהות</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="מספר ת.ז." />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="credentials.password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>סיסמה</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="password"
+                              placeholder={editing ? "ללא שינוי" : "סיסמה"}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="credentials.num"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>מספר חשבון</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="מספר חשבון" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="credentials.username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>שם משתמש</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="שם משתמש לאינטרנט" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="credentials.password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>סיסמה</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="password"
+                              placeholder={editing ? "ללא שינוי" : "סיסמה"}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </>
+                )}
+
+                <FormRootError />
               </div>
-            )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="displayName">שם תצוגה</Label>
-              <Input
-                id="displayName"
-                value={form.displayName}
-                onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-                placeholder="לדוגמה: חשבון עיקרי"
-              />
-            </div>
-
-            {form.bankType === "discount" ? (
-              <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="discountId">תעודת זהות</Label>
-                  <Input
-                    id="discountId"
-                    value={form.discountId}
-                    onChange={(e) => setForm({ ...form, discountId: e.target.value })}
-                    placeholder="מספר ת.ז."
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="discountPassword">סיסמה</Label>
-                  <Input
-                    id="discountPassword"
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={editingId ? "ללא שינוי" : "סיסמה"}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="discountNum">מספר חשבון</Label>
-                  <Input
-                    id="discountNum"
-                    value={form.discountNum}
-                    onChange={(e) => setForm({ ...form, discountNum: e.target.value })}
-                    placeholder="מספר חשבון"
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="username">שם משתמש</Label>
-                  <Input
-                    id="username"
-                    value={form.username}
-                    onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    placeholder="שם משתמש לאינטרנט"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="password">סיסמה</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={editingId ? "ללא שינוי" : "סיסמה"}
-                  />
-                </div>
-              </>
-            )}
-
-            {error && <p className="text-destructive text-sm">{error}</p>}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>
-              ביטול
-            </Button>
-            <Button onClick={handleSubmit} disabled={submitting}>
-              {submitting ? "שומר..." : "שמור"}
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFormOpen(false)}
+                  disabled={isPending}
+                >
+                  ביטול
+                </Button>
+                <FormSubmit pending={isPending} pendingText="שומר...">
+                  שמור
+                </FormSubmit>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -354,12 +433,17 @@ export function CredentialsSection() {
           <p className="text-muted-foreground text-sm">
             האם למחוק את &ldquo;{deleteTarget?.displayName}&rdquo;? פעולה זו אינה הפיכה.
           </p>
+          {deleteError && <p className="text-destructive text-sm">{deleteError}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={isDeletePending}
+            >
               ביטול
             </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={submitting}>
-              {submitting ? "מוחק..." : "מחק"}
+            <Button variant="destructive" onClick={handleDelete} disabled={isDeletePending}>
+              {isDeletePending ? "מוחק..." : "מחק"}
             </Button>
           </DialogFooter>
         </DialogContent>
