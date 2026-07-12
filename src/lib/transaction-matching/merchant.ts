@@ -19,7 +19,12 @@ export function extractMerchant(description: string): string {
     }
   }
 
-  // Strip standalone digit tokens of 4+ chars (card numbers, account IDs)
+  // Strip standalone digit tokens of 4+ chars (card numbers, account IDs).
+  // NOT the same thing as the 5+ digit redaction rule in
+  // src/lib/redaction — that rule serves PRIVACY (nothing identifying
+  // leaves a log line or the host), this one serves merchant MATCHING
+  // (normalizing descriptors so duplicates collapse). They evolve
+  // independently; do not "deduplicate" one into the other.
   s = s.replace(/(^|\s)\d{4,}(?=\s|$)/g, "$1");
 
   // Strip domain suffixes: .com, .co.il, .net, etc.

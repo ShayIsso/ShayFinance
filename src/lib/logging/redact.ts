@@ -1,16 +1,17 @@
+import { redactionRules } from "@/lib/redaction";
+
 const PASSWORD_KEYS = /^(password|pwd|secret|token|apiKey|api_key)$/i;
 const ID_KEYS = /^(id|idNumber|nationalId|teudatZehut)$/i;
 const ACCOUNT_KEYS = /^(accountNumber|bankAccountNumber)$/i;
 const NINE_DIGITS = /^\d{9}$/;
-const BEARER_PATTERN = /Bearer [A-Za-z0-9._\-]+/g;
-const OTP_PATTERN = /(otp|code|קוד|אימות)[^0-9]{0,15}([0-9]{4,8})(?!\d)/gi;
 
+/**
+ * String-level pass — delegates to the shared ADR-0008 rule table in
+ * src/lib/redaction (a strict superset of the old Bearer + OTP pass),
+ * so the logging path and the AI-egress path can never drift.
+ */
 function redactString(value: string): string {
-  let result = value.replace(BEARER_PATTERN, "Bearer [REDACTED]");
-  result = result.replace(OTP_PATTERN, (match, ctx, digits) =>
-    match.replace(digits, "[REDACTED_OTP]"),
-  );
-  return result;
+  return redactionRules.reduce((acc, rule) => rule.apply(acc), value);
 }
 
 export function redact(value: unknown, visited: WeakSet<object> = new WeakSet()): unknown {
