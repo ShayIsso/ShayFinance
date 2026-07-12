@@ -179,6 +179,81 @@ describe("redactText — rule ordering and interaction", () => {
   });
 });
 
+describe("redactText — review-probe regressions", () => {
+  // Exact inputs from the PR #122 adversarial review probe. Each of
+  // these survived the first implementation and must never leak again.
+  const cases: Array<{ name: string; input: string; expected: string }> = [
+    {
+      name: "redacts an alphanumeric OTP value (keyword + non-numeric adjacent value)",
+      input: "OTP: a1b2c3",
+      expected: "OTP: [REDACTED_SECRET]",
+    },
+    {
+      name: "redacts a short numeric OTP below the legacy 4-digit floor",
+      input: "otp 123",
+      expected: "otp [REDACTED_SECRET]",
+    },
+    {
+      name: "redacts an alphanumeric value after Hebrew קוד אימות",
+      input: "קוד אימות: a1b2c3",
+      expected: "קוד אימות: [REDACTED_SECRET]",
+    },
+    {
+      name: "redacts the value in natural Hebrew possessive + copula phrasing",
+      input: "הסיסמה שלי היא hunter2",
+      expected: "הסיסמה שלי היא [REDACTED_SECRET]",
+    },
+    {
+      name: "redacts a protocol-relative credentialed URL (userinfo, no scheme)",
+      input: "see //user:secretpw@evil.com now",
+      expected: "see [REDACTED_URL] now",
+    },
+    {
+      name: "redacts a Windows home path",
+      input: "C:\\Users\\x\\secrets.txt",
+      expected: "[REDACTED_PATH]",
+    },
+  ];
+
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(redactText(input)).toBe(expected);
+  });
+});
+
+describe("redactText — natural Hebrew phrasing corpus", () => {
+  const cases: Array<{ name: string; input: string; expected: string }> = [
+    {
+      name: "redacts the value after Hebrew copula היא",
+      input: "הסיסמה היא fake123",
+      expected: "הסיסמה היא [REDACTED_SECRET]",
+    },
+    {
+      name: "redacts the value after Hebrew copula הוא",
+      input: "המפתח הוא fake-key-2",
+      expected: "המפתח הוא [REDACTED_SECRET]",
+    },
+    {
+      name: "redacts the value after Hebrew copula זה",
+      input: "הטוקן זה tok-fake",
+      expected: "הטוקן זה [REDACTED_SECRET]",
+    },
+    {
+      name: "redacts the value after possessive שלך with a colon",
+      input: "סיסמה שלך: fakepw",
+      expected: "סיסמה שלך: [REDACTED_SECRET]",
+    },
+    {
+      name: "routes numeric Hebrew OTP phrasing through the legacy token",
+      input: "הקוד הוא 1234",
+      expected: "הקוד הוא [REDACTED_OTP]",
+    },
+  ];
+
+  it.each(cases)("$name", ({ input, expected }) => {
+    expect(redactText(input)).toBe(expected);
+  });
+});
+
 describe("redactText — idempotence", () => {
   const inputs: string[] = [
     "12345",
@@ -191,6 +266,14 @@ describe("redactText — idempotence", () => {
     "/Users/someuser/projects/.env",
     "סיסמה: fake1 אימייל user@example.co.il טלפון 0501234567 ראה https://u:p@h.com/x ב-/Users/someuser/f.txt",
     "שווארמה הרצל תל אביב",
+    // Review-probe corpus.
+    "OTP: a1b2c3",
+    "otp 123",
+    "קוד אימות: a1b2c3",
+    "הסיסמה שלי היא hunter2",
+    "see //user:secretpw@evil.com now",
+    "C:\\Users\\x\\secrets.txt",
+    "הקוד הוא 1234",
   ];
 
   it.each(inputs.map((input) => ({ input })))(
@@ -213,11 +296,38 @@ describe("redactionRules — the exported rule table", () => {
     ]);
   });
 
-  it("gives each rule class a distinguishable bracketed placeholder", () => {
-    const placeholders = redactionRules.map((rule) => rule.placeholder);
-    expect(new Set(placeholders).size).toBe(placeholders.length);
-    for (const placeholder of placeholders) {
-      expect(placeholder).toMatch(/^\[REDACTED_[A-Z]+\]$/);
+  it("gives each rule class distinguishable bracketed placeholders", () => {
+    const allPlaceholders = redactionRules.flatMap((rule) => rule.placeholders);
+    expect(new Set(allPlaceholders).size).toBe(allPlaceholders.length);
+    for (const placeholder of allPlaceholders) {
+      expect(placeholder).toMatch(/^\[REDACTED(_[A-Z]+)?\]$/);
+    }
+  });
+
+  it("each rule's apply emits only its own declared placeholders", () => {
+    const probesByRule: Record<string, string[]> = {
+      "digit-run": ["acct 1234567"],
+      "keyword-secret": [
+        "password: fake-value",
+        "OTP code: 1234",
+        "Authorization: Bearer fakeToken.abc",
+        "קוד אימות: a1b2c3",
+        "הסיסמה שלי היא hunter2",
+      ],
+      email: ["someone@example.com"],
+      "credentialed-url": ["https://u:p@h.com/x", "//user:fakepw@h.com"],
+      "home-path": ["/Users/someuser/f.txt", "C:\\Users\\someuser\\f.txt"],
+    };
+    for (const rule of redactionRules) {
+      for (const probe of probesByRule[rule.name]) {
+        const output = rule.apply(probe);
+        expect(output).not.toBe(probe); // every probe must trigger its rule
+        const emitted = output.match(/\[REDACTED(?:_[A-Z]+)?\]/g) ?? [];
+        expect(emitted.length).toBeGreaterThan(0);
+        for (const token of emitted) {
+          expect(rule.placeholders).toContain(token);
+        }
+      }
     }
   });
 
@@ -225,6 +335,14 @@ describe("redactionRules — the exported rule table", () => {
     const input = "code 1234 password: fake user@example.com /Users/someuser/x 987654321";
     const viaTable = redactionRules.reduce((acc, rule) => rule.apply(acc), input);
     expect(viaTable).toBe(redactText(input));
+  });
+
+  it("is deeply frozen — the security-critical table cannot be mutated", () => {
+    expect(Object.isFrozen(redactionRules)).toBe(true);
+    for (const rule of redactionRules) {
+      expect(Object.isFrozen(rule)).toBe(true);
+      expect(Object.isFrozen(rule.placeholders)).toBe(true);
+    }
   });
 });
 
