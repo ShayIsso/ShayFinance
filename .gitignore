@@ -55,3 +55,13 @@ scripts/spike/fixture-draft.json
 scripts/spike/benchmark-results.json
 scripts/spike/benchmark.ts
 scripts/spike/discount-url-probe.ts
+
+# mattpocock/skills — installed agentic tooling, regenerable from skills-lock.json (committed).
+# Real skill content lives in /.agents/ (fetched from GitHub); /.claude/skills/* are generated
+# symlinks into it. Only the lock manifest is tracked — like package-lock.json vs node_modules.
+# The three hand-maintained skills below are real, pre-existing, and stay tracked.
+/.agents/
+/.claude/skills/*
+!/.claude/skills/generate-commit-message/
+!/.claude/skills/obsidian-markdown/
+!/.claude/skills/react-performance-optimization/
