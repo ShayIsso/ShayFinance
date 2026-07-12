@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { bankCredentials } from "@/db/schema";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { credentialSchemas } from "./schemas";
+import { CredentialNotFoundError } from "./errors";
 
 type BankType = "discount" | "max" | "visaCal";
 
@@ -39,7 +40,7 @@ export async function getDecryptedCredentials(
   const row = await db.query.bankCredentials.findFirst({
     where: eq(bankCredentials.id, id),
   });
-  if (!row) throw new Error(`Credential not found: ${id}`);
+  if (!row) throw new CredentialNotFoundError(id);
   const json = decrypt({ encrypted: row.encryptedCredentials, iv: row.iv, authTag: row.authTag });
   return { bankType: row.bankType, credentials: JSON.parse(json) as Record<string, string> };
 }
@@ -57,7 +58,7 @@ export async function updateCredential(
       where: eq(bankCredentials.id, id),
       columns: { bankType: true },
     });
-    if (!row) throw new Error(`Credential not found: ${id}`);
+    if (!row) throw new CredentialNotFoundError(id);
     validateCredentials(row.bankType, update.rawCredentials);
     const { encrypted, iv, authTag } = encrypt(JSON.stringify(update.rawCredentials));
     values.encryptedCredentials = encrypted;
