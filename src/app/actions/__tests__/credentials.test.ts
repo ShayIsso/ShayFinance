@@ -24,8 +24,13 @@ import {
   updateCredentialAction,
   deleteCredentialAction,
 } from "@/app/actions/credentials";
-import { addCredentialSchema, editCredentialSchema } from "@/lib/credentials/schemas";
+import {
+  addCredentialSchema,
+  editCredentialSchema,
+  credentialSchemas,
+} from "@/lib/credentials/schemas";
 import { CredentialNotFoundError } from "@/lib/credentials/errors";
+import { formatZodError } from "@/lib/api-utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 const FAKE_DISCOUNT_FIELDS = { id: "000000000", password: "fake-password", num: "000000" };
@@ -205,6 +210,25 @@ describe("updateCredentialAction", () => {
       rawCredentials: FAKE_DISCOUNT_FIELDS,
     });
     expect(revalidatePath).toHaveBeenCalledWith("/sync");
+  });
+
+  it("returns a formatted error when the module rejects credentials that mismatch the stored bank", async () => {
+    // A forged payload can lie about bankType; the module re-validates
+    // against the STORED bank and throws a ZodError — the boundary must
+    // format it, not rethrow raw.
+    const moduleRejection = credentialSchemas.discount.safeParse(FAKE_MAX_FIELDS);
+    if (moduleRejection.success) throw new Error("fixture should not validate");
+    vi.mocked(updateCredential).mockRejectedValue(moduleRejection.error);
+
+    const result = await updateCredentialAction({
+      id: VALID_ID,
+      bankType: "max",
+      displayName: "כרטיס בדיקה",
+      credentials: FAKE_MAX_FIELDS,
+    });
+
+    expect(result.error).toBe(formatZodError(moduleRejection.error));
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("returns a Hebrew error when the credential does not exist, without revalidating", async () => {

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { ZodError } from "zod";
 import { formatZodError, formatZodFieldErrors, type FieldErrors } from "@/lib/api-utils";
 import { addCredential, updateCredential, removeCredential } from "@/lib/credentials";
 // Imported from the dedicated errors module (not the mocked barrel) so
@@ -58,6 +59,10 @@ export async function updateCredentialAction(
     await updateCredential(id, { displayName, rawCredentials: credentials });
   } catch (err) {
     if (err instanceof CredentialNotFoundError) return { error: NOT_FOUND_MESSAGE };
+    // The module re-validates against the STORED bankType. A payload whose
+    // bankType lies about the row (never our UI, only a forged request)
+    // fails that check — return it formatted instead of throwing raw.
+    if (err instanceof ZodError) return { error: formatZodError(err) };
     throw err;
   }
 

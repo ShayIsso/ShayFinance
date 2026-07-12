@@ -81,10 +81,13 @@ export function CredentialsSection() {
   const [isPending, startTransition] = React.useTransition();
   const [isDeletePending, startDeleteTransition] = React.useTransition();
 
-  // The resolver reads the current mode through a ref so one stable RHF
-  // instance can validate with the add schema (password required) or the
-  // edit schema (blank password = keep the stored one).
-  const editingRef = React.useRef(false);
+  // The resolver reads the current dialog mode (add vs edit) through a ref so
+  // one stable RHF instance can validate with the add schema (password
+  // required) or the edit schema (blank password = keep the stored one).
+  const editModeRef = React.useRef(false);
+  // Snapshot of the edit form's prefilled non-password fields, to detect
+  // changes that would be silently dropped without a replacement password.
+  const prefillRef = React.useRef(EMPTY_CREDENTIAL_FIELDS);
   const resolver = React.useMemo<Resolver<CredentialFormValues>>(() => {
     // The union's input type is narrower per-branch than the superset form
     // values, hence the cast; the schemas are module-owned and shared with
@@ -96,7 +99,7 @@ export function CredentialsSection() {
       editCredentialSchema,
     ) as unknown as Resolver<CredentialFormValues>;
     return (values, context, options) =>
-      (editingRef.current ? editResolver : addResolver)(values, context, options);
+      (editModeRef.current ? editResolver : addResolver)(values, context, options);
   }, []);
 
   const form = useForm<CredentialFormValues>({ resolver, defaultValues: EMPTY_FORM });
@@ -111,19 +114,20 @@ export function CredentialsSection() {
   }
 
   React.useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- removed during Phase 2 Server Actions migration (see PRD issue #35)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the list stays client-fetched: #118 scoped Server Actions to mutations only, the GET routes remain
     fetchCredentials();
   }, []);
 
   function openAdd() {
-    editingRef.current = false;
+    editModeRef.current = false;
     setEditing(null);
     form.reset(EMPTY_FORM);
     setFormOpen(true);
   }
 
   async function openEdit(cred: Credential) {
-    editingRef.current = true;
+    editModeRef.current = true;
+    prefillRef.current = EMPTY_CREDENTIAL_FIELDS;
     setEditing(cred);
     form.reset({
       bankType: cred.bankType,
@@ -137,9 +141,16 @@ export function CredentialsSection() {
     const res = await fetch(`/api/credentials/${cred.id}`);
     if (res.ok) {
       const data = await res.json();
-      form.setValue("credentials.id", data.safeFields?.id ?? "");
-      form.setValue("credentials.num", data.safeFields?.num ?? "");
-      form.setValue("credentials.username", data.safeFields?.username ?? "");
+      const prefill = {
+        ...EMPTY_CREDENTIAL_FIELDS,
+        id: data.safeFields?.id ?? "",
+        num: data.safeFields?.num ?? "",
+        username: data.safeFields?.username ?? "",
+      };
+      prefillRef.current = prefill;
+      form.setValue("credentials.id", prefill.id);
+      form.setValue("credentials.num", prefill.num);
+      form.setValue("credentials.username", prefill.username);
     }
   }
 
@@ -150,6 +161,23 @@ export function CredentialsSection() {
   }
 
   function onSubmit(values: CredentialFormValues) {
+    // Without a replacement password the stored credentials can't be
+    // re-encrypted, so edits to the other login fields would be silently
+    // dropped — demand a password instead of pretending they saved.
+    if (editing && values.credentials.password === "") {
+      const prefill = prefillRef.current;
+      const loginFieldsChanged =
+        values.bankType === "discount"
+          ? values.credentials.id !== prefill.id || values.credentials.num !== prefill.num
+          : values.credentials.username !== prefill.username;
+      if (loginFieldsChanged) {
+        form.setError("credentials.password", {
+          message: "כדי לעדכן את פרטי ההתחברות יש להזין סיסמה",
+        });
+        return;
+      }
+    }
+
     startTransition(async () => {
       // Only the selected bank's fields leave the client.
       const bankCredentials =
@@ -323,84 +351,67 @@ export function CredentialsSection() {
                 />
 
                 {bankType === "discount" ? (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="credentials.id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>תעודת זהות</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="מספר ת.ז." />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="credentials.password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>סיסמה</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="password"
-                              placeholder={editing ? "ללא שינוי" : "סיסמה"}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="credentials.num"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>מספר חשבון</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="מספר חשבון" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
+                  <FormField
+                    control={form.control}
+                    name="credentials.id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>תעודת זהות</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="מספר ת.ז." />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 ) : (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="credentials.username"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>שם משתמש</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="שם משתמש לאינטרנט" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="credentials.password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>סיסמה</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="password"
-                              placeholder={editing ? "ללא שינוי" : "סיסמה"}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
+                  <FormField
+                    control={form.control}
+                    name="credentials.username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>שם משתמש</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="שם משתמש לאינטרנט" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="credentials.password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סיסמה</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="password"
+                          placeholder={editing ? "ללא שינוי" : "סיסמה"}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {bankType === "discount" && (
+                  <FormField
+                    control={form.control}
+                    name="credentials.num"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>מספר חשבון</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="מספר חשבון" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
 
                 <FormRootError />
