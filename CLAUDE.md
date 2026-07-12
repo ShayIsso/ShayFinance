@@ -8,17 +8,6 @@ Private, self-hosted personal finance dashboard. Fetches and categorizes transac
 **Phase 2 Kickoff:** `docs/phase2-kickoff.md`
 **Backlog:** `BACKLOG.md`
 
-## Tech Stack
-
-- **Framework:** Next.js (App Router) + TypeScript (strict)
-- **Styling:** Tailwind CSS + Shadcn UI
-- **ORM:** Drizzle ORM + PostgreSQL (Docker)
-- **Scraping:** `israeli-bank-scrapers-core` + `puppeteer-core`
-- **Charts:** Shadcn Charts (Recharts)
-- **Validation:** Zod on all API boundaries
-- **Testing:** Vitest (58 tests across 5 suites)
-- **Icons:** Lucide React only
-
 ## Architecture Rules
 
 ### Module Structure
