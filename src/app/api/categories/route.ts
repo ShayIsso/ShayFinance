@@ -1,23 +1,10 @@
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
-import { getCategories, createCategory } from "@/lib/categories";
-import { createCategorySchema } from "@/lib/categories/schemas";
-import { formatZodError } from "@/lib/api-utils";
+import { getCategories } from "@/lib/categories";
+
+// Mutations (create/update/delete) live in Server Actions:
+// src/app/actions/categories.ts (FND2 — shared RHF+Zod form layer).
 
 export async function GET() {
   const data = await getCategories();
   return NextResponse.json(data);
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = createCategorySchema.parse(await request.json());
-    const id = await createCategory(body);
-    return NextResponse.json({ id }, { status: 201 });
-  } catch (err) {
-    if (err instanceof ZodError) {
-      return NextResponse.json({ error: formatZodError(err) }, { status: 400 });
-    }
-    throw err;
-  }
 }
