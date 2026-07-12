@@ -56,11 +56,7 @@ Every interaction must feel fluid: loading skeletons (not "טוען..."), smooth
 
 ### Bootstrap Drizzle Migration System
 
-Phase 2 schema changes (R1 reconciliation columns, future RD1 `recurring_expenses`, S1 `sync_runs`) currently apply via `npm run db:push`. Phase 1 also used `db:push` exclusively — no migration files have ever been generated. This works for single-user local/Docker deployments but loses historical schema records and complicates any future remote/multi-environment deployment.
-
-When Phase 2 has accumulated 3+ schema-changing slices, do a bootstrap chore: `npx drizzle-kit introspect` against the current dev DB to produce a baseline `0000_baseline.sql`, mark it as already-applied via `INSERT INTO __drizzle_migrations`, then generate `0001_*.sql` for the next change. From that point onward, all schema changes flow through generated migrations.
-
-Discovered during R1 (#46/PR #66): a worker-generated "create everything" first migration would have wiped Shay's 400+ real transactions. We chose `db:push` to avoid that and tracked this as future tech debt.
+**Done 2026-07-12** ([#104](https://github.com/ShayIsso/ShayFinance/issues/104), [ADR-0009](docs/adr/0009-generated-migrations-from-baseline.md)): baseline generated from `src/db/schema.ts` and marked applied against the live dev DB; all schema changes now ship as generated migrations, `db:push` retired.
 
 ### API Route Auth: Return 401 JSON Instead of Redirect
 
