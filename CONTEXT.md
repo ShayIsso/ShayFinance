@@ -8,9 +8,9 @@ This file starts lean. New terms get added by `/grill-with-docs` as planning ses
 
 ## What this project is
 
-A private, self-hosted personal finance dashboard for a single user. Fetches and categorizes transactions from three Israeli banks (Bank Discount, Max, Cal). Local/Docker only, no cloud, no third-party APIs. Hebrew RTL interface.
+A private, self-hosted personal finance dashboard for a single user. Fetches and categorizes transactions from three Israeli banks (Bank Discount, Max, Cal). Local/Docker only for hosting and all bank data. Hebrew RTL interface.
 
-Hard constraints: single-user, local-only, zero-leak logging, no third-party services. Anything that violates these is wrong by construction.
+Hard constraints: single-user, self-hosted, zero-leak logging. The only permitted external egress is redaction-gated AI categorization per [ADR-0008](./docs/adr/0008-redaction-gated-external-categorization.md) — anything else that sends data off the host is wrong by construction.
 
 ---
 
@@ -90,6 +90,36 @@ Rules match by one of four match types: `contains`, `starts_with`, `exact`, `reg
 ### `retroactive application` (Phase 2)
 
 Applying a newly created rule to existing uncategorized transactions, or to transactions whose current rule has strictly lower priority than the new rule. Carries the workflow load that AI categorization was meant to handle (per ADR-0005). Lives in `categories/rules.ts` as `previewRetroactiveApply` + `applyRetroactively`.
+
+---
+
+## AI categorization vocabulary (Phase 3)
+
+Locked in [ADR-0008](./docs/adr/0008-redaction-gated-external-categorization.md). Use these exact terms.
+
+### `redaction boundary` — load-bearing
+
+The line between what may and may never leave the host. Forbidden classes (credentials, secrets, national IDs, account numbers, any 5+ digit string) never cross; merchant descriptors cross only after redaction. Replaces the blanket "local-only, no third-party APIs" invariant from ADR-0005. The redaction rule set — digit runs of 5+, keyword-secret patterns, emails, credentialed URLs, home paths — is a pure, TDD'd module shared with the log sanitizer.
+
+### `RedactedString`
+
+Branded TypeScript type produced only by the redaction module. Provider adapters accept `RedactedString`, never plain `string`, so unredacted text structurally cannot reach a provider.
+
+### `anchored confidence`
+
+The 1–7 confidence rubric every provider must return, with each level behaviourally anchored (not a free-floating score). Drives tiered auto-apply. Same rubric for external and local providers.
+
+### `tiered auto-apply`
+
+Trust posture for AI suggestions: merchant-memory hits always apply; confidence 6–7 auto-applies marked-as-AI with one-click undo (overrides feed the corrections log); 3–5 queue as review suggestions; 1–2 stay uncategorized.
+
+### `merchant memory`
+
+Previously confirmed merchant-to-category mappings, consulted before any model call. A hit outranks any model output and applies without asking.
+
+### `zero-egress mode`
+
+Running categorization against local Ollama behind the same adapter boundary — same anchored confidence, same review flow, no data leaves the host. Always selectable.
 
 ---
 
