@@ -19,10 +19,23 @@ export const transactionFiltersSchema = z.object({
 
 export const updateTransactionSchema = z.object({
   customDescription: z.string().nullable().optional(),
-  categoryId: z.string().uuid().nullable().optional(),
+  categoryId: z.string().uuid({ message: "מזהה קטגוריה לא תקין" }).nullable().optional(),
 });
 
+export const transactionIdSchema = z.object({
+  id: z.string().uuid({ message: "מזהה עסקה לא תקין" }),
+});
+
+export const updateTransactionActionSchema = updateTransactionSchema
+  .extend(transactionIdSchema.shape)
+  .refine(
+    (data) => Object.entries(data).some(([key, value]) => key !== "id" && value !== undefined),
+    { message: "לא סופקו שדות לעדכון" },
+  );
+
 export const bulkCategorizeSchema = z.object({
-  transactionIds: z.array(z.string().uuid()).min(1),
-  categoryId: z.string().uuid(),
+  transactionIds: z
+    .array(z.string().uuid({ message: "מזהה עסקה לא תקין" }))
+    .min(1, { message: "יש לספק לפחות עסקה אחת" }),
+  categoryId: z.string().uuid({ message: "יש לבחור קטגוריה" }),
 });
