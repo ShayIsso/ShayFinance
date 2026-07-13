@@ -12,21 +12,11 @@ Private, self-hosted personal finance dashboard. Fetches and categorizes transac
 
 ### Module Structure
 
-The app is composed of 9 deep modules. Each module has a clean public interface and encapsulates its complexity internally:
-
-1. `crypto` — AES-256-GCM encrypt/decrypt. No DB awareness.
-2. `credentials` — Bank credential CRUD. Encrypts on write, decrypts on read.
-3. `scraper` — Wraps `israeli-bank-scrapers-core`. Yields typed events.
-4. `sync` — Sequential bank-by-bank orchestrator. SSE stream + OTP bridge.
-5. `transactions` — Import with deduplication, status updates, CRUD.
-6. `categories` — Rule engine + CRUD. Priority-ordered matching.
-7. `analytics` — Pure functional. Computes financial metrics. No side effects.
-8. `auth` — Bcrypt password check + session cookie middleware.
-9. `screenshots` — Temporary failure screenshot management. 24h cleanup.
+The app is composed of deep modules under `src/lib/` — one directory per module, and each module's **public interface is its `index.ts`** (the only file consumers import). `ls src/lib` is the authoritative module list; a module's name states its responsibility, its `index.ts` states its surface, and its test suite states its behavior. Don't rely on prose lists of modules — they drift. Domain vocabulary for module concepts lives in `CONTEXT.md`.
 
 ### Adding New Modules
 
-When building Phase 2 features, follow the deep module pattern:
+When building new features, follow the deep module pattern:
 
 - Clean public interface (export only what consumers need)
 - Pure computation functions testable without DB
@@ -67,6 +57,16 @@ When building Phase 2 features, follow the deep module pattern:
 - `investment` does NOT reduce net savings — it's tracked as deployment of savings.
 - `transfer` and `ignore` are invisible to calculations.
 
+## Code Comments
+
+Code explains itself — structure, naming, and tests carry the "what" and "how". A comment is justified only when it states something the code cannot:
+
+- **Domain semantics and cross-module invariants** — e.g. "rule matching runs on `description`, never `custom_description`". Prefer linking the `CONTEXT.md` term over restating it.
+- **Why this and not the alternative** — a rejected approach and its reason, or a pointer to the deciding ADR/issue.
+- **Non-obvious constraints** — library quirks, timezone/encoding traps, security requirements that a plausible refactor would silently break.
+
+Never write comments that narrate the next line, restate the function name, address the PR reviewer ("this now correctly handles X"), or explain what a test asserts (the test name does that). If a comment merely repeats the code, delete it — or rename/restructure the code until the comment isn't needed. When removing a comment, first check it against the list above: deleting a constraint or invariant comment damages the code.
+
 ## Security Rules
 
 These are non-negotiable:
@@ -86,11 +86,7 @@ These are non-negotiable:
 
 ### Tables
 
-- `bank_credentials` — encrypted bank login data
-- `bank_accounts` — account numbers and balances per credential (unique: credentialId + accountNumber)
-- `transactions` — all financial transactions with dedup support
-- `categories` — Hebrew categories with type classification (unique: name)
-- `category_rules` — auto-categorization rules with priority
+`src/db/schema.ts` is the single source of truth for tables, columns, and indexes — read it directly instead of trusting any prose list (prose drifts; the schema file can't, since migrations are generated from it).
 
 ### Key Constraints
 
@@ -122,10 +118,7 @@ These are non-negotiable:
 
 ## Pages
 
-1. **Dashboard** — Savings Summary (Net Savings, Savings Rate %), income/expenses, balance per account, spending-by-category chart, recent transactions. Month navigation.
-2. **Transactions** — Filterable/sortable table, inline custom_description editing, bulk category assignment, "create rule?" suggestions.
-3. **Sync** — Per-bank progress, OTP input with 3-min countdown, error/retry per bank, screenshot links.
-4. **Settings** — Bank credentials CRUD, categories management, categorization rules CRUD.
+Four pages — **Dashboard**, **Transactions**, **Sync**, **Settings** — under `src/app/(dashboard)/`. Read the page's component tree for its current feature set; the tracker issue that shipped a feature is the record of its intent.
 
 ## Infrastructure
 

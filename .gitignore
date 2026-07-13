@@ -38,6 +38,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Phase 3 wayfinder brief — private planning artifact / reference-app research; read by Fable from disk, never committed.
+docs/phase3-kickoff.md
+
+# database backups (real financial data — never commit)
+backups/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
