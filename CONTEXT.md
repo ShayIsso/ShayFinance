@@ -73,7 +73,15 @@ Only **Bank Discount** issues an OTP during scraping. Max and Cal do not. The OT
 
 ### `futureDebits` (scraper field, credit cards)
 
-The `israeli-bank-scrapers-core` library exposes a `futureDebits` array on credit-card account objects, intended to surface upcoming charges. **It is empty in practice for Max and Cal.** This is a known gap captured in BACKLOG.md ("Multi-Card Credit Balance Mapping"). Don't design Phase 2 features assuming `futureDebits` is populated — currently it isn't.
+The `israeli-bank-scrapers-core` library exposes a `futureDebits` array on credit-card account objects, intended to surface upcoming charges. **It is empty in practice for Max and Cal.** Don't design features assuming `futureDebits` is populated — currently it isn't. The card-balance gap this caused is resolved by the `next-debit estimate` (below), which deliberately bypasses this field.
+
+### `next-debit estimate` — load-bearing
+
+What the dashboard shows as a Max/Cal card's "balance": an estimate of the upcoming charge (החיוב הקרוב) against the bank account, **derived from stored transactions**, not read from the scraper. Decided in issue #102, shipped in PR #127.
+
+The rule: sum of `chargedAmount` over the card's transactions with `processedDate` in `(today, today + 31 days]` — exclusive of today, inclusive at +31 days. Transaction status and type are deliberately ignored; the date predicate alone decides. Empty window → ₪0 (never "—"). The debit-date hint shown next to it is the in-window date carrying the largest absolute summed charge, so a small off-cycle straggler can't outrank the main billing-cycle date.
+
+Invariants: it is **display-only** — it never enters Net Savings, expenses, or any financial total. `bank_accounts.balance` stays scraper-truth (null for cards); the estimate is computed live in `src/lib/analytics` (`computeNextDebitEstimate`). Installments need no special handling — each payment is its own row with its own `processedDate`, so the window naturally catches only the next payment.
 
 ---
 
@@ -153,7 +161,7 @@ Every API route and Server Action validates input through a Zod schema co-locate
 
 - **Reconciliation patterns (P1/P2/P3, confidence scores)** — Phase 2 work in progress. `/grill-with-docs` will capture these terms during reconciliation planning, not before.
 - **Recurring detection vocabulary (cadence, anomaly, next expected date)** — same; capture during recurring-detection planning.
-- **Module file layouts and test surfaces** — see [`ARCHITECTURE.md`](./ARCHITECTURE.md) at repo root for the Phase 2 blueprint.
+- **Module file layouts and test surfaces** — read the code: `src/lib/*/index.ts` is each module's public interface. [`ARCHITECTURE.md`](./ARCHITECTURE.md) is the frozen Phase 2 blueprint (historical record, not living truth).
 - **Architectural decisions and their rationale** — see [`docs/adr/`](./docs/adr/). Cross-check before contradicting.
 - **Deferred features** — see [`BACKLOG.md`](./BACKLOG.md).
 - **Personal preferences and workflow gotchas** — these live in Claude's memory (`MEMORY.md` outside the repo), not here. CONTEXT.md is for _the codebase_, not _the developer_.

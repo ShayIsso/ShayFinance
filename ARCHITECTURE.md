@@ -1,6 +1,8 @@
 # ShayFinance — Architecture Blueprint (Phase 2)
 
-**Status:** Advisory. Produced by Architecture Pass 1 (issue #36).  
+**Status: Historical — frozen 2026-07-13.** This document is a record of the Phase 2 architecture pass as designed on 2026-04-24, kept for the rationale it captures. It is **not living truth**: the code is authoritative — each module's public interface is its `src/lib/<module>/index.ts`, and its behavior is documented by its test suite. Do not update this file, and do not treat its module maps or file layouts as current. New architectural decisions go in [`docs/adr/`](./docs/adr/); domain vocabulary goes in [`CONTEXT.md`](./CONTEXT.md).
+
+**Original status:** Advisory. Produced by Architecture Pass 1 (issue #36).  
 **Date:** 2026-04-24  
 **References:** docs/PRD-phase2.md · docs/phase2-kickoff.md · issue #35
 
