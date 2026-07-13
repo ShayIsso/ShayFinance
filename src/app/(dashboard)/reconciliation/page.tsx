@@ -6,7 +6,6 @@ import { ReconciliationInbox } from "@/components/reconciliation-inbox";
 export default async function ReconciliationPage() {
   const rows = await getPendingInboxRows();
 
-  // Group rows by reconciliationGroupId
   const groupMap = new Map<
     string,
     {

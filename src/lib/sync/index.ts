@@ -88,7 +88,7 @@ export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<Sync
     // by the events below. The try/catch is a safety net for GENUINE throws
     // (e.g. importScrapedAccounts hitting a DB error).
     //
-    // S2: scheduled runs call event.otpHandler.skip() above — which rejects the bridge
+    // Scheduled runs call event.otpHandler.skip() above — which rejects the bridge
     // promise with OTP_TIMEOUT. The scraper catches that and yields otp_timeout, which
     // syncRunStatusForEvent maps to otp_skipped below. No special fork needed here.
     try {
@@ -101,7 +101,6 @@ export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<Sync
             event.otpHandler.skip();
             continue;
           }
-          // Interactive (manual) path — unchanged.
           activeOtpHandler = event.otpHandler;
           yield { type: "otp_required", bank: event.bank, otpHandler: event.otpHandler };
           continue;

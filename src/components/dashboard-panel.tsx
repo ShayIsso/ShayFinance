@@ -111,15 +111,12 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
   };
 }
 
-// ── Hebrew cadence labels ─────────────────────────────────────────────────────
-
 const CADENCE_LABELS: Record<UpcomingCharge["cadence"], string> = {
   monthly: "חודשי",
   quarterly: "רבעוני",
   annual: "שנתי",
 };
 
-// ── Upcoming charges card ─────────────────────────────────────────────────────
 // Dates formatted client-side to avoid hydration mismatch (CLAUDE.md rule)
 
 function formatUpcomingDate(isoDate: string): string {
@@ -130,10 +127,8 @@ function formatUpcomingDate(isoDate: string): string {
   }).format(new Date(year, month - 1, day));
 }
 
-// Next-debit hint on the balances card wants an unpadded "day.month" (e.g.
-// "9.8"), so this is a plain string split rather than formatUpcomingDate's
-// Intl 2-digit formatting. No Date object involved — safe against hydration
-// mismatch either way, but kept string-only for simplicity.
+// Not formatUpcomingDate: the balances card wants an unpadded "day.month" ("9.8"),
+// not Intl's 2-digit form.
 function formatDebitDateHint(isoDate: string): string {
   const [, month, day] = isoDate.split("-").map(Number);
   return `${day}.${month}`;

@@ -96,8 +96,6 @@ export async function undoReconciliationAction(
 
   const { txnId } = parsed.data;
 
-  // Fetch the transaction's group members to pass to the pure function
-  // We need to find the groupId first, then get all members
   const members = await drizzleInboxStore.getGroupMembers(txnId).catch(() => []);
 
   // If getGroupMembers returned nothing (txnId is not a groupId), get the txn directly

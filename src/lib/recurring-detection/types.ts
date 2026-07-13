@@ -53,8 +53,6 @@ export type PersistedRecurringPattern = RecurringPattern & {
   confirmedAt: Date | null;
 };
 
-// ── Anomaly alert types ───────────────────────────────────────────────────────
-
 /** Alert raised when a pattern's latest charge deviates > 15% from expectedAmount. */
 export type PriceChangeAlert = {
   type: "price_change";

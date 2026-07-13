@@ -592,7 +592,6 @@ export function SubscriptionsTable({
     return <EmptyState />;
   }
 
-  // Build a set of IDs that have anomalies for filter matching.
   const priceChangeIds = new Set(alerts.priceChanges.map((a) => a.patternId));
   const missedIds = new Set(alerts.missedPayments.map((a) => a.patternId));
   const newlyDetectedIds = new Set(alerts.newlyDetected.map((a) => a.patternId));
