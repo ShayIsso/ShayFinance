@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { transactions, categories, bankAccounts, bankCredentials } from "@/db/schema";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, gt, inArray, desc } from "drizzle-orm";
 
 export type AnalyticsTransaction = {
   chargedAmount: number;
@@ -36,6 +36,24 @@ export type AccountBalance = {
   balance: number | null;
   bankType: "discount" | "max" | "visaCal";
   displayName: string;
+  /**
+   * Only set for card accounts (max/visaCal): the window date carrying the
+   * largest absolute next-debit charge. Null when there is no upcoming debit
+   * to estimate. Always null/absent for Discount (scraper-truth balance).
+   */
+  nextDebitDate?: string | null;
+};
+
+/** Input row for {@link computeNextDebitEstimate} — status is deliberately not part of this shape. */
+export type NextDebitTransaction = {
+  /** YYYY-MM-DD, as returned by Drizzle for a `date` column. */
+  processedDate: string;
+  chargedAmount: number;
+};
+
+export type NextDebitEstimate = {
+  estimate: number;
+  nextDebitDate: string | null;
 };
 
 export type RecentTransaction = {
@@ -104,6 +122,110 @@ export function computeSpendingByCategory(
   return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
 }
 
+const NEXT_DEBIT_WINDOW_DAYS = 31;
+
+/**
+ * Julian Day Number for a Gregorian calendar date (Fliegel & Van Flandern).
+ * Pure integer arithmetic — deliberately avoids the `Date` object so date
+ * math stays fully deterministic and independent of timezone/DST quirks.
+ */
+function toJulianDayNumber(year: number, month: number, day: number): number {
+  const a = Math.floor((14 - month) / 12);
+  const y = year + 4800 - a;
+  const m = month + 12 * a - 3;
+  return (
+    day +
+    Math.floor((153 * m + 2) / 5) +
+    365 * y +
+    Math.floor(y / 4) -
+    Math.floor(y / 100) +
+    Math.floor(y / 400) -
+    32045
+  );
+}
+
+/** Inverse of {@link toJulianDayNumber}. */
+function fromJulianDayNumber(jdn: number): { year: number; month: number; day: number } {
+  const a = jdn + 32044;
+  const b = Math.floor((4 * a + 3) / 146097);
+  const c = a - Math.floor((146097 * b) / 4);
+  const d = Math.floor((4 * c + 3) / 1461);
+  const e = c - Math.floor((1461 * d) / 4);
+  const m = Math.floor((5 * e + 2) / 153);
+  const day = e - Math.floor((153 * m + 2) / 5) + 1;
+  const month = m + 3 - 12 * Math.floor(m / 10);
+  const year = 100 * b + d - 4800 + Math.floor(m / 10);
+  return { year, month, day };
+}
+
+/** Adds `days` to a YYYY-MM-DD ISO date string, returning a YYYY-MM-DD string. */
+function addDaysToIsoDate(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const {
+    year: y,
+    month: m,
+    day: d,
+  } = fromJulianDayNumber(toJulianDayNumber(year, month, day) + days);
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * Estimates the upcoming credit-card debit (החיוב הקרוב) from already-stored
+ * transactions, for banks (Max/Cal) whose scraper does not reliably report
+ * account balance. See issue #40 / grilling session #102 for the semantics
+ * decision.
+ *
+ * Window: `today < processedDate <= today + 31 days` — exclusive today,
+ * inclusive at +31 days. Status is intentionally ignored: the date predicate
+ * alone decides. A stale past-dated pending row falls out on the date check
+ * alone; a future-dated pending or completed row both count. Installments
+ * need no special casing — each payment is its own row with its own
+ * processedDate, so the window naturally catches only the next payment.
+ *
+ * The hint date is the in-window date whose *summed* chargedAmount has the
+ * largest absolute value — not the date with the most transactions or the
+ * earliest date — so a small off-cycle straggler can't outrank the main
+ * billing cycle date. Ties fall to the earlier date (arbitrary tie-break;
+ * unspecified by the issue).
+ *
+ * Pure function: `today` (YYYY-MM-DD) is passed in and this function never
+ * calls `new Date()` — all date arithmetic is done via Julian Day Number
+ * conversion, so results are fully deterministic for tests.
+ */
+export function computeNextDebitEstimate(
+  transactions: NextDebitTransaction[],
+  today: string,
+): NextDebitEstimate {
+  const windowEnd = addDaysToIsoDate(today, NEXT_DEBIT_WINDOW_DAYS);
+
+  const inWindow = transactions.filter(
+    (t) => t.processedDate > today && t.processedDate <= windowEnd,
+  );
+
+  if (inWindow.length === 0) {
+    return { estimate: 0, nextDebitDate: null };
+  }
+
+  const estimate = inWindow.reduce((sum, t) => sum + t.chargedAmount, 0);
+
+  const sumsByDate = new Map<string, number>();
+  for (const t of inWindow) {
+    sumsByDate.set(t.processedDate, (sumsByDate.get(t.processedDate) ?? 0) + t.chargedAmount);
+  }
+
+  let nextDebitDate: string | null = null;
+  let largestAbsSum = -1;
+  for (const date of Array.from(sumsByDate.keys()).sort()) {
+    const absSum = Math.abs(sumsByDate.get(date) as number);
+    if (absSum > largestAbsSum) {
+      largestAbsSum = absSum;
+      nextDebitDate = date;
+    }
+  }
+
+  return { estimate, nextDebitDate };
+}
+
 // ---------------------------------------------------------------------------
 // DB-backed wrapper functions
 // ---------------------------------------------------------------------------
@@ -166,6 +288,9 @@ export async function getSpendingByCategory(
   return computeSpendingByCategory(withCategory);
 }
 
+/** Bank types whose scraper doesn't reliably report account balance — display shows a derived estimate instead. */
+const CARD_BANK_TYPES = new Set<AccountBalance["bankType"]>(["max", "visaCal"]);
+
 export async function getAccountBalances(): Promise<AccountBalance[]> {
   const rows = await db
     .select({
@@ -178,13 +303,60 @@ export async function getAccountBalances(): Promise<AccountBalance[]> {
     .from(bankAccounts)
     .innerJoin(bankCredentials, eq(bankAccounts.credentialId, bankCredentials.id));
 
-  return rows.map((r) => ({
-    id: r.id,
-    accountNumber: r.accountNumber,
-    balance: r.balance !== null ? Number(r.balance) : null,
-    bankType: r.bankType,
-    displayName: r.displayName,
-  }));
+  const cardAccountIds = rows.filter((r) => CARD_BANK_TYPES.has(r.bankType)).map((r) => r.id);
+
+  // Computed once here, then threaded into the pure function — see
+  // computeNextDebitEstimate's doc comment for why it never calls Date itself.
+  const today = new Date().toISOString().slice(0, 10);
+
+  const txByAccount = new Map<string, NextDebitTransaction[]>();
+  if (cardAccountIds.length > 0) {
+    const txRows = await db
+      .select({
+        bankAccountId: transactions.bankAccountId,
+        processedDate: transactions.processedDate,
+        chargedAmount: transactions.chargedAmount,
+      })
+      .from(transactions)
+      .where(
+        and(
+          inArray(transactions.bankAccountId, cardAccountIds),
+          gt(transactions.processedDate, today),
+        ),
+      );
+
+    for (const t of txRows) {
+      const list = txByAccount.get(t.bankAccountId) ?? [];
+      list.push({ processedDate: t.processedDate, chargedAmount: Number(t.chargedAmount) });
+      txByAccount.set(t.bankAccountId, list);
+    }
+  }
+
+  return rows.map((r) => {
+    if (CARD_BANK_TYPES.has(r.bankType)) {
+      const { estimate, nextDebitDate } = computeNextDebitEstimate(
+        txByAccount.get(r.id) ?? [],
+        today,
+      );
+      return {
+        id: r.id,
+        accountNumber: r.accountNumber,
+        balance: estimate,
+        bankType: r.bankType,
+        displayName: r.displayName,
+        nextDebitDate,
+      };
+    }
+
+    return {
+      id: r.id,
+      accountNumber: r.accountNumber,
+      balance: r.balance !== null ? Number(r.balance) : null,
+      bankType: r.bankType,
+      displayName: r.displayName,
+      nextDebitDate: null,
+    };
+  });
 }
 
 export async function getRecentTransactions(limit: number): Promise<RecentTransaction[]> {
