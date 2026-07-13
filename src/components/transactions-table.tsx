@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
 import { createRuleAction } from "@/app/actions/rules";
+import { updateTransactionAction, bulkCategorizeAction } from "@/app/actions/transactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -309,6 +310,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   const [bulkCategoryId, setBulkCategoryId] = React.useState("");
   const [bulkApplying, setBulkApplying] = React.useState(false);
   const [ruleSuggestion, setRuleSuggestion] = React.useState<RuleSuggestion | null>(null);
+  const [isPending, startTransition] = React.useTransition();
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -366,28 +368,28 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   }
 
   async function handleDescriptionSave(id: string, customDescription: string | null) {
-    await fetch(`/api/transactions/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customDescription }),
+    startTransition(async () => {
+      const result = await updateTransactionAction({ id, customDescription });
+      if (!result.error) {
+        setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, customDescription } : t)));
+      }
     });
-    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, customDescription } : t)));
   }
 
   async function handleCategoryAssign(id: string, categoryId: string) {
-    await fetch(`/api/transactions/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ categoryId }),
-    });
     const tx = transactions.find((t) => t.id === id);
-    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, categoryId } : t)));
-    if (tx) {
-      setRuleSuggestion({
-        description: tx.customDescription ?? tx.description,
-        categoryId,
-      });
-    }
+    startTransition(async () => {
+      const result = await updateTransactionAction({ id, categoryId });
+      if (!result.error) {
+        setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, categoryId } : t)));
+        if (tx) {
+          setRuleSuggestion({
+            description: tx.customDescription ?? tx.description,
+            categoryId,
+          });
+        }
+      }
+    });
   }
 
   async function handleCreateRule() {
@@ -423,17 +425,17 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   async function applyBulkCategory() {
     if (!bulkCategoryId || selected.size === 0) return;
     setBulkApplying(true);
-    await fetch("/api/transactions/bulk-categorize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transactionIds: Array.from(selected), categoryId: bulkCategoryId }),
+    const transactionIds = Array.from(selected);
+    const categoryId = bulkCategoryId;
+    startTransition(async () => {
+      const result = await bulkCategorizeAction({ transactionIds, categoryId });
+      if (!result.error) {
+        setTransactions((prev) => prev.map((t) => (selected.has(t.id) ? { ...t, categoryId } : t)));
+        setSelected(new Set());
+        setBulkCategoryId("");
+      }
+      setBulkApplying(false);
     });
-    setTransactions((prev) =>
-      prev.map((t) => (selected.has(t.id) ? { ...t, categoryId: bulkCategoryId } : t)),
-    );
-    setSelected(new Set());
-    setBulkCategoryId("");
-    setBulkApplying(false);
   }
 
   const hasActiveFilters =
@@ -557,7 +559,11 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={applyBulkCategory} disabled={!bulkCategoryId || bulkApplying}>
+          <Button
+            size="sm"
+            onClick={applyBulkCategory}
+            disabled={!bulkCategoryId || bulkApplying || isPending}
+          >
             {bulkApplying ? "מחיל..." : "החל"}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
