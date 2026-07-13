@@ -130,6 +130,15 @@ function formatUpcomingDate(isoDate: string): string {
   }).format(new Date(year, month - 1, day));
 }
 
+// Next-debit hint on the balances card wants an unpadded "day.month" (e.g.
+// "9.8"), so this is a plain string split rather than formatUpcomingDate's
+// Intl 2-digit formatting. No Date object involved — safe against hydration
+// mismatch either way, but kept string-only for simplicity.
+function formatDebitDateHint(isoDate: string): string {
+  const [, month, day] = isoDate.split("-").map(Number);
+  return `${day}.${month}`;
+}
+
 function UpcomingChargesCard({ charges, total }: { charges: UpcomingCharge[]; total: number }) {
   const [expanded, setExpanded] = React.useState(false);
 
@@ -480,6 +489,11 @@ export function DashboardPanel({
                           >
                             {acc.balance !== null ? formatCurrency(acc.balance) : "—"}
                           </p>
+                          {acc.nextDebitDate && acc.balance !== 0 && (
+                            <p className="text-muted-foreground mt-0.5 text-xs">
+                              חיוב קרוב · {formatDebitDateHint(acc.nextDebitDate)}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </CardContent>
