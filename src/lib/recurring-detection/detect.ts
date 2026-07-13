@@ -3,8 +3,6 @@ import type { DetectionTransaction, RecurringPattern, Cadence } from "./types";
 import { buildFingerprint } from "./fingerprint";
 import { computeNextExpectedDate } from "./next-date";
 
-// ── Cadence classification ────────────────────────────────────────────────────
-
 /** Day ranges (inclusive) for each cadence class, with ±7d drift tolerance. */
 const CADENCE_RANGES: Array<{ cadence: Cadence; min: number; max: number }> = [
   { cadence: "monthly", min: 28 - 7, max: 31 + 7 },
@@ -41,8 +39,6 @@ function classifyCadence(sortedDates: Date[]): Cadence | null {
   return cadence;
 }
 
-// ── Fuzzy merchant clustering ─────────────────────────────────────────────────
-
 const STRONG_MATCH_THRESHOLD = 0.7;
 
 /**
@@ -74,14 +70,13 @@ function clusterByMerchant(
     if (!merchant) continue;
 
     let assigned = false;
-    for (const [key, cluster] of clusters) {
+    for (const cluster of clusters.values()) {
       const score = scoreSimilarity(cluster.representative, merchant);
       if (score >= STRONG_MATCH_THRESHOLD) {
         cluster.txns.push(txn);
         assigned = true;
         break;
       }
-      void key; // suppress unused-var lint
     }
 
     if (!assigned) {
@@ -91,8 +86,6 @@ function clusterByMerchant(
 
   return clusters;
 }
-
-// ── Amount sub-clustering ─────────────────────────────────────────────────────
 
 /**
  * Further partitions a merchant cluster into amount buckets (±10%).
@@ -121,14 +114,10 @@ function partitionByAmount(
   return groups;
 }
 
-// ── Rolling average of last 3 ─────────────────────────────────────────────────
-
 function rollingAvgLast3(amounts: number[]): number {
   const last3 = amounts.slice(-3);
   return last3.reduce((s, a) => s + a, 0) / last3.length;
 }
-
-// ── Main detection function ───────────────────────────────────────────────────
 
 /**
  * Pure function. Detects recurring expense patterns from a slice of transactions.
@@ -167,7 +156,6 @@ export function detectPatterns(txns: DetectionTransaction[]): RecurringPattern[]
         continue;
       }
 
-      // Sort by date ascending
       const sorted = [...group.txns].sort((a, b) => a.date.localeCompare(b.date));
       const sortedDates = sorted.map((t) => new Date(t.date));
 

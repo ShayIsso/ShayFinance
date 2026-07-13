@@ -6,7 +6,6 @@ import { formatZodError } from "@/lib/api-utils";
 import { drizzleSchedulerConfigStore } from "@/lib/scheduler/config";
 import type { SchedulerConfigData } from "@/lib/scheduler/config";
 
-// Zod schema for scheduler config input validation
 const schedulerConfigSchema = z.object({
   enabled: z.boolean(),
   cronTime: z

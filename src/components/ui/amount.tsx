@@ -19,8 +19,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-// ── Currency helpers (source of truth — lifted from transactions-table) ────────
-
 /** Maps common currency symbols to ISO 4217 codes for Intl.NumberFormat. */
 export const CURRENCY_SYMBOL_TO_CODE: Record<string, string> = {
   "₪": "ILS",
@@ -58,8 +56,6 @@ export function formatAmount(
     maximumFractionDigits: digits,
   }).format(amount);
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export interface AmountProps {
   /** The numeric value to display. */

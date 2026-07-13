@@ -6,8 +6,6 @@
 
 import { categorize, type CategoryRule } from "@/lib/categories/rules";
 
-// ── Store interface ──────────────────────────────────────────────────────────
-
 export type InboxTransaction = {
   id: string;
   bankAccountId: string;
@@ -38,8 +36,6 @@ export type InboxStore = {
   getCategoryIdByName(name: string): Promise<string | null>;
   getRulesOrderedByPriority(): Promise<CategoryRule[]>;
 };
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Identify the bankSide row in a transfer_pair group.
@@ -75,8 +71,6 @@ export function identifyBankSide(members: InboxTransaction[]): InboxTransaction 
   return a.createdAt <= b.createdAt ? a : b;
 }
 
-// ── Approve ───────────────────────────────────────────────────────────────────
-
 export async function approveGroup(
   groupId: string,
   store: InboxStore,
@@ -86,7 +80,6 @@ export async function approveGroup(
 
   const transferCategoryId = await store.getCategoryIdByName("העברה פנימית");
 
-  // Determine group type from members' roles
   const hasSettlementLump = members.some((m) => m.reconciliationRole === "settlement_lump");
 
   if (hasSettlementLump) {
@@ -115,8 +108,6 @@ export async function approveGroups(
   }
   return {};
 }
-
-// ── Reject ────────────────────────────────────────────────────────────────────
 
 export async function rejectGroup(groupId: string, store: InboxStore): Promise<{ error?: string }> {
   const members = await store.getGroupMembers(groupId);
@@ -148,8 +139,6 @@ export async function rejectGroups(
   return {};
 }
 
-// ── Undo auto-applied ─────────────────────────────────────────────────────────
-
 export async function undoTransaction(
   txnId: string,
   allGroupMembers: InboxTransaction[],
@@ -161,12 +150,10 @@ export async function undoTransaction(
 
   const rules = await store.getRulesOrderedByPriority();
 
-  // Clear this row's reconciliation columns
   await store.clearRows([txnId]);
   const newCategoryId = categorize(txn.description, rules);
   await store.setCategory(txnId, newCategoryId);
 
-  // Check remaining group members
   const remaining = allGroupMembers.filter(
     (m) => m.id !== txnId && m.reconciliationGroupId === txn.reconciliationGroupId,
   );
