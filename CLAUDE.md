@@ -76,7 +76,7 @@ These are non-negotiable:
 - **Credentials** stored in PostgreSQL encrypted with AES-256-GCM. Unique IV per record.
 - **Passwords never returned by API.** The `GET /api/credentials/:id` route strips passwords and returns only safe fields.
 - **Path traversal prevention.** The screenshots module validates filenames with `/^[a-zA-Z0-9_-]+\.png$/`.
-- **`.env` contains only:** `DATABASE_URL`, `ENCRYPTION_KEY`, `APP_PASSWORD`, `CHROMIUM_PATH` (optional)
+- **`.env` contains only:** `DATABASE_URL`, `ENCRYPTION_KEY`, `APP_PASSWORD`, `CHROMIUM_PATH` (optional), `GEMINI_API_KEY` (optional — AI categorization egress per ADR-0008)
 - **Never commit** `.env`, `node_modules`, `.DS_Store`, or the screenshots directory.
 - **Failure screenshots** auto-delete after 24 hours. Directory is gitignored.
 - **App auth:** Simple password gate with bcrypt hash. HTTP-only HMAC-signed session cookie.
