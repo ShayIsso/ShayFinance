@@ -1,4 +1,4 @@
-import { amountsMatch, datesWithin } from "@/lib/transaction-matching";
+import { amountsMatch, datesWithin, matchesTransferDescriptor } from "@/lib/transaction-matching";
 import type { P3InterAccountCandidate, ReconciliationTransaction } from "./types";
 
 const EXACT_TOLERANCE = 0.02;
@@ -8,11 +8,8 @@ const MIN_CONFIDENCE = 0.7;
 const BOTH_SIDES_CONFIDENCE = 0.9;
 const ONE_SIDE_CONFIDENCE = 0.7;
 
-// Hebrew and Latin transfer markers
-const TRANSFER_MARKER_RE = /ביט|העברה|bit|transfer/i;
-
 function hasMarker(description: string): boolean {
-  return TRANSFER_MARKER_RE.test(description);
+  return matchesTransferDescriptor(description, ["inter_account", "bit_mirror"]);
 }
 
 function parseDate(dateStr: string): Date {

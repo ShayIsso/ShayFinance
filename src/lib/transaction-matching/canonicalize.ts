@@ -1,3 +1,5 @@
+import { tokenize } from "./tokenize";
+
 /**
  * Cross-script merchant aliasing.
  *
@@ -41,10 +43,7 @@ export function canonicalizeMerchant(extracted: string): string {
   const normalized = extracted.normalize("NFC").trim();
   if (!normalized) return normalized;
 
-  const tokens = normalized
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
+  const tokens = tokenize(normalized);
 
   for (const [canonicalKey, aliases] of ALIAS_TABLE) {
     for (const alias of aliases) {
