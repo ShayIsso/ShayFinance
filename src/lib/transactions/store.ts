@@ -61,6 +61,7 @@ export function createDbStore(): TransactionStore {
           installmentTotal: tx.installmentTotal,
           status: tx.status,
           categoryId: tx.categoryId,
+          categorySource: tx.categorySource,
         })
         .returning({ id: transactions.id });
       return row.id;

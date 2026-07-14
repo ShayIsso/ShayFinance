@@ -246,7 +246,13 @@ export const drizzleInboxStore: InboxStore = {
           if (bankSide && member.id === bankSide.id) {
             await tx
               .update(transactions)
-              .set({ reconciliationConfirmedAt: now, categoryId: transferCategoryId })
+              .set({
+                reconciliationConfirmedAt: now,
+                categoryId: transferCategoryId,
+                // System-assigned transfer category — provenance keeps it out of
+                // automation's overwrite reach (ADR-0010 overwrite law).
+                categorySource: "rule",
+              })
               .where(eq(transactions.id, member.id));
           } else {
             await tx
@@ -289,7 +295,13 @@ export const drizzleInboxStore: InboxStore = {
   },
 
   async setCategory(txnId: string, categoryId: string | null): Promise<void> {
-    await db.update(transactions).set({ categoryId }).where(eq(transactions.id, txnId));
+    // Reconciliation re-runs the rule engine on split/edit rows, so a non-null
+    // result is rule-sourced (ADR-0010); clearing resets provenance to NULL.
+    // Memory is deliberately NOT consulted here in this slice (issue #135).
+    await db
+      .update(transactions)
+      .set({ categoryId, categorySource: categoryId === null ? null : "rule" })
+      .where(eq(transactions.id, txnId));
   },
 
   async getCategoryIdByName(name: string): Promise<string | null> {
