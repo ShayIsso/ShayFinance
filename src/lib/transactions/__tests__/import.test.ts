@@ -1,11 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { importTransaction } from "../import";
-import type {
-  TransactionStore,
-  StoredTransaction,
-  NewTransaction,
-  Categorization,
-} from "../import";
+import type { TransactionStore, StoredTransaction, Categorization } from "../import";
 import type { ScrapedTransaction } from "@/lib/scraper/types";
 
 // In-memory store for testing
