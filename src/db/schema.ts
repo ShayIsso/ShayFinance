@@ -11,6 +11,7 @@ import {
   date,
   pgEnum,
   uniqueIndex,
+  index,
   customType,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -60,6 +61,17 @@ export const categorySourceEnum = pgEnum("category_source", ["rule", "memory", "
 
 // Trust tier of a merchant-memory entry (ADR-0010 §4).
 export const memorySourceEnum = pgEnum("memory_source", ["user", "ai"]);
+
+// Lifecycle of an AI categorization suggestion (ADR-0008 §7). `pending_review`
+// and `auto_applied` are written by an AI run; `accepted` / `rejected` /
+// `undone` are user actions on a suggestion (review + undo flows, ticket #148).
+export const aiSuggestionStatusEnum = pgEnum("ai_suggestion_status", [
+  "pending_review",
+  "auto_applied",
+  "accepted",
+  "rejected",
+  "undone",
+]);
 
 // Tables
 export const bankCredentials = pgTable("bank_credentials", {
@@ -253,3 +265,36 @@ export const categoryCorrections = pgTable("category_corrections", {
   fromSource: categorySourceEnum("from_source").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+/**
+ * AI categorization suggestions (ADR-0008 §7). One row per suggestion an AI run
+ * produced: `auto_applied` rows record a 6–7 auto-apply (the category is already
+ * on the transaction, marked `ai`); `pending_review` rows are 3–5 queued for the
+ * user. A user's later `accepted` / `rejected` / `undone` action mutates status.
+ *
+ * `confidence` is the anchored 1–7 rubric (CONTEXT.md "anchored confidence") —
+ * never reconciliation's 0–1 float. The (transaction, category) index serves the
+ * suppression lookup (a `rejected`/`undone` pair is never re-suggested); the
+ * status index serves the pending-review queue.
+ */
+export const aiSuggestions = pgTable(
+  "ai_suggestions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id")
+      .references(() => transactions.id, { onDelete: "cascade" })
+      .notNull(),
+    categoryId: uuid("category_id")
+      .references(() => categories.id, { onDelete: "cascade" })
+      .notNull(),
+    confidence: integer("confidence").notNull(),
+    model: varchar("model", { length: 100 }).notNull(),
+    status: aiSuggestionStatusEnum("status").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_ai_suggestions_txn_category").on(table.transactionId, table.categoryId),
+    index("idx_ai_suggestions_status").on(table.status),
+  ],
+);
