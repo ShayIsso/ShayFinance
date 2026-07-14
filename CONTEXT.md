@@ -89,7 +89,7 @@ Invariants: it is **display-only** — it never enters Net Savings, expenses, or
 
 ### `category` and `category rule`
 
-A `category` is a Hebrew-named bucket with a `type` (see above). A `category rule` is a pattern that auto-assigns a category to matching transactions. Rules have a `priority` integer; higher priority wins. Rules are the top precedence layer — deliberately-authored law for pattern-shaped semantics (chain-wide matches, bank-mechanics strings). Per [ADR-0010](./docs/adr/0010-categorization-precedence-and-merchant-memory.md) they no longer grow by default: the "Create rule?" suggestion on manual assignment is removed; merchant memory is the default learning path.
+A `category` is a Hebrew-named bucket with a `type` (see above). `מזומן ומשיכות` (#133) is the honest home for purpose-unknowable money movement — ATM/cash withdrawals and generic P2P (bit/PayBox) — kept distinct from `העברה פנימית` (genuine own-account self-transfers). A `category rule` is a pattern that auto-assigns a category to matching transactions. Rules have a `priority` integer; higher priority wins. Rules are the top precedence layer — deliberately-authored law for pattern-shaped semantics (chain-wide matches, bank-mechanics strings). Per [ADR-0010](./docs/adr/0010-categorization-precedence-and-merchant-memory.md) they no longer grow by default: the "Create rule?" suggestion on manual assignment is removed; merchant memory is the default learning path.
 
 ### `match type`
 

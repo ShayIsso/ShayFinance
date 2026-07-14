@@ -1,5 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { categorize, type CategoryRule } from "../rules";
+import { categorize, matchesRule, type CategoryRule } from "../rules";
+
+describe("matchesRule", () => {
+  it("matches contains case-insensitively", () => {
+    expect(matchesRule("contains", "DEMO", "buy at demomarket")).toBe(true);
+    expect(matchesRule("contains", "xyz", "buy at demomarket")).toBe(false);
+  });
+
+  it("matches starts_with case-insensitively", () => {
+    expect(matchesRule("starts_with", "DEMO", "demomarket order")).toBe(true);
+    expect(matchesRule("starts_with", "demo", "buy demomarket")).toBe(false);
+  });
+
+  it("matches exact case-insensitively", () => {
+    expect(matchesRule("exact", "DEMO", "demo")).toBe(true);
+    expect(matchesRule("exact", "DEMO", "demo tel aviv")).toBe(false);
+  });
+
+  it("matches regex case-insensitively", () => {
+    expect(matchesRule("regex", "מזומן|משיכה", "משיכה מהחשבון")).toBe(true);
+    expect(matchesRule("regex", "מזומן|משיכה", "קניה")).toBe(false);
+  });
+});
 
 const rule = (
   override: Partial<CategoryRule> & Pick<CategoryRule, "matchType" | "pattern" | "categoryId">,

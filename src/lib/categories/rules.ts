@@ -2,39 +2,41 @@ import { db } from "@/db";
 import { categoryRules } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 
+export type MatchType = "contains" | "starts_with" | "exact" | "regex";
+
 export type CategoryRule = {
   id: string;
   categoryId: string;
-  matchType: "contains" | "starts_with" | "exact" | "regex";
+  matchType: MatchType;
   pattern: string;
   priority: number;
 };
 
+// Pure function — testable without DB. The single source of rule-match
+// semantics: any replay of rules (e.g. the taxonomy migration planner) must
+// import this rather than reimplement it.
+export function matchesRule(matchType: MatchType, pattern: string, description: string): boolean {
+  const lower = description.toLowerCase();
+  const pat = pattern.toLowerCase();
+
+  switch (matchType) {
+    case "contains":
+      return lower.includes(pat);
+    case "starts_with":
+      return lower.startsWith(pat);
+    case "exact":
+      return lower === pat;
+    case "regex":
+      return new RegExp(pattern, "i").test(description);
+  }
+}
+
 // Pure function — testable without DB
 export function categorize(description: string, rules: CategoryRule[]): string | null {
   const sorted = [...rules].sort((a, b) => b.priority - a.priority);
-  const lower = description.toLowerCase();
 
   for (const rule of sorted) {
-    const pattern = rule.pattern.toLowerCase();
-    let matched = false;
-
-    switch (rule.matchType) {
-      case "contains":
-        matched = lower.includes(pattern);
-        break;
-      case "starts_with":
-        matched = lower.startsWith(pattern);
-        break;
-      case "exact":
-        matched = lower === pattern;
-        break;
-      case "regex":
-        matched = new RegExp(rule.pattern, "i").test(description);
-        break;
-    }
-
-    if (matched) return rule.categoryId;
+    if (matchesRule(rule.matchType, rule.pattern, description)) return rule.categoryId;
   }
 
   return null;

@@ -95,6 +95,9 @@ export const categories = pgTable(
     type: categoryTypeEnum("type").notNull(),
     icon: varchar("icon", { length: 50 }).notNull(),
     color: varchar("color", { length: 7 }).notNull(),
+    // Hebrew positive/anti-example guidance rendered into the AI categorization
+    // prompt (#133). Nullable: user-created categories have none.
+    description: text("description"),
     isDefault: boolean("is_default").default(false).notNull(),
   },
   (table) => [uniqueIndex("uq_category_name").on(table.name)],
