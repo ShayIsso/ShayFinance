@@ -350,6 +350,73 @@ describe("runAiCategorization — full pipeline", () => {
     expect(fake.suggestions).toHaveLength(0);
   });
 
+  it("never lets a memory hit overwrite a row that became user-sourced mid-run", async () => {
+    const fake = createFake({
+      categories: CATS,
+      servedIds: ["t-locked"],
+      entries: [
+        { merchantKey: keyOf("שופרסל דיל"), categoryId: "c-food", source: "user", hitCount: 0 },
+      ],
+      txns: [
+        {
+          id: "t-locked",
+          description: "שופרסל דיל",
+          bankType: "max",
+          categoryId: "c-rest",
+          categorySource: "user",
+        },
+      ],
+    });
+    const provider = scriptedProvider([]);
+
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+    });
+
+    expect(summary.memoryApplied).toBe(0);
+    expect(summary.overwriteBlocked).toBe(1);
+    expect(fake.txns[0]).toMatchObject({ categoryId: "c-rest", categorySource: "user" });
+    expect(provider.prompts).toHaveLength(0);
+  });
+
+  it("suppresses an undone pair at review tier — no new pending_review row", async () => {
+    const fake = createFake({
+      categories: CATS,
+      suggestions: [
+        {
+          transactionId: "t-undone",
+          categoryId: "c-food",
+          confidence: 6,
+          model: "x",
+          status: "undone",
+        },
+      ],
+      txns: [
+        {
+          id: "t-undone",
+          description: "מאפיית לחם",
+          bankType: "max",
+          categoryId: null,
+          categorySource: null,
+        },
+      ],
+    });
+    const provider = scriptedProvider([{ match: "מאפיית", category: "מזון וסופר", confidence: 4 }]);
+
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+    });
+
+    expect(summary.queuedForReview).toBe(0);
+    expect(summary.suppressed).toBe(1);
+    expect(fake.suggestions.filter((s) => s.model === "test-model")).toHaveLength(0);
+    expect(fake.txns[0].categoryId).toBeNull();
+  });
+
   it("records provider errors as failures without throwing", async () => {
     const fake = createFake({
       categories: CATS,
