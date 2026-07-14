@@ -114,7 +114,7 @@ Owner is thinking through the taxonomy in UX terms before any implementation tic
 
 All data files are gitignored (real transaction descriptions never enter the repo): `scripts/spike/fixture.json`, `few-shot.json`, `adjudications.json`, `benchmark-results-*.json`, and the runner `benchmark.ts`. Committed tooling: `scripts/spike/build-fixture.ts` (rebuilds fixture + few-shot from the live DB) and `scripts/spike/rescore.ts` (raw + adjudicated scoring over result files). The runner is reconstructible from §1 (prompt shape, providers, settings, redaction rules).
 
-**Post-taxonomy-v2 change to the runner (§7).** The category list is no longer built from a hard-coded English-hint map. The runner now `SELECT name, type, description FROM categories` and renders one bullet per category as `- <name> — <Hebrew description>`, where `description` is the taxonomy-v2 כולל/לא כולל guidance column (#133). This is the only prompt-shape change; few-shot construction, batch size, output contract, redaction rules (descriptions pass through the same `redact()` before egress — they are generic public text and are unaltered by it), and provider settings are unchanged. `build-fixture.ts` and `rescore.ts` are unchanged; the raw column is authoritative for v2 (the committed `adjudications.json` encodes the old taxonomy and does not apply — see §7).
+**Post-taxonomy-v2 change to the runner (§7).** The category list is no longer built from a hard-coded English-hint map. The runner now `SELECT name, type, description FROM categories` and renders one bullet per category as `- <name> — <Hebrew description>`, where `description` is the taxonomy-v2 כולל/לא כולל guidance column (#133). This is the only prompt-shape change; few-shot construction, batch size, output contract, redaction rules (descriptions pass through the same `redact()` before egress — they are generic public text and are unaltered by it), and provider settings are unchanged. `build-fixture.ts` and `rescore.ts` are unchanged; the #100 `adjudications.json` (old taxonomy) does not apply to v2 and was replaced by the owner's 2026-07-14 v2 rulings (see §7), which `rescore.ts` applies as before.
 
 ### Anonymization
 
@@ -138,13 +138,13 @@ Both files stay gitignored. 2 of 50 items were altered by redaction (digit runs)
 
 ### Results
 
-| Model                    | #100 raw (old taxonomy) | #100 adjudicated | **v2 raw**         | v2 adjudicated              |
-| ------------------------ | ----------------------- | ---------------- | ------------------ | --------------------------- |
-| gemini-flash-latest      | 26/50 (52%)             | 39/50 (78%) GO   | **25/50 (50%)**    | pending owner review (≈76%) |
-| gemini-flash-lite-latest | 19/50 (38%)             | 32/50 (64%)      | **23/50 (46%)**    | pending owner review (≈72%) |
-| gemini-pro-latest        | 25/50 (50%)             | 38/50 (76%)      | not run (reserved) | —                           |
+| Model                    | #100 raw (old taxonomy) | #100 adjudicated | **v2 raw**         | v2 adjudicated (owner-ruled 2026-07-14) |
+| ------------------------ | ----------------------- | ---------------- | ------------------ | --------------------------------------- |
+| gemini-flash-latest      | 26/50 (52%)             | 39/50 (78%) GO   | **25/50 (50%)**    | **36/50 (72%) — GO**                    |
+| gemini-flash-lite-latest | 19/50 (38%)             | 32/50 (64%)      | **23/50 (46%)**    | 31/50 (62%) — NO-GO                     |
+| gemini-pro-latest        | 25/50 (50%)             | 38/50 (76%)      | not run (reserved) | —                                       |
 
-The **raw** score is the only number this re-run establishes on its own. #100's gate score was the _adjudicated_ score (§1: labels encoding private context or taxonomy ambiguity measure the fixture, not the model), and its adjudication was owner-signed. That adjudication does **not** carry over — it was authored against the old taxonomy and old items — so v2 adjudicated is left open pending owner review of the candidate list below. The "≈" figures are this worker's projection if the owner accepts the §7 personal-context/stale-label candidates on the same basis #100 used; they are not a signed result.
+#100's gate score was the _adjudicated_ score (§1: labels encoding private context or taxonomy ambiguity measure the fixture, not the model), and its adjudication was owner-signed. That adjudication did **not** carry over — it was authored against the old taxonomy and old items — so the owner re-adjudicated the v2 misses live (2026-07-14): each of flash's 25 raw misses was ruled either "model correct under v2, historical label stale" or "label stands". The 11 accepted rulings replace the #100 `adjudications.json` (gitignored, applied by `rescore.ts`). The adjudicated column above is the gate score, as in #100.
 
 ### Why raw barely moved (52% → 50%) — and why that understates the model
 
@@ -152,7 +152,7 @@ The descriptions did their job: on the re-run the model's answers track the **v2
 
 ### Miss analysis — gemini-flash-latest (25 misses, anonymised)
 
-**(b) Personal-context or stale-under-v2 — 13 items (owner-adjudication candidates).** The description provably does not carry the answer, or v2 reassigned the boundary and the historical label wasn't rewritten. In every one, the model's answer is defensible (often _more_ v2-correct than the label):
+**(b) Personal-context or stale-under-v2 — 13 items (pre-adjudication candidate list; the owner's final ruling is below).** The description provably does not carry the answer, or v2 reassigned the boundary and the historical label wasn't rewritten. In every one, the model's answer is defensible (often _more_ v2-correct than the label):
 
 - ATM withdrawal dated by day, labelled by what the cash later bought — `מש' מכספומט [בנק] [תאריך]` (×2) → label `מתנות ואירועים`, model `מזומן ומשיכות`. Under v2 the model's answer is the literal home of a cash withdrawal.
 - Self-transfer to own bank account (string carries the owner's own name) — `העברה [שם] ... משיכה לחשבון הבנק` (×2) → label `העברה פנימית`, model `מזומן ומשיכות`. Requires knowing the name is the owner's.
@@ -185,11 +185,21 @@ So of 25 raw misses, **21 are fixture/taxonomy artefacts or defensible ties (b+c
 
 `gemini-flash-lite-latest` mirrors the same 13 (b) candidates, but adds genuine sibling errors flash got right (a butcher/meat-vendor trade name → `מסעדות וקפה` instead of `מזון וסופר`; a fuel-brand item → `מזון וסופר`; a card-fee string → `חשבונות ושירותים`), so it trails flash at every cut.
 
+### Final adjudication (owner-ruled 2026-07-14)
+
+The owner reviewed all 25 flash misses live and ruled **11** of them "model correct under v2, historical label stale": the two ATM-withdrawal items, the two P2P-to-person transfers labelled by remembered purpose, the barbershop item, the two cloud-storage subscription items, the payment-app merchant item, the venue the model called a subscription, the food-supplements item, and the ice-cream parlour item. The other **14 stand as real misses** — including, conservatively, the owner's own self-transfer descriptions, the family-account transfers, and the non-profit fee, plus the sibling near-misses and genuine errors.
+
+The ruling is more conservative than this section's (b)-class estimate: 11 items accepted against the 13-candidate projection of ≈76%, keeping the personal-context transfers as label-stands while agreeing with the model on three items the pre-adjudication analysis had classed as near-misses or errors. **Final adjudicated score: flash-latest 36/50 = 72%.**
+
+Applying the same 11 rulings to `gemini-flash-lite-latest` (it missed all 11 items, but on three of them gave a _different_ wrong answer than the accepted one, so it gains only 8) yields **31/50 = 62% adjudicated** — below the gate on every cut; it stays out either way.
+
+One process outcome: the adjudication surfaced a rule/description inconsistency for the cloud-storage subscription merchant — an existing rule pointed it at `חשבונות ושירותים` while the v2 `מנויים` description explicitly claims cloud storage. The owner ruled with the model, and the rule was re-pointed to `מנויים` post-apply.
+
 ### Verdict vs the ≥70% gate (ADR-0005 / ADR-0008)
 
-- **Raw does not clear the gate** (flash 50%, lite 46%) — but per §1 the gate has always been measured on the adjudicated score, because raw holds the model to labels that encode private context. This re-run reproduces that gap almost exactly: #100 was 52% raw → 78% adjudicated; v2 is 50% raw and, on the same adjudication basis, projects to **≈76%** for flash.
-- **The GO decision for `gemini-flash-latest` stands and is reinforced.** The descriptions made the model's answers _more_ v2-aligned; the residual genuine-error rate is ~8%. The taxonomy-v2 prompt is a net improvement in model behaviour even though the raw number, measured against un-migrated historical labels, does not show it.
-- **`gemini-flash-lite-latest`'s position is unchanged — stays out.** Its raw improved (38% → 46%) but it still trails flash on both raw and genuine-error count, and it makes exactly the restaurant/grocery-confusion errors that disqualified the cheap tier in #100. The cheap tier did not improve enough to reconsider; flash remains the GO model at negligible cost.
-- **Action for the owner:** adjudicate the 13 (b) candidates above (accept the model's answer where the label encodes private context or v2 moved the boundary). If accepted on #100's basis, flash lands at 38/50 (76%), clearing the gate. Separately, the stale-under-v2 labels (barbershop → `בריאות וטיפוח`, cloud storage → `מנויים`) are historical manual labels the migration left untouched and are candidates for a one-time relabel, independent of the model decision.
+- **Raw does not clear the gate** (flash 50%, lite 46%) — but per §1 the gate has always been measured on the adjudicated score, because raw holds the model to labels that encode private context. This re-run reproduces that gap: #100 was 52% raw → 78% adjudicated; v2 is 50% raw → **72% owner-adjudicated**.
+- **`gemini-flash-latest` clears the gate at 72% — GO reaffirmed.** The descriptions made the model's answers _more_ v2-aligned; the residual genuine-error rate is ~8%. The taxonomy-v2 prompt is a net improvement in model behaviour even though the raw number, measured against un-migrated historical labels, does not show it. Note the owner adjudicated more conservatively than #100's basis (11 rulings vs the 13-candidate ≈76% projection above), and the gate still clears with margin.
+- **`gemini-flash-lite-latest`'s position is unchanged — stays out.** Its raw improved (38% → 46%) but its adjudicated score (62%) is still below the gate, it trails flash on both raw and genuine-error count, and it makes exactly the restaurant/grocery-confusion errors that disqualified the cheap tier in #100. The cheap tier did not improve enough to reconsider; flash remains the GO model at negligible cost.
+- Separately from the model decision, the stale-under-v2 labels the adjudication confirmed (barbershop → `בריאות וטיפוח`, cloud storage → `מנויים`) are historical manual labels the migration left untouched and are candidates for a one-time relabel.
 
 Cost: the two-provider sweep (flash + flash-lite, 50 items × 3 batches each, one transient flash retry) consumed a negligible slice of the #99 credit — well under ₪0.1 total. Pro was not run (reserved).
