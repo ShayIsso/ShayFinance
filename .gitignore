@@ -58,7 +58,10 @@ pgdata/
 # Only the template is committed; actual fixtures stay local-only.
 scripts/spike/fixture.json
 scripts/spike/fixture-draft.json
+scripts/spike/few-shot.json
+scripts/spike/adjudications.json
 scripts/spike/benchmark-results.json
+scripts/spike/benchmark-results-*.json
 scripts/spike/benchmark.ts
 scripts/spike/discount-url-probe.ts
 
