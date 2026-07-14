@@ -35,6 +35,7 @@ import {
   Smartphone,
   Globe,
   Volleyball,
+  HandCoins,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Smartphone,
   Globe,
   Volleyball,
+  HandCoins,
 };
 
 const ICON_LABELS: Record<string, string> = {
@@ -140,6 +142,7 @@ const ICON_LABELS: Record<string, string> = {
   Smartphone: "סמארטפון",
   Globe: "גלובוס",
   Volleyball: "כדורגל",
+  HandCoins: "מזומן",
 };
 
 const AVAILABLE_ICONS = Object.keys(ICON_MAP);

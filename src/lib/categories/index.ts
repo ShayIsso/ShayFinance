@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { DefaultCategoryDeletionError } from "./errors";
 
 export { DefaultCategoryDeletionError } from "./errors";
+export { matchesRule, type MatchType } from "./rules";
 
 export type Category = {
   id: string;

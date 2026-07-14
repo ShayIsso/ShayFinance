@@ -65,6 +65,9 @@ scripts/spike/benchmark-results-*.json
 scripts/spike/benchmark.ts
 scripts/spike/discount-url-probe.ts
 
+# Taxonomy v2 owner decisions — real merchant descriptors, never commit.
+scripts/spike/taxonomy-decisions-133.json
+
 # mattpocock/skills — installed agentic tooling, regenerable from skills-lock.json (committed).
 # Real skill content lives in /.agents/ (fetched from GitHub); /.claude/skills/* are generated
 # symlinks into it. Only the lock manifest is tracked — like package-lock.json vs node_modules.
