@@ -28,6 +28,8 @@
  * so precedence never changes which phase treats a description as a marker.
  */
 
+import { tokenize } from "./tokenize";
+
 export type TransferDescriptorKind = "inter_account" | "bit_mirror" | "card_settlement";
 
 export interface TransferDescriptorMatch {
@@ -56,14 +58,6 @@ const PHRASE_TABLE: Record<TransferDescriptorKind, ReadonlyArray<readonly string
 // detector used so its boundary semantics are preserved byte-for-byte: 4-digit
 // runs embedded in a longer digit or alphanumeric sequence do not match.
 const CARD_LAST4_RE = /\b\d{4}\b/;
-
-function tokenize(description: string): string[] {
-  return description
-    .normalize("NFC")
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
-}
 
 function containsPhrase(tokens: readonly string[], phrase: readonly string[]): boolean {
   if (phrase.length === 1) return tokens.includes(phrase[0]);

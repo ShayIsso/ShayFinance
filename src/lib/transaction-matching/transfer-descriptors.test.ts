@@ -103,7 +103,6 @@ describe("classifyTransferDescriptor", () => {
     });
 
     it("does NOT match the phrase when tokens are non-consecutive", () => {
-      // "חיוב" alone still matches as card_settlement, but not the bit_mirror phrase.
       expect(classifyTransferDescriptor("חיוב חודשי ישיר")).toEqual({
         kind: "card_settlement",
         token: "חיוב",
@@ -131,7 +130,6 @@ describe("classifyTransferDescriptor", () => {
 
   describe("kind-scoped classification", () => {
     it("returns null when a matching kind is excluded from the considered set", () => {
-      // העברה matches inter_account, but card_settlement scope excludes it.
       expect(classifyTransferDescriptor("העברה", ["card_settlement"])).toBeNull();
     });
 
