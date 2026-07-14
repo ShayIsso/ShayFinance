@@ -46,15 +46,6 @@ export async function categorizeTransaction(description: string): Promise<string
   return categorize(description, rules);
 }
 
-export function suggestRule(description: string, categoryId: string): Omit<CategoryRule, "id"> {
-  return {
-    categoryId,
-    matchType: "contains",
-    pattern: description,
-    priority: 0,
-  };
-}
-
 // CRUD
 export async function getRules(): Promise<CategoryRule[]> {
   const rows = await db.select().from(categoryRules).orderBy(desc(categoryRules.priority));

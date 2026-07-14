@@ -13,8 +13,13 @@ vi.mock("@/lib/transactions", () => ({
   bulkCategorize: vi.fn(),
 }));
 
+vi.mock("@/lib/merchant-memory", () => ({
+  changeTransactionCategory: vi.fn(async () => ({ fanOutCount: 0, wasCorrection: false })),
+}));
+
 import { revalidatePath } from "next/cache";
 import { updateTransaction, bulkCategorize } from "@/lib/transactions";
+import { changeTransactionCategory } from "@/lib/merchant-memory";
 import { updateTransactionAction, bulkCategorizeAction } from "@/app/actions/transactions";
 
 const VALID_TXN_ID = "3f8a2b1c-4d5e-4f6a-8b7c-9d0e1f2a3b4c";
@@ -72,16 +77,21 @@ describe("updateTransactionAction", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 
-  it("delegates a category assignment to the module, leaving customDescription untouched", async () => {
+  it("routes a category assignment through merchant memory and reports the fan-out count", async () => {
+    vi.mocked(changeTransactionCategory).mockResolvedValueOnce({
+      fanOutCount: 3,
+      wasCorrection: true,
+    });
+
     const result = await updateTransactionAction({
       id: VALID_TXN_ID,
       categoryId: VALID_CATEGORY_ID,
     });
 
-    expect(result).toEqual({ updated: true });
-    expect(updateTransaction).toHaveBeenCalledWith(VALID_TXN_ID, {
-      categoryId: VALID_CATEGORY_ID,
-    });
+    expect(result).toEqual({ updated: true, fanOutCount: 3 });
+    expect(changeTransactionCategory).toHaveBeenCalledWith(VALID_TXN_ID, VALID_CATEGORY_ID);
+    // Assignment does not go through the plain update path.
+    expect(updateTransaction).not.toHaveBeenCalled();
   });
 
   it("allows clearing the custom description back to null (display reverts to the original description)", async () => {
@@ -91,15 +101,16 @@ describe("updateTransactionAction", () => {
     expect(updateTransaction).toHaveBeenCalledWith(VALID_TXN_ID, { customDescription: null });
   });
 
-  it("allows clearing the category back to null (uncategorized)", async () => {
+  it("clears the category back to null via the plain update path (no memory write)", async () => {
     const result = await updateTransactionAction({ id: VALID_TXN_ID, categoryId: null });
 
     expect(result).toEqual({ updated: true });
     expect(updateTransaction).toHaveBeenCalledWith(VALID_TXN_ID, { categoryId: null });
+    expect(changeTransactionCategory).not.toHaveBeenCalled();
   });
 
   it("rethrows unexpected module failures", async () => {
-    vi.mocked(updateTransaction).mockRejectedValue(new Error("connection refused"));
+    vi.mocked(changeTransactionCategory).mockRejectedValueOnce(new Error("connection refused"));
 
     await expect(
       updateTransactionAction({ id: VALID_TXN_ID, categoryId: VALID_CATEGORY_ID }),

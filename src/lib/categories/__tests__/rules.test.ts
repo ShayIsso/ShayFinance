@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { categorize, suggestRule, type CategoryRule } from "../rules";
+import { categorize, type CategoryRule } from "../rules";
 
 const rule = (
   override: Partial<CategoryRule> & Pick<CategoryRule, "matchType" | "pattern" | "categoryId">,
@@ -102,17 +102,5 @@ describe("categorize", () => {
       rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-6" }),
     ];
     expect(categorize("שופרסל דיל", rules)).toBe("cat-6");
-  });
-});
-
-describe("suggestRule", () => {
-  it("generates a contains rule using the full description as pattern", () => {
-    const suggestion = suggestRule("שופרסל דיל רחובות", "cat-7");
-    expect(suggestion).toEqual({
-      categoryId: "cat-7",
-      matchType: "contains",
-      pattern: "שופרסל דיל רחובות",
-      priority: 0,
-    });
   });
 });

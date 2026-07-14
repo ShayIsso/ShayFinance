@@ -12,7 +12,6 @@ import {
   Inbox,
 } from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
-import { createRuleAction } from "@/app/actions/rules";
 import { updateTransactionAction, bulkCategorizeAction } from "@/app/actions/transactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,11 +69,6 @@ type Filters = {
   search: string;
   page: number;
   pageSize: number;
-};
-
-type RuleSuggestion = {
-  description: string;
-  categoryId: string;
 };
 
 type TransactionsResponse = {
@@ -223,42 +217,18 @@ function CategoryCell({
   );
 }
 
-// ── Rule suggestion banner ───────────────────────────────────────────────────
+// ── Fan-out notice ────────────────────────────────────────────────────────────
+// After a category assignment, merchant memory auto-applies the choice to
+// same-key transactions (ADR-0010 §4). Surface the count with one-click undo,
+// not a confirmation modal.
 
-function RuleSuggestionBanner({
-  suggestion,
-  categories,
-  onCreateRule,
-  onDismiss,
-}: {
-  suggestion: RuleSuggestion;
-  categories: Category[];
-  onCreateRule: () => Promise<void>;
-  onDismiss: () => void;
-}) {
-  const [creating, setCreating] = React.useState(false);
-  const category = categories.find((c) => c.id === suggestion.categoryId);
-
-  async function handleCreate() {
-    setCreating(true);
-    await onCreateRule();
-    setCreating(false);
-  }
-
+function FanOutNotice({ count, onDismiss }: { count: number; onDismiss: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border bg-amber-50 px-4 py-3 text-sm">
-      <span>
-        ליצור כלל אוטומטי עבור &ldquo;{suggestion.description}&rdquo;
-        {category ? ` → ${category.name}` : ""}?
-      </span>
-      <div className="flex shrink-0 gap-2">
-        <Button size="sm" variant="outline" onClick={onDismiss}>
-          ביטול
-        </Button>
-        <Button size="sm" onClick={handleCreate} disabled={creating}>
-          {creating ? "יוצר..." : "צור כלל"}
-        </Button>
-      </div>
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+      <span>הוחל על עוד {count} עסקאות של אותו בית עסק</span>
+      <Button size="sm" variant="outline" onClick={onDismiss}>
+        סגור
+      </Button>
     </div>
   );
 }
@@ -309,7 +279,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkCategoryId, setBulkCategoryId] = React.useState("");
   const [bulkApplying, setBulkApplying] = React.useState(false);
-  const [ruleSuggestion, setRuleSuggestion] = React.useState<RuleSuggestion | null>(null);
+  const [fanOutNotice, setFanOutNotice] = React.useState<number | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
   React.useEffect(() => {
@@ -377,30 +347,13 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   }
 
   async function handleCategoryAssign(id: string, categoryId: string) {
-    const tx = transactions.find((t) => t.id === id);
     startTransition(async () => {
       const result = await updateTransactionAction({ id, categoryId });
       if (!result.error) {
         setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, categoryId } : t)));
-        if (tx) {
-          setRuleSuggestion({
-            description: tx.customDescription ?? tx.description,
-            categoryId,
-          });
-        }
+        setFanOutNotice(result.fanOutCount && result.fanOutCount > 0 ? result.fanOutCount : null);
       }
     });
-  }
-
-  async function handleCreateRule() {
-    if (!ruleSuggestion) return;
-    await createRuleAction({
-      categoryId: ruleSuggestion.categoryId,
-      matchType: "contains",
-      pattern: ruleSuggestion.description,
-      priority: 0,
-    });
-    setRuleSuggestion(null);
   }
 
   const allSelected = transactions.length > 0 && transactions.every((t) => selected.has(t.id));
@@ -443,13 +396,8 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
 
   return (
     <div className="space-y-4">
-      {ruleSuggestion && (
-        <RuleSuggestionBanner
-          suggestion={ruleSuggestion}
-          categories={categories}
-          onCreateRule={handleCreateRule}
-          onDismiss={() => setRuleSuggestion(null)}
-        />
+      {fanOutNotice !== null && (
+        <FanOutNotice count={fanOutNotice} onDismiss={() => setFanOutNotice(null)} />
       )}
 
       {/* Filter bar */}
