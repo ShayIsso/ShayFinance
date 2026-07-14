@@ -1,4 +1,5 @@
 import type { ScrapedTransaction } from "@/lib/scraper/types";
+import type { CategorySource } from "@/lib/merchant-memory";
 
 export type StoredTransaction = {
   id: string;
@@ -15,6 +16,17 @@ export type StoredTransaction = {
 export type NewTransaction = Omit<ScrapedTransaction, ""> & {
   bankAccountId: string;
   categoryId: string | null;
+  categorySource: CategorySource | null;
+};
+
+/**
+ * Categorization result for an imported transaction: the assigned category and
+ * its provenance TIER (ADR-0010 §2). A rule match is `rule`; a user-tier memory
+ * hit is `memory`; an ai-tier memory hit is `ai`. No category ⇒ both null.
+ */
+export type Categorization = {
+  categoryId: string | null;
+  source: CategorySource | null;
 };
 
 export type TransactionStore = {
@@ -38,7 +50,7 @@ export async function importTransaction(
   tx: ScrapedTransaction,
   bankAccountId: string,
   store: TransactionStore,
-  categorize: (desc: string) => Promise<string | null>,
+  categorize: (desc: string) => Promise<Categorization>,
 ): Promise<"inserted" | "updated" | "skipped"> {
   // 1. Try external_id match
   if (tx.externalId) {
@@ -78,7 +90,7 @@ export async function importTransaction(
   }
 
   // 3. New transaction — auto-categorize and insert
-  const categoryId = await categorize(tx.description);
-  await store.insert({ ...tx, bankAccountId, categoryId });
+  const { categoryId, source } = await categorize(tx.description);
+  await store.insert({ ...tx, bankAccountId, categoryId, categorySource: source });
   return "inserted";
 }

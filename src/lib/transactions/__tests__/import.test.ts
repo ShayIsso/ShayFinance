@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { importTransaction } from "../import";
-import type { TransactionStore, StoredTransaction, NewTransaction } from "../import";
+import type { TransactionStore, StoredTransaction, Categorization } from "../import";
 import type { ScrapedTransaction } from "@/lib/scraper/types";
 
 // In-memory store for testing
@@ -40,11 +40,13 @@ function createMemoryStore(
   };
 }
 
-const noCategorize = async (_desc: string): Promise<string | null> => null;
+const noCategorize = async (_desc: string): Promise<Categorization> => ({
+  categoryId: null,
+  source: null,
+});
 const categorizeFixed =
   (categoryId: string) =>
-  async (_desc: string): Promise<string | null> =>
-    categoryId;
+  async (_desc: string): Promise<Categorization> => ({ categoryId, source: "rule" });
 
 function makeTx(overrides: Partial<ScrapedTransaction> = {}): ScrapedTransaction {
   return {

@@ -12,8 +12,12 @@ import {
   Inbox,
 } from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
-import { createRuleAction } from "@/app/actions/rules";
-import { updateTransactionAction, bulkCategorizeAction } from "@/app/actions/transactions";
+import {
+  updateTransactionAction,
+  bulkCategorizeAction,
+  undoFanOutAction,
+} from "@/app/actions/transactions";
+import type { FannedOutRow } from "@/lib/merchant-memory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -70,11 +74,6 @@ type Filters = {
   search: string;
   page: number;
   pageSize: number;
-};
-
-type RuleSuggestion = {
-  description: string;
-  categoryId: string;
 };
 
 type TransactionsResponse = {
@@ -223,40 +222,38 @@ function CategoryCell({
   );
 }
 
-// ── Rule suggestion banner ───────────────────────────────────────────────────
+// ── Fan-out notice ────────────────────────────────────────────────────────────
+// After a category assignment, merchant memory auto-applies the choice to
+// same-key transactions (ADR-0010 §4): a count with one-click undo, not a
+// confirmation modal. Undo restores the siblings' prior category+provenance;
+// the memory entry the user wrote stays.
 
-function RuleSuggestionBanner({
-  suggestion,
-  categories,
-  onCreateRule,
+function FanOutNotice({
+  count,
+  onUndo,
   onDismiss,
 }: {
-  suggestion: RuleSuggestion;
-  categories: Category[];
-  onCreateRule: () => Promise<void>;
+  count: number;
+  onUndo: () => Promise<void>;
   onDismiss: () => void;
 }) {
-  const [creating, setCreating] = React.useState(false);
-  const category = categories.find((c) => c.id === suggestion.categoryId);
+  const [undoing, setUndoing] = React.useState(false);
 
-  async function handleCreate() {
-    setCreating(true);
-    await onCreateRule();
-    setCreating(false);
+  async function handleUndo() {
+    setUndoing(true);
+    await onUndo();
+    setUndoing(false);
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border bg-amber-50 px-4 py-3 text-sm">
-      <span>
-        ליצור כלל אוטומטי עבור &ldquo;{suggestion.description}&rdquo;
-        {category ? ` → ${category.name}` : ""}?
-      </span>
+    <div className="bg-muted/50 flex items-center justify-between gap-4 rounded-lg border px-4 py-3 text-sm">
+      <span>הוחל על עוד {count} עסקאות של אותו בית עסק</span>
       <div className="flex shrink-0 gap-2">
-        <Button size="sm" variant="outline" onClick={onDismiss}>
-          ביטול
+        <Button size="sm" variant="ghost" onClick={onDismiss}>
+          סגור
         </Button>
-        <Button size="sm" onClick={handleCreate} disabled={creating}>
-          {creating ? "יוצר..." : "צור כלל"}
+        <Button size="sm" variant="outline" onClick={handleUndo} disabled={undoing}>
+          {undoing ? "מבטל..." : "בטל החלה"}
         </Button>
       </div>
     </div>
@@ -309,7 +306,10 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkCategoryId, setBulkCategoryId] = React.useState("");
   const [bulkApplying, setBulkApplying] = React.useState(false);
-  const [ruleSuggestion, setRuleSuggestion] = React.useState<RuleSuggestion | null>(null);
+  const [fanOutNotice, setFanOutNotice] = React.useState<{
+    count: number;
+    rows: FannedOutRow[];
+  } | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
   React.useEffect(() => {
@@ -377,30 +377,38 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   }
 
   async function handleCategoryAssign(id: string, categoryId: string) {
-    const tx = transactions.find((t) => t.id === id);
     startTransition(async () => {
       const result = await updateTransactionAction({ id, categoryId });
       if (!result.error) {
         setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, categoryId } : t)));
-        if (tx) {
-          setRuleSuggestion({
-            description: tx.customDescription ?? tx.description,
-            categoryId,
-          });
-        }
+        applyFanOutResult(categoryId, result.fannedOut);
       }
     });
   }
 
-  async function handleCreateRule() {
-    if (!ruleSuggestion) return;
-    await createRuleAction({
-      categoryId: ruleSuggestion.categoryId,
-      matchType: "contains",
-      pattern: ruleSuggestion.description,
-      priority: 0,
-    });
-    setRuleSuggestion(null);
+  function applyFanOutResult(categoryId: string, fannedOut: FannedOutRow[] | undefined) {
+    if (fannedOut && fannedOut.length > 0) {
+      const fannedIds = new Set(fannedOut.map((r) => r.id));
+      setTransactions((prev) => prev.map((t) => (fannedIds.has(t.id) ? { ...t, categoryId } : t)));
+      setFanOutNotice({ count: fannedOut.length, rows: fannedOut });
+    } else {
+      setFanOutNotice(null);
+    }
+  }
+
+  async function handleUndoFanOut() {
+    if (!fanOutNotice) return;
+    const rows = fanOutNotice.rows;
+    const result = await undoFanOutAction({ rows });
+    if (!result.error) {
+      setTransactions((prev) =>
+        prev.map((t) => {
+          const restored = rows.find((r) => r.id === t.id);
+          return restored ? { ...t, categoryId: restored.previousCategoryId } : t;
+        }),
+      );
+      setFanOutNotice(null);
+    }
   }
 
   const allSelected = transactions.length > 0 && transactions.every((t) => selected.has(t.id));
@@ -433,6 +441,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
         setTransactions((prev) => prev.map((t) => (selected.has(t.id) ? { ...t, categoryId } : t)));
         setSelected(new Set());
         setBulkCategoryId("");
+        applyFanOutResult(categoryId, result.fannedOut);
       }
       setBulkApplying(false);
     });
@@ -443,12 +452,11 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
 
   return (
     <div className="space-y-4">
-      {ruleSuggestion && (
-        <RuleSuggestionBanner
-          suggestion={ruleSuggestion}
-          categories={categories}
-          onCreateRule={handleCreateRule}
-          onDismiss={() => setRuleSuggestion(null)}
+      {fanOutNotice !== null && (
+        <FanOutNotice
+          count={fanOutNotice.count}
+          onUndo={handleUndoFanOut}
+          onDismiss={() => setFanOutNotice(null)}
         />
       )}
 

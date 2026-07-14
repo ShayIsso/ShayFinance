@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  findMatchingUncategorizedTxns,
+  findOverwritableMatches,
   previewRetroactiveApply,
   applyRetroactively,
-  type UncategorizedTransaction,
+  type OverwritableTransaction,
   type RetroactiveStore,
 } from "../retroactive";
 import type { CategoryRule } from "../rules";
@@ -17,82 +17,91 @@ const rule = (
 });
 
 const txn = (
-  override: Partial<UncategorizedTransaction> &
-    Pick<UncategorizedTransaction, "id" | "description">,
-): UncategorizedTransaction => ({
-  categoryId: null,
+  override: Partial<OverwritableTransaction> & Pick<OverwritableTransaction, "id" | "description">,
+): OverwritableTransaction => ({
+  categorySource: null,
   ...override,
 });
 
 const makeStore = (
   foundRule: CategoryRule | null,
-  txns: UncategorizedTransaction[],
+  txns: OverwritableTransaction[],
 ): RetroactiveStore => ({
   getRuleById: vi.fn(async () => foundRule),
-  getUncategorizedTransactions: vi.fn(async () => txns),
+  getOverwritableTransactions: vi.fn(async () => txns),
   categorizeTransactions: vi.fn(async (ids: string[]) => ids.length),
 });
 
 // ─── Pure function ────────────────────────────────────────────────────────────
 
-describe("findMatchingUncategorizedTxns", () => {
+describe("findOverwritableMatches", () => {
   it('returns uncategorized tx matching "contains" rule', () => {
     const r = rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-1" });
     const txns = [txn({ id: "t1", description: "שופרסל דיל" })];
-    expect(findMatchingUncategorizedTxns(r, txns)).toHaveLength(1);
+    expect(findOverwritableMatches(r, txns)).toHaveLength(1);
   });
 
-  it("excludes already-categorized tx even when pattern matches", () => {
+  it("overwrites ai-sourced rows that match (the overwrite law extends to 'ai')", () => {
     const r = rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-1" });
-    const txns = [txn({ id: "t1", description: "שופרסל דיל", categoryId: "cat-other" })];
-    expect(findMatchingUncategorizedTxns(r, txns)).toHaveLength(0);
+    const txns = [txn({ id: "t1", description: "שופרסל דיל", categorySource: "ai" })];
+    expect(findOverwritableMatches(r, txns)).toHaveLength(1);
+  });
+
+  it("never touches user, rule, or memory sourced rows even when the pattern matches", () => {
+    const r = rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-1" });
+    const txns = [
+      txn({ id: "t-user", description: "שופרסל דיל", categorySource: "user" }),
+      txn({ id: "t-rule", description: "שופרסל דיל", categorySource: "rule" }),
+      txn({ id: "t-memory", description: "שופרסל דיל", categorySource: "memory" }),
+    ];
+    expect(findOverwritableMatches(r, txns)).toHaveLength(0);
   });
 
   it('returns uncategorized tx matching "starts_with" rule', () => {
     const r = rule({ matchType: "starts_with", pattern: "אמזון", categoryId: "cat-1" });
     const txns = [txn({ id: "t1", description: 'אמזון ישראל בע"מ' })];
-    expect(findMatchingUncategorizedTxns(r, txns)).toHaveLength(1);
+    expect(findOverwritableMatches(r, txns)).toHaveLength(1);
   });
 
   it('returns uncategorized tx matching "exact" rule', () => {
     const r = rule({ matchType: "exact", pattern: "תחבורה ציבורית", categoryId: "cat-1" });
     const txns = [txn({ id: "t1", description: "תחבורה ציבורית" })];
-    expect(findMatchingUncategorizedTxns(r, txns)).toHaveLength(1);
+    expect(findOverwritableMatches(r, txns)).toHaveLength(1);
   });
 
   it('returns uncategorized tx matching "regex" rule', () => {
     const r = rule({ matchType: "regex", pattern: "^שופרסל", categoryId: "cat-1" });
     const txns = [txn({ id: "t1", description: "שופרסל דיל רחובות" })];
-    expect(findMatchingUncategorizedTxns(r, txns)).toHaveLength(1);
+    expect(findOverwritableMatches(r, txns)).toHaveLength(1);
   });
 
   it("returns empty array when no pattern matches", () => {
     const r = rule({ matchType: "contains", pattern: "נטפליקס", categoryId: "cat-1" });
     const txns = [txn({ id: "t1", description: "שופרסל דיל" })];
-    expect(findMatchingUncategorizedTxns(r, txns)).toHaveLength(0);
+    expect(findOverwritableMatches(r, txns)).toHaveLength(0);
   });
 
-  it("returns only uncategorized matching txns from a mixed list", () => {
+  it("returns only overwritable matching txns from a mixed list", () => {
     const r = rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-1" });
     const txns = [
-      txn({ id: "t1", description: "שופרסל דיל" }), // uncategorized + match
-      txn({ id: "t2", description: "שופרסל הנגב", categoryId: "cat-x" }), // categorized + match → excluded
-      txn({ id: "t3", description: "רמי לוי" }), // uncategorized + no match → excluded
+      txn({ id: "t1", description: "שופרסל דיל" }), // NULL + match
+      txn({ id: "t2", description: "שופרסל הנגב", categorySource: "user" }), // protected + match → excluded
+      txn({ id: "t3", description: "רמי לוי" }), // NULL + no match → excluded
+      txn({ id: "t4", description: "שופרסל אונליין", categorySource: "ai" }), // ai + match → included
     ];
-    const result = findMatchingUncategorizedTxns(r, txns);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe("t1");
+    const result = findOverwritableMatches(r, txns);
+    expect(result.map((t) => t.id)).toEqual(["t1", "t4"]);
   });
 
   it("returns empty array for empty input", () => {
     const r = rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-1" });
-    expect(findMatchingUncategorizedTxns(r, [])).toHaveLength(0);
+    expect(findOverwritableMatches(r, [])).toHaveLength(0);
   });
 
   it("matching is case-insensitive", () => {
     const r = rule({ matchType: "contains", pattern: "AMAZON", categoryId: "cat-1" });
     const txns = [txn({ id: "t1", description: "amazon prime monthly" })];
-    expect(findMatchingUncategorizedTxns(r, txns)).toHaveLength(1);
+    expect(findOverwritableMatches(r, txns)).toHaveLength(1);
   });
 });
 
@@ -105,7 +114,7 @@ describe("previewRetroactiveApply", () => {
     expect(result).toEqual({ count: 0 });
   });
 
-  it("returns correct count of uncategorized matching transactions", async () => {
+  it("returns correct count of overwritable matching transactions", async () => {
     const r = rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-1" });
     const txns = [
       txn({ id: "t1", description: "שופרסל דיל" }),

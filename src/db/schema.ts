@@ -53,6 +53,14 @@ export const recurringCadenceEnum = pgEnum("recurring_cadence", ["monthly", "qua
 
 export const recurringStatusEnum = pgEnum("recurring_status", ["active", "paused", "canceled"]);
 
+// Provenance of a transaction's category (ADR-0010 §2). Records the trust
+// TIER, not the mechanism: a user-tier merchant-memory hit writes `memory`,
+// an ai-tier hit writes `ai`. NULL on the transaction column = uncategorized.
+export const categorySourceEnum = pgEnum("category_source", ["rule", "memory", "ai", "user"]);
+
+// Trust tier of a merchant-memory entry (ADR-0010 §4).
+export const memorySourceEnum = pgEnum("memory_source", ["user", "ai"]);
+
 // Tables
 export const bankCredentials = pgTable("bank_credentials", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -122,6 +130,7 @@ export const transactions = pgTable(
     categoryId: uuid("category_id").references(() => categories.id, {
       onDelete: "set null",
     }),
+    categorySource: categorySourceEnum("category_source"),
     reconciliationGroupId: uuid("reconciliation_group_id"),
     reconciliationRole: reconciliationRoleEnum("reconciliation_role"),
     reconciliationConfidence: real("reconciliation_confidence"),
@@ -190,4 +199,54 @@ export const schedulerConfig = pgTable("scheduler_config", {
   enabled: boolean("enabled").notNull().default(false),
   cronTime: varchar("cron_time", { length: 5 }).notNull().default("07:00"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Learned merchant→category mappings (ADR-0010 §4). Exact-key, one row per
+ * merchant. `merchant_key` is `extractMerchant(description)` computed on the
+ * raw description — never `custom_description`, never `canonicalizeMerchant`
+ * (alias-table growth would orphan keys). Conflicts are last-write-wins.
+ */
+export const merchantMemory = pgTable(
+  "merchant_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merchantKey: text("merchant_key").notNull(),
+    categoryId: uuid("category_id")
+      .references(() => categories.id, { onDelete: "cascade" })
+      .notNull(),
+    source: memorySourceEnum("source").notNull(),
+    hitCount: integer("hit_count").notNull().default(0),
+    lastHitAt: timestamp("last_hit_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("uq_merchant_memory_key").on(table.merchantKey)],
+);
+
+/**
+ * Append-only log of user recategorizations of already-categorized
+ * transactions (ADR-0010 §5). No update/delete surface. Category names are
+ * text SNAPSHOTS (denormalized on purpose) so history survives #133's
+ * taxonomy renames/merges; the nullable FKs ride along for convenience.
+ * `description_redacted` is produced by src/lib/redaction at write time — a
+ * future AI-egress source must never store raw text.
+ */
+export const categoryCorrections = pgTable("category_corrections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  transactionId: uuid("transaction_id").references(() => transactions.id, {
+    onDelete: "set null",
+  }),
+  merchantKey: text("merchant_key").notNull(),
+  descriptionRedacted: text("description_redacted").notNull(),
+  fromCategoryName: text("from_category_name").notNull(),
+  toCategoryName: text("to_category_name").notNull(),
+  fromCategoryId: uuid("from_category_id").references(() => categories.id, {
+    onDelete: "set null",
+  }),
+  toCategoryId: uuid("to_category_id").references(() => categories.id, {
+    onDelete: "set null",
+  }),
+  fromSource: categorySourceEnum("from_source").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });

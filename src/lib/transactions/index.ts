@@ -1,13 +1,14 @@
 import { db } from "@/db";
 import { bankAccounts, transactions, recurringExpenses } from "@/db/schema";
-import { eq, and, gte, lte, ilike, inArray, isNull, count } from "drizzle-orm";
-import { categorizeTransaction } from "@/lib/categories/rules";
+import { eq, and, gte, lte, ilike, isNull, count } from "drizzle-orm";
+import { categorize, getRules } from "@/lib/categories/rules";
 import type { ScrapedAccount } from "@/lib/scraper/types";
-import { importTransaction } from "./import";
+import { importTransaction, type Categorization } from "./import";
 import { createDbStore } from "./store";
 import type { transactionFiltersSchema } from "./schemas";
 import type { z } from "zod";
 import { extractMerchant, amountsMatch } from "@/lib/transaction-matching";
+import { createMerchantMemoryStore, deriveMerchantKey, lookupMemory } from "@/lib/merchant-memory";
 
 export async function importScrapedAccounts(
   credentialId: string,
@@ -17,6 +18,24 @@ export async function importScrapedAccounts(
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+
+  // Precedence at the import seam: rules (deliberately-authored law) → merchant
+  // memory (learned exact-key mappings). AI is a later slice (ADR-0010 §1).
+  // Rules are fetched once for the whole sync rather than per transaction.
+  const rules = await getRules();
+  const memoryStore = createMerchantMemoryStore();
+  const categorizer = async (description: string): Promise<Categorization> => {
+    const ruleCategoryId = categorize(description, rules);
+    if (ruleCategoryId) return { categoryId: ruleCategoryId, source: "rule" };
+
+    const key = deriveMerchantKey(description);
+    if (!key) return { categoryId: null, source: null };
+    const hit = (await lookupMemory([key], memoryStore)).get(key);
+    if (!hit) return { categoryId: null, source: null };
+    // Trust tier, not mechanism (ADR-0010 §2): a user-tier hit is `memory`, an
+    // ai-tier hit stays `ai` so a cached guess never launders into trusted.
+    return { categoryId: hit.categoryId, source: hit.source === "user" ? "memory" : "ai" };
+  };
 
   for (const account of scrapedAccounts) {
     // Upsert bank_account — insert or update balance on conflict
@@ -41,7 +60,7 @@ export async function importScrapedAccounts(
     if (!accountId) continue;
 
     for (const tx of account.transactions) {
-      const result = await importTransaction(tx, accountId, store, categorizeTransaction);
+      const result = await importTransaction(tx, accountId, store, categorizer);
       if (result === "inserted") inserted++;
       else if (result === "updated") updated++;
       else skipped++;
@@ -194,19 +213,22 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
   return buildPaginatedResult(data, total, page, pageSize);
 }
 
+/**
+ * Category ASSIGNMENT is not accepted here — `categoryId` is typed as `null`
+ * only, so an assignment cannot bypass merchant-memory's atomic
+ * memory+log+fan-out path (`changeTransactionCategory` /
+ * `bulkChangeTransactionCategories`, ADR-0010 §6). This path edits the custom
+ * description and clears a category (which also clears its provenance).
+ */
 export async function updateTransaction(
   id: string,
-  changes: { customDescription?: string | null; categoryId?: string | null },
+  changes: { customDescription?: string | null; categoryId?: null },
 ): Promise<void> {
   const dbChanges: Record<string, unknown> = { updatedAt: new Date() };
   if ("customDescription" in changes) dbChanges.customDescription = changes.customDescription;
-  if ("categoryId" in changes) dbChanges.categoryId = changes.categoryId;
+  if ("categoryId" in changes) {
+    dbChanges.categoryId = null;
+    dbChanges.categorySource = null;
+  }
   await db.update(transactions).set(dbChanges).where(eq(transactions.id, id));
-}
-
-export async function bulkCategorize(transactionIds: string[], categoryId: string): Promise<void> {
-  await db
-    .update(transactions)
-    .set({ categoryId, updatedAt: new Date() })
-    .where(inArray(transactions.id, transactionIds));
 }
