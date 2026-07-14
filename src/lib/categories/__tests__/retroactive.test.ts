@@ -7,7 +7,6 @@ import {
   type RetroactiveStore,
 } from "../retroactive";
 import type { CategoryRule } from "../rules";
-import type { CategorySource } from "@/lib/merchant-memory";
 
 const rule = (
   override: Partial<CategoryRule> & Pick<CategoryRule, "matchType" | "pattern" | "categoryId">,

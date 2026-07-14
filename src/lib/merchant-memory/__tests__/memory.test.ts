@@ -83,7 +83,7 @@ function createStore(seed?: {
     async getCategoryName(categoryId) {
       return categoryNames[categoryId] ?? null;
     },
-    async getOverwritableTransactions(_merchantKey) {
+    async getOverwritableTransactions() {
       // The contract allows over-returning (the DB store prefilters by key);
       // exact key matching happens in selectFanOutTargets.
       return txns
