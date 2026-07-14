@@ -1,4 +1,4 @@
-import { amountsMatch, datesWithin } from "@/lib/transaction-matching";
+import { amountsMatch, datesWithin, matchesTransferDescriptor } from "@/lib/transaction-matching";
 import type { P2MirrorCandidate, ReconciliationTransaction } from "./types";
 
 const EXACT_TOLERANCE = 0.02;
@@ -7,11 +7,8 @@ const OVERLAP_PENALTY = 0.25;
 const MIN_CONFIDENCE = 0.7;
 const HIGH_CONFIDENCE = 0.95;
 
-// Hebrew and Latin Bit/debit markers (case-insensitive for Latin)
-const BIT_MARKER_RE = /ביט|חיוב ישיר|bit/i;
-
 function hasMarker(description: string): boolean {
-  return BIT_MARKER_RE.test(description);
+  return matchesTransferDescriptor(description, ["bit_mirror"]);
 }
 
 function parseDate(dateStr: string): Date {

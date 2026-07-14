@@ -1,10 +1,8 @@
-import { datesWithin } from "@/lib/transaction-matching";
+import { datesWithin, matchesTransferDescriptor } from "@/lib/transaction-matching";
 import { scoreP1Confidence } from "./confidence";
 import type { ReconciliationCandidate, ReconciliationTransaction } from "./types";
 
 const CYCLE_WINDOW_DAYS = 35;
-const LUMP_MARKERS = ["ויזה", "מאסטרקארד", "חיוב"];
-const CARD_LAST4_RE = /\b\d{4}\b/;
 const CARD_BANK_TYPES: ReadonlySet<string> = new Set(["max", "visaCal"]);
 const BANK_TYPES: ReadonlySet<string> = new Set(["discount"]);
 const OVERLAP_PENALTY = 0.25;
@@ -12,7 +10,7 @@ const MIN_CONFIDENCE = 0.7;
 
 function isBankLumpCandidate(tx: ReconciliationTransaction): boolean {
   if (!BANK_TYPES.has(tx.bankType)) return false;
-  return LUMP_MARKERS.some((m) => tx.description.includes(m)) || CARD_LAST4_RE.test(tx.description);
+  return matchesTransferDescriptor(tx.description, ["card_settlement"]);
 }
 
 function parseDate(dateStr: string): Date {
