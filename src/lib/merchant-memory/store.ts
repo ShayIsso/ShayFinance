@@ -1,17 +1,45 @@
 import { db } from "@/db";
 import { merchantMemory, categoryCorrections, transactions, categories } from "@/db/schema";
-import { eq, inArray, or, isNull, sql } from "drizzle-orm";
+import { eq, inArray, or, and, isNull, ilike, sql, type SQL } from "drizzle-orm";
 import {
   recordAssignment,
   applyCorrection,
+  applyBulkCategorization,
+  undoFanOut,
   type MerchantMemoryStore,
   type MemoryEntry,
+  type FannedOutRow,
 } from "./memory";
 
 // Both `db` and a transaction handle satisfy this surface, so the store can be
 // bound either to the connection (import lookups) or to a single transaction
 // (atomic corrections — ADR-0010 §6).
 type DbClient = Pick<typeof db, "select" | "insert" | "update">;
+
+/**
+ * The overwrite law (ADR-0010 §3) as a Drizzle predicate — the single SQL
+ * expression of "automation may touch this row". Owned here because
+ * merchant-memory owns the law; retroactive rule application consumes it too.
+ */
+export function overwriteLawSql(): SQL {
+  return or(isNull(transactions.categorySource), eq(transactions.categorySource, "ai"))!;
+}
+
+/**
+ * Over-inclusive SQL prefilter for fan-out candidates. extractMerchant only
+ * strips prefixes/digit-tokens/domain suffixes, lowercases Latin, and
+ * collapses whitespace — so every whitespace-separated token of a key appears
+ * verbatim and in order in any description that derives to that key. ILIKE
+ * '%tok1%tok2%…%' therefore never excludes a true match (exact key equality
+ * is re-checked in JS by selectFanOutTargets) while keeping the scan off the
+ * whole table. Assumes stored descriptions are NFC like the key.
+ */
+function merchantKeyPrefilter(merchantKey: string): SQL | undefined {
+  const tokens = merchantKey.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return undefined;
+  const escaped = tokens.map((t) => t.replace(/[\\%_]/g, "\\$&"));
+  return ilike(transactions.description, `%${escaped.join("%")}%`);
+}
 
 export function createMerchantMemoryStore(client: DbClient = db): MerchantMemoryStore {
   return {
@@ -97,18 +125,20 @@ export function createMerchantMemoryStore(client: DbClient = db): MerchantMemory
       return rows[0]?.name ?? null;
     },
 
-    async getOverwritableTransactions() {
+    async getOverwritableTransactions(merchantKey) {
       const rows = await client
         .select({
           id: transactions.id,
           description: transactions.description,
+          categoryId: transactions.categoryId,
           categorySource: transactions.categorySource,
         })
         .from(transactions)
-        .where(or(isNull(transactions.categorySource), eq(transactions.categorySource, "ai")));
+        .where(and(overwriteLawSql(), merchantKeyPrefilter(merchantKey)));
       return rows.map((r) => ({
         id: r.id,
         description: r.description,
+        categoryId: r.categoryId ?? null,
         categorySource: r.categorySource ?? null,
       }));
     },
@@ -119,6 +149,19 @@ export function createMerchantMemoryStore(client: DbClient = db): MerchantMemory
         .update(transactions)
         .set({ categoryId, categorySource: source, updatedAt: now })
         .where(inArray(transactions.id, ids));
+    },
+
+    async restoreTransactionCategories(rows, now) {
+      for (const row of rows) {
+        await client
+          .update(transactions)
+          .set({
+            categoryId: row.previousCategoryId,
+            categorySource: row.previousCategorySource,
+            updatedAt: now,
+          })
+          .where(eq(transactions.id, row.id));
+      }
     },
 
     async appendCorrection(row) {
@@ -146,21 +189,38 @@ export function createMerchantMemoryStore(client: DbClient = db): MerchantMemory
 export async function changeTransactionCategory(
   transactionId: string,
   toCategoryId: string,
-): Promise<{ fanOutCount: number; wasCorrection: boolean }> {
+): Promise<{ fanOutCount: number; fannedOut: FannedOutRow[]; wasCorrection: boolean }> {
   return db.transaction(async (tx) => {
     const store = createMerchantMemoryStore(tx);
     const txn = await store.getTransaction(transactionId);
-    if (!txn) return { fanOutCount: 0, wasCorrection: false };
+    if (!txn) return { fanOutCount: 0, fannedOut: [], wasCorrection: false };
 
     if (txn.categoryId === null) {
-      const { fanOutCount } = await recordAssignment(
-        { transactionId, toCategoryId, tier: "user" },
-        store,
-      );
-      return { fanOutCount, wasCorrection: false };
+      const result = await recordAssignment({ transactionId, toCategoryId, tier: "user" }, store);
+      return { ...result, wasCorrection: false };
     }
 
-    const { fanOutCount } = await applyCorrection({ transactionId, toCategoryId }, store);
-    return { fanOutCount, wasCorrection: true };
+    const result = await applyCorrection({ transactionId, toCategoryId }, store);
+    return { ...result, wasCorrection: true };
   });
+}
+
+/**
+ * DB entry point for bulk manual categorization — one transaction wrapping
+ * applyBulkCategorization so log rows, memory writes, and fan-out never
+ * partially apply.
+ */
+export async function bulkChangeTransactionCategories(
+  transactionIds: string[],
+  toCategoryId: string,
+): Promise<{ fanOutCount: number; fannedOut: FannedOutRow[] }> {
+  return db.transaction(async (tx) =>
+    applyBulkCategorization({ transactionIds, toCategoryId }, createMerchantMemoryStore(tx)),
+  );
+}
+
+/** DB entry point for one-click fan-out undo — restores in one transaction. */
+export async function undoCategoryFanOut(rows: FannedOutRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  await db.transaction(async (tx) => undoFanOut(rows, createMerchantMemoryStore(tx)));
 }

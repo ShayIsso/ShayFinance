@@ -24,7 +24,18 @@ export type CorrectionTxn = {
 export type OverwritableTxn = {
   id: string;
   description: string;
+  categoryId: string | null;
   categorySource: CategorySource | null;
+};
+
+/**
+ * Pre-fan-out state of a sibling transaction, captured so one-click undo
+ * (ADR-0010 §4) can restore exactly what automation overwrote — no guessing.
+ */
+export type FannedOutRow = {
+  id: string;
+  previousCategoryId: string | null;
+  previousCategorySource: CategorySource | null;
 };
 
 export type NewCorrection = {
@@ -50,13 +61,19 @@ export type MerchantMemoryStore = {
   upsertEntry(entry: MemoryEntry, now: Date): Promise<void>;
   getTransaction(id: string): Promise<CorrectionTxn | null>;
   getCategoryName(categoryId: string): Promise<string | null>;
-  getOverwritableTransactions(): Promise<OverwritableTxn[]>;
+  /**
+   * Candidate fan-out siblings for a merchant key: rows overwritable under the
+   * law. May over-return (e.g. an SQL prefilter) — the exact key match happens
+   * in selectFanOutTargets; it must never under-return for the given key.
+   */
+  getOverwritableTransactions(merchantKey: string): Promise<OverwritableTxn[]>;
   setTransactionCategory(
     ids: string[],
     categoryId: string,
     source: CategorySource,
     now: Date,
   ): Promise<void>;
+  restoreTransactionCategories(rows: FannedOutRow[], now: Date): Promise<void>;
   appendCorrection(row: NewCorrection): Promise<void>;
 };
 
@@ -96,18 +113,17 @@ export function resolveEntryWrite(
 
 /**
  * Same-key siblings a user-tier write may auto-apply to: exact merchant-key
- * match, overwritable under the law, excluding the transaction just touched.
+ * match, overwritable under the law, excluding the transactions just touched.
  */
 export function selectFanOutTargets(
   merchantKey: string,
   candidates: OverwritableTxn[],
-  excludeTxnId: string,
-): string[] {
+  excludeTxnIds: readonly string[],
+): OverwritableTxn[] {
   return candidates
-    .filter((t) => t.id !== excludeTxnId)
+    .filter((t) => !excludeTxnIds.includes(t.id))
     .filter((t) => canOverwrite(t.categorySource))
-    .filter((t) => deriveMerchantKey(t.description) === merchantKey)
-    .map((t) => t.id);
+    .filter((t) => deriveMerchantKey(t.description) === merchantKey);
 }
 
 // ── Store-injected orchestration ──────────────────────────────────────────────
@@ -135,18 +151,42 @@ export async function lookupMemory(
 async function fanOut(
   merchantKey: string,
   toCategoryId: string,
-  excludeTxnId: string,
+  excludeTxnIds: readonly string[],
   store: MerchantMemoryStore,
   now: Date,
-): Promise<number> {
-  if (!merchantKey) return 0;
-  const candidates = await store.getOverwritableTransactions();
-  const targets = selectFanOutTargets(merchantKey, candidates, excludeTxnId);
-  if (targets.length === 0) return 0;
+): Promise<FannedOutRow[]> {
+  if (!merchantKey) return [];
+  const candidates = await store.getOverwritableTransactions(merchantKey);
+  const targets = selectFanOutTargets(merchantKey, candidates, excludeTxnIds);
+  if (targets.length === 0) return [];
   // Siblings acquire the category by automation applying a user-tier memory
   // entry → `memory`, not `user` (trust tier, not mechanism — ADR-0010 §2).
-  await store.setTransactionCategory(targets, toCategoryId, "memory", now);
-  return targets.length;
+  await store.setTransactionCategory(
+    targets.map((t) => t.id),
+    toCategoryId,
+    "memory",
+    now,
+  );
+  return targets.map((t) => ({
+    id: t.id,
+    previousCategoryId: t.categoryId,
+    previousCategorySource: t.categorySource,
+  }));
+}
+
+/**
+ * One-click undo of a fan-out (ADR-0010 §4): restores each sibling to its
+ * pre-fan-out category and provenance. Cancelling automation is not new
+ * evidence — no corrections-log rows — and the memory entry the user wrote
+ * stays as written.
+ */
+export async function undoFanOut(
+  rows: FannedOutRow[],
+  store: MerchantMemoryStore,
+  now: Date = new Date(),
+): Promise<void> {
+  if (rows.length === 0) return;
+  await store.restoreTransactionCategories(rows, now);
 }
 
 export type RecordAssignmentInput = {
@@ -164,10 +204,10 @@ export async function recordAssignment(
   input: RecordAssignmentInput,
   store: MerchantMemoryStore,
   now: Date = new Date(),
-): Promise<{ fanOutCount: number }> {
+): Promise<{ fanOutCount: number; fannedOut: FannedOutRow[] }> {
   const { transactionId, toCategoryId, tier } = input;
   const txn = await store.getTransaction(transactionId);
-  if (!txn) return { fanOutCount: 0 };
+  if (!txn) return { fanOutCount: 0, fannedOut: [] };
 
   const merchantKey = deriveMerchantKey(txn.description);
   const existing = await store.getEntry(merchantKey);
@@ -182,9 +222,9 @@ export async function recordAssignment(
   const targetSource: CategorySource = tier === "user" ? "user" : "ai";
   await store.setTransactionCategory([transactionId], toCategoryId, targetSource, now);
 
-  const fanOutCount =
-    tier === "user" ? await fanOut(merchantKey, toCategoryId, transactionId, store, now) : 0;
-  return { fanOutCount };
+  const fannedOut =
+    tier === "user" ? await fanOut(merchantKey, toCategoryId, [transactionId], store, now) : [];
+  return { fanOutCount: fannedOut.length, fannedOut };
 }
 
 export type ApplyCorrectionInput = {
@@ -202,10 +242,13 @@ export async function applyCorrection(
   input: ApplyCorrectionInput,
   store: MerchantMemoryStore,
   now: Date = new Date(),
-): Promise<{ fanOutCount: number }> {
+): Promise<{ fanOutCount: number; fannedOut: FannedOutRow[] }> {
   const { transactionId, toCategoryId } = input;
   const txn = await store.getTransaction(transactionId);
-  if (!txn) return { fanOutCount: 0 };
+  if (!txn) return { fanOutCount: 0, fannedOut: [] };
+  // Re-selecting the current category is not a correction: no from-X-to-X log
+  // row, no memory write, no fan-out.
+  if (txn.categoryId === toCategoryId) return { fanOutCount: 0, fannedOut: [] };
 
   const merchantKey = deriveMerchantKey(txn.description);
   const fromCategoryId = txn.categoryId;
@@ -232,6 +275,81 @@ export async function applyCorrection(
 
   await store.setTransactionCategory([transactionId], toCategoryId, "user", now);
 
-  const fanOutCount = await fanOut(merchantKey, toCategoryId, transactionId, store, now);
-  return { fanOutCount };
+  const fannedOut = await fanOut(merchantKey, toCategoryId, [transactionId], store, now);
+  return { fanOutCount: fannedOut.length, fannedOut };
+}
+
+export type ApplyBulkCategorizationInput = {
+  transactionIds: string[];
+  toCategoryId: string;
+};
+
+/**
+ * Bulk manual categorization — the same policy as the single-row operations,
+ * composed for a selection (ADR-0010 §4–5): every selected previously-
+ * categorized row that actually changes gets its own corrections-log row
+ * (bulk flips are exactly the oscillation evidence #133 needs), every distinct
+ * merchant learns a user-tier entry (last-write-wins), all selected rows are
+ * marked `user`, and each distinct merchant fans out once to non-selected
+ * siblings under the overwrite law.
+ */
+export async function applyBulkCategorization(
+  input: ApplyBulkCategorizationInput,
+  store: MerchantMemoryStore,
+  now: Date = new Date(),
+): Promise<{ fanOutCount: number; fannedOut: FannedOutRow[] }> {
+  const { transactionIds, toCategoryId } = input;
+  const toCategoryName = (await store.getCategoryName(toCategoryId)) ?? "";
+
+  const found: CorrectionTxn[] = [];
+  for (const id of transactionIds) {
+    const txn = await store.getTransaction(id);
+    if (txn) found.push(txn);
+  }
+  if (found.length === 0) return { fanOutCount: 0, fannedOut: [] };
+
+  const nameCache = new Map<string, string>();
+  for (const txn of found) {
+    if (txn.categoryId === null || txn.categoryId === toCategoryId) continue;
+    let fromCategoryName = nameCache.get(txn.categoryId);
+    if (fromCategoryName === undefined) {
+      fromCategoryName = (await store.getCategoryName(txn.categoryId)) ?? "";
+      nameCache.set(txn.categoryId, fromCategoryName);
+    }
+    await store.appendCorrection({
+      transactionId: txn.id,
+      merchantKey: deriveMerchantKey(txn.description),
+      descriptionRedacted: redactText(txn.description),
+      fromCategoryName,
+      toCategoryName,
+      fromCategoryId: txn.categoryId,
+      toCategoryId,
+      // See applyCorrection: a categorized row with no source predates the
+      // backfill and is treated as a user decision.
+      fromSource: txn.categorySource ?? "user",
+    });
+  }
+
+  const merchantKeys = new Set<string>();
+  for (const txn of found) {
+    const key = deriveMerchantKey(txn.description);
+    if (key) merchantKeys.add(key);
+  }
+  for (const key of merchantKeys) {
+    await store.upsertEntry({ merchantKey: key, categoryId: toCategoryId, source: "user" }, now);
+  }
+
+  await store.setTransactionCategory(
+    found.map((t) => t.id),
+    toCategoryId,
+    "user",
+    now,
+  );
+
+  const selectedIds = found.map((t) => t.id);
+  const fannedOut: FannedOutRow[] = [];
+  for (const key of merchantKeys) {
+    fannedOut.push(...(await fanOut(key, toCategoryId, selectedIds, store, now)));
+  }
+  return { fanOutCount: fannedOut.length, fannedOut };
 }

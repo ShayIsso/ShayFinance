@@ -7,6 +7,8 @@ import {
   lookupMemory,
   recordAssignment,
   applyCorrection,
+  applyBulkCategorization,
+  undoFanOut,
   type MerchantMemoryStore,
   type MemoryEntry,
   type CorrectionTxn,
@@ -81,7 +83,9 @@ function createStore(seed?: {
     async getCategoryName(categoryId) {
       return categoryNames[categoryId] ?? null;
     },
-    async getOverwritableTransactions() {
+    async getOverwritableTransactions(_merchantKey) {
+      // The contract allows over-returning (the DB store prefilters by key);
+      // exact key matching happens in selectFanOutTargets.
       return txns
         .filter((t) => t.categorySource === null || t.categorySource === "ai")
         .map(
@@ -89,6 +93,7 @@ function createStore(seed?: {
             ({
               id: t.id,
               description: t.description,
+              categoryId: t.categoryId,
               categorySource: t.categorySource,
             }) satisfies OverwritableTxn,
         );
@@ -98,6 +103,15 @@ function createStore(seed?: {
         if (ids.includes(t.id)) {
           t.categoryId = categoryId;
           t.categorySource = source;
+        }
+      }
+    },
+    async restoreTransactionCategories(rows) {
+      for (const row of rows) {
+        const t = txns.find((x) => x.id === row.id);
+        if (t) {
+          t.categoryId = row.previousCategoryId;
+          t.categorySource = row.previousCategorySource;
         }
       }
     },
@@ -154,9 +168,11 @@ describe("selectFanOutTargets", () => {
     id: string,
     description: string,
     categorySource: CategorySource | null,
-  ): OverwritableTxn => ({ id, description, categorySource });
+  ): OverwritableTxn => ({ id, description, categoryId: null, categorySource });
 
-  it("selects same-key overwritable siblings, excluding the touched txn", () => {
+  const ids = (targets: OverwritableTxn[]) => targets.map((t) => t.id);
+
+  it("selects same-key overwritable siblings, excluding the touched txns", () => {
     const key = deriveMerchantKey("שופרסל דיל");
     const candidates = [
       c("t1", "שופרסל דיל", null),
@@ -164,7 +180,7 @@ describe("selectFanOutTargets", () => {
       c("t3", "רמי לוי", null),
       c("self", "שופרסל דיל", null),
     ];
-    expect(selectFanOutTargets(key, candidates, "self")).toEqual(["t1"]);
+    expect(ids(selectFanOutTargets(key, candidates, ["self"]))).toEqual(["t1"]);
   });
 
   it("skips protected rows even when the key matches", () => {
@@ -176,7 +192,7 @@ describe("selectFanOutTargets", () => {
       c("t4", "שופרסל דיל", "ai"),
       c("t5", "שופרסל דיל", null),
     ];
-    expect(selectFanOutTargets(key, candidates, "none")).toEqual(["t4", "t5"]);
+    expect(ids(selectFanOutTargets(key, candidates, []))).toEqual(["t4", "t5"]);
   });
 });
 
@@ -303,9 +319,53 @@ describe("recordAssignment", () => {
     const { store } = createStore();
     expect(
       await recordAssignment({ transactionId: "ghost", toCategoryId: "c", tier: "user" }, store),
-    ).toEqual({
-      fanOutCount: 0,
+    ).toEqual({ fanOutCount: 0, fannedOut: [] });
+  });
+
+  it("reports each fanned-out sibling's prior state for undo", async () => {
+    const { store } = createStore({
+      txns: [
+        { id: "target", description: "שופרסל דיל", categoryId: null, categorySource: null },
+        { id: "sib-ai", description: "שופרסל דיל", categoryId: "old", categorySource: "ai" },
+      ],
     });
+
+    const result = await recordAssignment(
+      { transactionId: "target", toCategoryId: "cat-food", tier: "user" },
+      store,
+    );
+
+    expect(result.fannedOut).toEqual([
+      { id: "sib-ai", previousCategoryId: "old", previousCategorySource: "ai" },
+    ]);
+  });
+});
+
+// ── undoFanOut ────────────────────────────────────────────────────────────────
+
+describe("undoFanOut", () => {
+  it("restores fanned-out siblings' prior category+source without logging corrections", async () => {
+    const { store, txns, entries, corrections } = createStore({
+      txns: [
+        { id: "target", description: "שופרסל דיל", categoryId: null, categorySource: null },
+        { id: "sib-null", description: "שופרסל דיל", categoryId: null, categorySource: null },
+        { id: "sib-ai", description: "שופרסל דיל", categoryId: "old", categorySource: "ai" },
+      ],
+    });
+
+    const { fannedOut } = await recordAssignment(
+      { transactionId: "target", toCategoryId: "cat-food", tier: "user" },
+      store,
+    );
+    await undoFanOut(fannedOut, store);
+
+    const byId = (id: string) => txns.find((t) => t.id === id)!;
+    expect(byId("sib-null")).toMatchObject({ categoryId: null, categorySource: null });
+    expect(byId("sib-ai")).toMatchObject({ categoryId: "old", categorySource: "ai" });
+    // The user's own assignment and the memory entry both survive the undo.
+    expect(byId("target")).toMatchObject({ categoryId: "cat-food", categorySource: "user" });
+    expect(entries[0]).toMatchObject({ categoryId: "cat-food", source: "user" });
+    expect(corrections).toHaveLength(0);
   });
 });
 
@@ -372,7 +432,107 @@ describe("applyCorrection", () => {
   it("returns count 0 for an unknown transaction and writes nothing", async () => {
     const { store, corrections } = createStore();
     const result = await applyCorrection({ transactionId: "ghost", toCategoryId: "c" }, store);
-    expect(result).toEqual({ fanOutCount: 0 });
+    expect(result).toEqual({ fanOutCount: 0, fannedOut: [] });
     expect(corrections).toHaveLength(0);
+  });
+
+  it("no-ops when the target category equals the current one: no log row, no memory write, no fan-out", async () => {
+    const { store, txns, entries, corrections } = createStore({
+      txns: [
+        { id: "target", description: "שופרסל דיל", categoryId: "cat-food", categorySource: "rule" },
+        { id: "sib", description: "שופרסל דיל", categoryId: null, categorySource: null },
+      ],
+      categoryNames: { "cat-food": "מזון" },
+    });
+
+    const result = await applyCorrection(
+      { transactionId: "target", toCategoryId: "cat-food" },
+      store,
+    );
+
+    expect(result).toEqual({ fanOutCount: 0, fannedOut: [] });
+    expect(corrections).toHaveLength(0);
+    expect(entries).toHaveLength(0);
+    expect(txns.find((t) => t.id === "target")).toMatchObject({ categorySource: "rule" });
+    expect(txns.find((t) => t.id === "sib")).toMatchObject({ categoryId: null });
+  });
+});
+
+// ── applyBulkCategorization ───────────────────────────────────────────────────
+
+describe("applyBulkCategorization", () => {
+  it("logs a correction per recategorized row, marks all selected 'user', learns per merchant, fans out to non-selected siblings", async () => {
+    const { store, txns, entries, corrections } = createStore({
+      txns: [
+        // Two selected rows of the same merchant, both previously categorized.
+        { id: "s1", description: "שופרסל דיל", categoryId: "cat-a", categorySource: "rule" },
+        { id: "s2", description: "שופרסל דיל", categoryId: "cat-b", categorySource: "ai" },
+        // Selected, uncategorized (first-time) — no log row.
+        { id: "s3", description: "רמי לוי", categoryId: null, categorySource: null },
+        // Non-selected same-key siblings.
+        { id: "sib-1", description: "שופרסל דיל", categoryId: null, categorySource: null },
+        { id: "sib-2", description: "רמי לוי", categoryId: "old", categorySource: "ai" },
+        { id: "sib-user", description: "שופרסל דיל", categoryId: "keep", categorySource: "user" },
+      ],
+      categoryNames: { "cat-a": "א", "cat-b": "ב", "cat-food": "מזון" },
+    });
+
+    const result = await applyBulkCategorization(
+      { transactionIds: ["s1", "s2", "s3"], toCategoryId: "cat-food" },
+      store,
+    );
+
+    // One log row per recategorized transaction (s1, s2), none for first-time s3.
+    expect(corrections).toHaveLength(2);
+    expect(corrections.map((c) => c.transactionId).sort()).toEqual(["s1", "s2"]);
+    expect(corrections.find((c) => c.transactionId === "s1")).toMatchObject({
+      fromCategoryName: "א",
+      toCategoryName: "מזון",
+      fromSource: "rule",
+    });
+
+    const byId = (id: string) => txns.find((t) => t.id === id)!;
+    for (const id of ["s1", "s2", "s3"]) {
+      expect(byId(id)).toMatchObject({ categoryId: "cat-food", categorySource: "user" });
+    }
+
+    // One user-tier entry per distinct merchant.
+    expect(entries.map((e) => e.merchantKey).sort()).toEqual(
+      [deriveMerchantKey("שופרסל דיל"), deriveMerchantKey("רמי לוי")].sort(),
+    );
+    expect(entries.every((e) => e.source === "user" && e.categoryId === "cat-food")).toBe(true);
+
+    // Fan-out reaches non-selected overwritable siblings only.
+    expect(result.fanOutCount).toBe(2);
+    expect(byId("sib-1")).toMatchObject({ categoryId: "cat-food", categorySource: "memory" });
+    expect(byId("sib-2")).toMatchObject({ categoryId: "cat-food", categorySource: "memory" });
+    expect(byId("sib-user")).toMatchObject({ categoryId: "keep", categorySource: "user" });
+    expect(result.fannedOut).toContainEqual({
+      id: "sib-2",
+      previousCategoryId: "old",
+      previousCategorySource: "ai",
+    });
+  });
+
+  it("skips log rows for selected rows already at the target category", async () => {
+    const { store, corrections } = createStore({
+      txns: [
+        { id: "s1", description: "שופרסל דיל", categoryId: "cat-food", categorySource: "rule" },
+      ],
+      categoryNames: { "cat-food": "מזון" },
+    });
+
+    await applyBulkCategorization({ transactionIds: ["s1"], toCategoryId: "cat-food" }, store);
+
+    expect(corrections).toHaveLength(0);
+  });
+
+  it("returns count 0 when no selected transactions exist", async () => {
+    const { store } = createStore();
+    const result = await applyBulkCategorization(
+      { transactionIds: ["ghost"], toCategoryId: "c" },
+      store,
+    );
+    expect(result).toEqual({ fanOutCount: 0, fannedOut: [] });
   });
 });

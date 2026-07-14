@@ -4,10 +4,12 @@ export type {
   MemoryEntry,
   CorrectionTxn,
   OverwritableTxn,
+  FannedOutRow,
   NewCorrection,
   MerchantMemoryStore,
   RecordAssignmentInput,
   ApplyCorrectionInput,
+  ApplyBulkCategorizationInput,
 } from "./memory";
 export {
   deriveMerchantKey,
@@ -17,5 +19,13 @@ export {
   lookupMemory,
   recordAssignment,
   applyCorrection,
+  applyBulkCategorization,
+  undoFanOut,
 } from "./memory";
-export { createMerchantMemoryStore, changeTransactionCategory } from "./store";
+export {
+  createMerchantMemoryStore,
+  changeTransactionCategory,
+  bulkChangeTransactionCategories,
+  undoCategoryFanOut,
+  overwriteLawSql,
+} from "./store";

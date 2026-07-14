@@ -10,17 +10,30 @@ vi.mock("next/cache", () => ({
 
 vi.mock("@/lib/transactions", () => ({
   updateTransaction: vi.fn(),
-  bulkCategorize: vi.fn(),
 }));
 
 vi.mock("@/lib/merchant-memory", () => ({
-  changeTransactionCategory: vi.fn(async () => ({ fanOutCount: 0, wasCorrection: false })),
+  changeTransactionCategory: vi.fn(async () => ({
+    fanOutCount: 0,
+    fannedOut: [],
+    wasCorrection: false,
+  })),
+  bulkChangeTransactionCategories: vi.fn(async () => ({ fanOutCount: 0, fannedOut: [] })),
+  undoCategoryFanOut: vi.fn(),
 }));
 
 import { revalidatePath } from "next/cache";
-import { updateTransaction, bulkCategorize } from "@/lib/transactions";
-import { changeTransactionCategory } from "@/lib/merchant-memory";
-import { updateTransactionAction, bulkCategorizeAction } from "@/app/actions/transactions";
+import { updateTransaction } from "@/lib/transactions";
+import {
+  changeTransactionCategory,
+  bulkChangeTransactionCategories,
+  undoCategoryFanOut,
+} from "@/lib/merchant-memory";
+import {
+  updateTransactionAction,
+  bulkCategorizeAction,
+  undoFanOutAction,
+} from "@/app/actions/transactions";
 
 const VALID_TXN_ID = "3f8a2b1c-4d5e-4f6a-8b7c-9d0e1f2a3b4c";
 const VALID_CATEGORY_ID = "7c6b5a4d-3e2f-4a1b-9c8d-0e1f2a3b4c5d";
@@ -53,6 +66,7 @@ describe("updateTransactionAction", () => {
 
     expect(result.fieldErrors?.categoryId).toBe("מזהה קטגוריה לא תקין");
     expect(updateTransaction).not.toHaveBeenCalled();
+    expect(changeTransactionCategory).not.toHaveBeenCalled();
   });
 
   it("rejects an update with no fields to change without touching the module", async () => {
@@ -77,9 +91,13 @@ describe("updateTransactionAction", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 
-  it("routes a category assignment through merchant memory and reports the fan-out count", async () => {
+  it("routes a category assignment through merchant memory and reports the fan-out", async () => {
+    const fannedOut = [
+      { id: OTHER_TXN_ID, previousCategoryId: null, previousCategorySource: null },
+    ];
     vi.mocked(changeTransactionCategory).mockResolvedValueOnce({
-      fanOutCount: 3,
+      fanOutCount: 1,
+      fannedOut,
       wasCorrection: true,
     });
 
@@ -88,7 +106,7 @@ describe("updateTransactionAction", () => {
       categoryId: VALID_CATEGORY_ID,
     });
 
-    expect(result).toEqual({ updated: true, fanOutCount: 3 });
+    expect(result).toEqual({ updated: true, fanOutCount: 1, fannedOut });
     expect(changeTransactionCategory).toHaveBeenCalledWith(VALID_TXN_ID, VALID_CATEGORY_ID);
     // Assignment does not go through the plain update path.
     expect(updateTransaction).not.toHaveBeenCalled();
@@ -128,7 +146,7 @@ describe("bulkCategorizeAction", () => {
     });
 
     expect(result.error).toContain("יש לספק לפחות עסקה אחת");
-    expect(bulkCategorize).not.toHaveBeenCalled();
+    expect(bulkChangeTransactionCategories).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
@@ -139,7 +157,7 @@ describe("bulkCategorizeAction", () => {
     });
 
     expect(result.fieldErrors?.categoryId).toBe("יש לבחור קטגוריה");
-    expect(bulkCategorize).not.toHaveBeenCalled();
+    expect(bulkChangeTransactionCategories).not.toHaveBeenCalled();
   });
 
   it("rejects a malformed transaction id within the list without touching the module", async () => {
@@ -149,34 +167,83 @@ describe("bulkCategorizeAction", () => {
     });
 
     expect(result.fieldErrors?.["transactionIds.1"]).toBe("מזהה עסקה לא תקין");
-    expect(bulkCategorize).not.toHaveBeenCalled();
+    expect(bulkChangeTransactionCategories).not.toHaveBeenCalled();
   });
 
   it("rejects non-object input without touching the module", async () => {
     const result = await bulkCategorizeAction("not an object");
 
     expect(result.error).toBeTruthy();
-    expect(bulkCategorize).not.toHaveBeenCalled();
+    expect(bulkChangeTransactionCategories).not.toHaveBeenCalled();
   });
 
-  it("delegates valid input to the module in a single call and revalidates once", async () => {
+  it("delegates valid input to merchant memory in a single call, reports fan-out, revalidates once", async () => {
+    const fannedOut = [
+      {
+        id: "9f8e7d6c-5b4a-4f3e-8d2c-1b0a9f8e7d6c",
+        previousCategoryId: null,
+        previousCategorySource: null,
+      },
+    ];
+    vi.mocked(bulkChangeTransactionCategories).mockResolvedValueOnce({
+      fanOutCount: 1,
+      fannedOut,
+    });
+
     const result = await bulkCategorizeAction({
       transactionIds: [VALID_TXN_ID, OTHER_TXN_ID],
       categoryId: VALID_CATEGORY_ID,
     });
 
-    expect(result).toEqual({ updated: 2 });
-    expect(bulkCategorize).toHaveBeenCalledTimes(1);
-    expect(bulkCategorize).toHaveBeenCalledWith([VALID_TXN_ID, OTHER_TXN_ID], VALID_CATEGORY_ID);
+    expect(result).toEqual({ updated: 2, fanOutCount: 1, fannedOut });
+    expect(bulkChangeTransactionCategories).toHaveBeenCalledTimes(1);
+    expect(bulkChangeTransactionCategories).toHaveBeenCalledWith(
+      [VALID_TXN_ID, OTHER_TXN_ID],
+      VALID_CATEGORY_ID,
+    );
     // Bulk touches many rows — revalidate ONCE per action call, not per row.
     expect(vi.mocked(revalidatePath).mock.calls).toEqual([["/transactions"], ["/"]]);
   });
 
   it("rethrows unexpected module failures", async () => {
-    vi.mocked(bulkCategorize).mockRejectedValue(new Error("connection refused"));
+    vi.mocked(bulkChangeTransactionCategories).mockRejectedValue(new Error("connection refused"));
 
     await expect(
       bulkCategorizeAction({ transactionIds: [VALID_TXN_ID], categoryId: VALID_CATEGORY_ID }),
     ).rejects.toThrow("connection refused");
+  });
+});
+
+// ── undoFanOutAction ────────────────────────────────────────────────────────────
+
+describe("undoFanOutAction", () => {
+  it("rejects an empty rows list without touching the module", async () => {
+    const result = await undoFanOutAction({ rows: [] });
+
+    expect(result.error).toContain("אין החלה לביטול");
+    expect(undoCategoryFanOut).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed previous source without touching the module", async () => {
+    const result = await undoFanOutAction({
+      rows: [{ id: VALID_TXN_ID, previousCategoryId: null, previousCategorySource: "hacked" }],
+    });
+
+    expect(result.error).toBeTruthy();
+    expect(undoCategoryFanOut).not.toHaveBeenCalled();
+  });
+
+  it("delegates valid rows to merchant memory and revalidates", async () => {
+    const rows = [
+      { id: VALID_TXN_ID, previousCategoryId: VALID_CATEGORY_ID, previousCategorySource: "ai" },
+      { id: OTHER_TXN_ID, previousCategoryId: null, previousCategorySource: null },
+    ];
+
+    const result = await undoFanOutAction({ rows });
+
+    expect(result).toEqual({ undone: 2 });
+    expect(undoCategoryFanOut).toHaveBeenCalledWith(rows);
+    expect(revalidatePath).toHaveBeenCalledWith("/transactions");
   });
 });

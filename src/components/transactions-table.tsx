@@ -12,7 +12,12 @@ import {
   Inbox,
 } from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
-import { updateTransactionAction, bulkCategorizeAction } from "@/app/actions/transactions";
+import {
+  updateTransactionAction,
+  bulkCategorizeAction,
+  undoFanOutAction,
+} from "@/app/actions/transactions";
+import type { FannedOutRow } from "@/lib/merchant-memory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -219,16 +224,38 @@ function CategoryCell({
 
 // ── Fan-out notice ────────────────────────────────────────────────────────────
 // After a category assignment, merchant memory auto-applies the choice to
-// same-key transactions (ADR-0010 §4). Surface the count with one-click undo,
-// not a confirmation modal.
+// same-key transactions (ADR-0010 §4): a count with one-click undo, not a
+// confirmation modal. Undo restores the siblings' prior category+provenance;
+// the memory entry the user wrote stays.
 
-function FanOutNotice({ count, onDismiss }: { count: number; onDismiss: () => void }) {
+function FanOutNotice({
+  count,
+  onUndo,
+  onDismiss,
+}: {
+  count: number;
+  onUndo: () => Promise<void>;
+  onDismiss: () => void;
+}) {
+  const [undoing, setUndoing] = React.useState(false);
+
+  async function handleUndo() {
+    setUndoing(true);
+    await onUndo();
+    setUndoing(false);
+  }
+
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+    <div className="bg-muted/50 flex items-center justify-between gap-4 rounded-lg border px-4 py-3 text-sm">
       <span>הוחל על עוד {count} עסקאות של אותו בית עסק</span>
-      <Button size="sm" variant="outline" onClick={onDismiss}>
-        סגור
-      </Button>
+      <div className="flex shrink-0 gap-2">
+        <Button size="sm" variant="ghost" onClick={onDismiss}>
+          סגור
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleUndo} disabled={undoing}>
+          {undoing ? "מבטל..." : "בטל החלה"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -279,7 +306,10 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkCategoryId, setBulkCategoryId] = React.useState("");
   const [bulkApplying, setBulkApplying] = React.useState(false);
-  const [fanOutNotice, setFanOutNotice] = React.useState<number | null>(null);
+  const [fanOutNotice, setFanOutNotice] = React.useState<{
+    count: number;
+    rows: FannedOutRow[];
+  } | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
   React.useEffect(() => {
@@ -351,9 +381,34 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
       const result = await updateTransactionAction({ id, categoryId });
       if (!result.error) {
         setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, categoryId } : t)));
-        setFanOutNotice(result.fanOutCount && result.fanOutCount > 0 ? result.fanOutCount : null);
+        applyFanOutResult(categoryId, result.fannedOut);
       }
     });
+  }
+
+  function applyFanOutResult(categoryId: string, fannedOut: FannedOutRow[] | undefined) {
+    if (fannedOut && fannedOut.length > 0) {
+      const fannedIds = new Set(fannedOut.map((r) => r.id));
+      setTransactions((prev) => prev.map((t) => (fannedIds.has(t.id) ? { ...t, categoryId } : t)));
+      setFanOutNotice({ count: fannedOut.length, rows: fannedOut });
+    } else {
+      setFanOutNotice(null);
+    }
+  }
+
+  async function handleUndoFanOut() {
+    if (!fanOutNotice) return;
+    const rows = fanOutNotice.rows;
+    const result = await undoFanOutAction({ rows });
+    if (!result.error) {
+      setTransactions((prev) =>
+        prev.map((t) => {
+          const restored = rows.find((r) => r.id === t.id);
+          return restored ? { ...t, categoryId: restored.previousCategoryId } : t;
+        }),
+      );
+      setFanOutNotice(null);
+    }
   }
 
   const allSelected = transactions.length > 0 && transactions.every((t) => selected.has(t.id));
@@ -386,6 +441,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
         setTransactions((prev) => prev.map((t) => (selected.has(t.id) ? { ...t, categoryId } : t)));
         setSelected(new Set());
         setBulkCategoryId("");
+        applyFanOutResult(categoryId, result.fannedOut);
       }
       setBulkApplying(false);
     });
@@ -397,7 +453,11 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   return (
     <div className="space-y-4">
       {fanOutNotice !== null && (
-        <FanOutNotice count={fanOutNotice} onDismiss={() => setFanOutNotice(null)} />
+        <FanOutNotice
+          count={fanOutNotice.count}
+          onUndo={handleUndoFanOut}
+          onDismiss={() => setFanOutNotice(null)}
+        />
       )}
 
       {/* Filter bar */}

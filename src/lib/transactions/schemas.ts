@@ -39,3 +39,17 @@ export const bulkCategorizeSchema = z.object({
     .min(1, { message: "יש לספק לפחות עסקה אחת" }),
   categoryId: z.string().uuid({ message: "יש לבחור קטגוריה" }),
 });
+
+export const undoFanOutSchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        id: z.string().uuid({ message: "מזהה עסקה לא תקין" }),
+        previousCategoryId: z.string().uuid({ message: "מזהה קטגוריה לא תקין" }).nullable(),
+        previousCategorySource: z
+          .enum(["rule", "memory", "ai", "user"], { message: "מקור קטגוריה לא תקין" })
+          .nullable(),
+      }),
+    )
+    .min(1, { message: "אין החלה לביטול" }),
+});

@@ -46,7 +46,7 @@ When building new features, follow the deep module pattern:
 - **5 types:** `income`, `expense`, `investment`, `transfer`, `ignore`
 - **Rule-based auto-categorization** with priority ordering.
 - **Match types:** `contains`, `starts_with`, `exact`, `regex`
-- Manual assignment triggers a "Create rule?" suggestion.
+- Manual assignment writes user-tier **merchant memory** — the default learning path (ADR-0010). Rules are authored deliberately in Settings; there is no "Create rule?" suggestion.
 - `transfer` and `ignore` are excluded from all financial totals.
 - `investment` is tracked separately from expenses.
 

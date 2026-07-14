@@ -1,8 +1,8 @@
 import { db } from "@/db";
 import { transactions, categoryRules } from "@/db/schema";
-import { eq, or, isNull, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { categorize, type CategoryRule } from "./rules";
-import { canOverwrite, type CategorySource } from "@/lib/merchant-memory";
+import { canOverwrite, overwriteLawSql, type CategorySource } from "@/lib/merchant-memory";
 
 export type OverwritableTransaction = {
   id: string;
@@ -78,7 +78,7 @@ export const drizzleRetroactiveStore: RetroactiveStore = {
         categorySource: transactions.categorySource,
       })
       .from(transactions)
-      .where(or(isNull(transactions.categorySource), eq(transactions.categorySource, "ai")));
+      .where(overwriteLawSql());
   },
 
   async categorizeTransactions(ids: string[], categoryId: string): Promise<number> {

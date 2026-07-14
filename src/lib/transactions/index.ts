@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { bankAccounts, transactions, recurringExpenses } from "@/db/schema";
-import { eq, and, gte, lte, ilike, inArray, isNull, count } from "drizzle-orm";
+import { eq, and, gte, lte, ilike, isNull, count } from "drizzle-orm";
 import { categorize, getRules } from "@/lib/categories/rules";
 import type { ScrapedAccount } from "@/lib/scraper/types";
 import { importTransaction, type Categorization } from "./import";
@@ -213,47 +213,22 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
   return buildPaginatedResult(data, total, page, pageSize);
 }
 
+/**
+ * Category ASSIGNMENT is not accepted here — `categoryId` is typed as `null`
+ * only, so an assignment cannot bypass merchant-memory's atomic
+ * memory+log+fan-out path (`changeTransactionCategory` /
+ * `bulkChangeTransactionCategories`, ADR-0010 §6). This path edits the custom
+ * description and clears a category (which also clears its provenance).
+ */
 export async function updateTransaction(
   id: string,
-  changes: { customDescription?: string | null; categoryId?: string | null },
+  changes: { customDescription?: string | null; categoryId?: null },
 ): Promise<void> {
   const dbChanges: Record<string, unknown> = { updatedAt: new Date() };
   if ("customDescription" in changes) dbChanges.customDescription = changes.customDescription;
-  // Category assignment routes through merchant-memory (changeTransactionCategory);
-  // this path only clears a category, which also clears its provenance.
   if ("categoryId" in changes) {
-    dbChanges.categoryId = changes.categoryId;
-    dbChanges.categorySource = changes.categoryId === null ? null : "user";
+    dbChanges.categoryId = null;
+    dbChanges.categorySource = null;
   }
   await db.update(transactions).set(dbChanges).where(eq(transactions.id, id));
-}
-
-/**
- * Bulk manual categorization is a user decision, so rows are marked `user`
- * (protecting them from automation under the overwrite law) and every distinct
- * merchant learns a user-tier memory entry. No fan-out — the selected set IS
- * the explicit scope.
- */
-export async function bulkCategorize(transactionIds: string[], categoryId: string): Promise<void> {
-  await db.transaction(async (tx) => {
-    const rows = await tx
-      .select({ id: transactions.id, description: transactions.description })
-      .from(transactions)
-      .where(inArray(transactions.id, transactionIds));
-
-    await tx
-      .update(transactions)
-      .set({ categoryId, categorySource: "user", updatedAt: new Date() })
-      .where(inArray(transactions.id, transactionIds));
-
-    const memoryStore = createMerchantMemoryStore(tx);
-    const now = new Date();
-    const seen = new Set<string>();
-    for (const row of rows) {
-      const key = deriveMerchantKey(row.description);
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      await memoryStore.upsertEntry({ merchantKey: key, categoryId, source: "user" }, now);
-    }
-  });
 }
