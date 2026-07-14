@@ -89,7 +89,7 @@ Invariants: it is **display-only** — it never enters Net Savings, expenses, or
 
 ### `category` and `category rule`
 
-A `category` is a Hebrew-named bucket with a `type` (see above). A `category rule` is a pattern that auto-assigns a category to matching transactions. Rules have a `priority` integer; higher priority wins. When the user manually assigns a category, the UI suggests creating a rule from that assignment.
+A `category` is a Hebrew-named bucket with a `type` (see above). A `category rule` is a pattern that auto-assigns a category to matching transactions. Rules have a `priority` integer; higher priority wins. Rules are the top precedence layer — deliberately-authored law for pattern-shaped semantics (chain-wide matches, bank-mechanics strings). Per [ADR-0010](./docs/adr/0010-categorization-precedence-and-merchant-memory.md) they no longer grow by default: the "Create rule?" suggestion on manual assignment is removed; merchant memory is the default learning path.
 
 ### `match type`
 
@@ -97,7 +97,19 @@ Rules match by one of four match types: `contains`, `starts_with`, `exact`, `reg
 
 ### `retroactive application` (Phase 2)
 
-Applying a newly created rule to existing uncategorized transactions, or to transactions whose current rule has strictly lower priority than the new rule. Carries the workflow load that AI categorization was meant to handle (per ADR-0005). Lives in `categories/rules.ts` as `previewRetroactiveApply` + `applyRetroactively`.
+Applying a newly created rule to existing transactions, governed by the `overwrite law` (below): uncategorized and `ai`-sourced assignments may be overwritten; `user`/`rule`/`memory`-sourced never. (Phase 2 shipped fill-NULL-only; ADR-0010 extends it to `ai` rows.) Lives in `categories/retroactive.ts` as `previewRetroactiveApply` + `applyRetroactively`.
+
+### `overwrite law` — load-bearing
+
+The single rule governing every automated recategorization (retroactive rule application, memory fan-out, AI runs): automation may overwrite only `NULL` and `ai`-sourced assignments. `user`, `rule`, and `memory`-sourced assignments are never overwritten by automation. One sentence explains the system: user decisions are never overwritten; AI guesses yield to everything. Locked in [ADR-0010](./docs/adr/0010-categorization-precedence-and-merchant-memory.md).
+
+### `category_source`
+
+Provenance enum on transactions: `rule | memory | ai | user` (NULL = uncategorized). Records the **trust tier, not the mechanism** — a user-tier merchant-memory hit writes `memory`; an ai-tier hit writes `ai`, so a cached AI guess never gains protected status by passing through the cache.
+
+### `corrections log`
+
+Append-only record of every user recategorization of an already-categorized transaction: merchant key, pre-redacted description snapshot, from/to category **name snapshots** (immutable history that survives taxonomy changes), `from_source`, timestamp. First-time labeling is a memory write, not a correction. Consumers: AI prompts read `from_source = 'ai'` rows as anti-examples; taxonomy work (#133) reads the whole log as oscillation evidence.
 
 ---
 
@@ -119,11 +131,11 @@ The 1–7 confidence rubric every provider must return, with each level behaviou
 
 ### `tiered auto-apply`
 
-Trust posture for AI suggestions: merchant-memory hits always apply; confidence 6–7 auto-applies marked-as-AI with one-click undo (overrides feed the corrections log); 3–5 queue as review suggestions; 1–2 stay uncategorized.
+Trust posture for AI suggestions: merchant-memory hits always apply (user-tier as trusted, ai-tier as a cached AI guess — see `merchant memory`); confidence 6–7 auto-applies marked-as-AI with one-click undo (overrides feed the corrections log); 3–5 queue as review suggestions; 1–2 stay uncategorized.
 
-### `merchant memory`
+### `merchant memory` — load-bearing
 
-Previously confirmed merchant-to-category mappings, consulted before any model call. A hit outranks any model output and applies without asking.
+Learned merchant-to-category mappings, consulted in bulk before any model call. Key = `extractMerchant(description)` (imported from `transaction-matching`, computed on raw `description`, never `custom_description`). Every assignment event writes an entry, in one of two trust tiers: **user-tier** (manual assignment, correction, explicit approval — hits always apply and outrank any model output) and **ai-tier** (written by confidence 6–7 auto-apply — hits skip the model call but the assignment stays marked AI-assigned with undo). Any user touch promotes the entry to user-tier. Conflicts are last-write-wins; a user-tier write fans out to existing same-key transactions under the `overwrite law`. Memory is managed through the transactions page (correcting any transaction of a merchant updates its entry) — it has no settings UI. Full model: [ADR-0010](./docs/adr/0010-categorization-precedence-and-merchant-memory.md).
 
 ### `zero-egress mode`
 

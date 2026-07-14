@@ -59,6 +59,10 @@ The external model (Gemini) and local Ollama sit behind the **same adapter inter
 | AI confidence 3–5   | Queued as review suggestions — nothing applied without user action.                                      |
 | AI confidence 1–2   | Transaction stays uncategorized. Low-confidence guesses are noise, not help.                             |
 
+## Clarification 2026-07-14
+
+The trust table's "Merchant-memory hit — always applies" row is refined by [ADR-0010](./0010-categorization-precedence-and-merchant-memory.md): memory entries carry a trust tier. **User-tier** hits (from manual assignment, correction, or explicit approval) apply as trusted and outrank any model output, as written. **Ai-tier** hits (written by confidence 6–7 auto-apply) also apply and skip the model call, but the resulting assignment stays marked AI-assigned with one-click undo — a cached AI guess does not gain trusted status by passing through the cache.
+
 ## Consequences
 
 - **Supersedes:** the local-only / "no third-party APIs" clause of ADR-0005. The deferral decision itself and the 70% threshold stand; only the local-only constraint is replaced by the redaction boundary.
