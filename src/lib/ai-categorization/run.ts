@@ -11,6 +11,7 @@ import { matchesTransferDescriptor, type TransferDescriptorKind } from "@/lib/tr
 import { assemblePrompt, chunkIntoBatches, BATCH_SIZE, type PromptCategory } from "./prompt";
 import { parseCategorizationResponse } from "./parse";
 import { routeConfidence } from "./router";
+import { planPacing, type PacingPolicy } from "./pacing";
 import type { CategorizationProvider, GenerationOptions } from "./provider";
 
 export type BankType = "discount" | "max" | "visaCal";
@@ -89,6 +90,12 @@ export interface AiCategorizationSummary {
   readonly totalUncategorized: number;
   readonly memoryApplied: number;
   readonly transferSkipped: number;
+  /**
+   * Ids of the transfer-guarded transactions (the `transferSkipped` population).
+   * The sync step routes those still unpaired after reconciliation P3 into the
+   * suspected-transfer inbox; the AI step itself never writes transfer semantics.
+   */
+  readonly transferSkippedIds: readonly string[];
   readonly autoApplied: number;
   readonly queuedForReview: number;
   readonly discarded: number;
@@ -99,11 +106,24 @@ export interface AiCategorizationSummary {
   readonly failures: RunFailure[];
 }
 
+/**
+ * Inter-batch pacing wiring. The pure `planPacing` policy owns every timing
+ * decision; `sleep` is the injected, impure timer the batch loop awaits between
+ * batches (the sync layer passes a real `setTimeout`, tests pass a fake). Absent,
+ * batches fire back-to-back — the retry-side pacing inside `provider.generate`
+ * is unaffected either way.
+ */
+export interface BatchPacing {
+  readonly policy: PacingPolicy;
+  readonly sleep: (ms: number) => Promise<void>;
+}
+
 export interface RunDeps {
   readonly aiStore: AiCategorizationStore;
   readonly memoryStore: MerchantMemoryStore;
   readonly provider: CategorizationProvider;
   readonly options?: RunOptions;
+  readonly pacing?: BatchPacing;
 }
 
 /**
@@ -206,9 +226,11 @@ export async function runAiCategorization(
 
   // ── Step 2: transfer guard (never sent to a provider) ──
   const afterTransfer: UncategorizedTxn[] = [];
+  const transferSkippedIds: string[] = [];
   for (const txn of afterMemory) {
     if (matchesTransferDescriptor(txn.description, transferKindsFor(txn.bankType))) {
       transferSkipped++;
+      transferSkippedIds.push(txn.id);
     } else {
       afterTransfer.push(txn);
     }
@@ -238,6 +260,14 @@ export async function runAiCategorization(
     batchCount = batches.length;
 
     for (let b = 0; b < batches.length; b++) {
+      // Steady inter-batch pause (planPacing's `ok` branch): the policy is the
+      // single source of the delay, `sleep` the only impure part. Paced before
+      // each batch after the first, so batches are spaced, not front-loaded.
+      if (deps.pacing && b > 0) {
+        const decision = planPacing(deps.pacing.policy, { attempt: 1, outcome: "ok" });
+        if (decision.delayMs > 0) await deps.pacing.sleep(decision.delayMs);
+      }
+
       const batch = batches[b];
       const redacted = batch.map((t) => redactText(t.description));
       const prompt = assemblePrompt({
@@ -315,6 +345,7 @@ export async function runAiCategorization(
     totalUncategorized: all.length,
     memoryApplied,
     transferSkipped,
+    transferSkippedIds,
     autoApplied,
     queuedForReview,
     discarded,

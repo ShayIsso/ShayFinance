@@ -25,12 +25,13 @@ export type {
   RunOptions,
   RunFailure,
   RunDeps,
+  BatchPacing,
   AiCategorizationSummary,
 } from "./run";
 export { runAiCategorization } from "./run";
 export { createAiCategorizationStore } from "./store";
 export type { ProviderErrorKind } from "./provider-http";
-export { ProviderError } from "./provider-http";
+export { ProviderError, DEFAULT_PACING } from "./provider-http";
 export type { GeminiProviderConfig, GeminiModel } from "./gemini";
 export { createGeminiProvider, GEMINI_DEFAULT_MODEL } from "./gemini";
 export type { OllamaProviderConfig } from "./ollama";

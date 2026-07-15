@@ -113,6 +113,55 @@ describe("approveGroup — P2 transfer_pair", () => {
   });
 });
 
+describe("approveGroup — suspected transfer (singleton, AI-step routing #148)", () => {
+  it("identifies the single member as bankSide and passes the transfer category", async () => {
+    const single = makeTxn({
+      id: "sus-1",
+      bankType: "max",
+      reconciliationRole: "transfer_pair",
+      description: "העברה בנקאית",
+      reconciliationConfidence: 0.5,
+      reconciliationConfirmedAt: null,
+    });
+
+    const store = makeStore({
+      getGroupMembers: vi.fn().mockResolvedValue([single]),
+      getCategoryIdByName: vi.fn().mockResolvedValue("cat-transfer-id"),
+    });
+
+    const result = await approveGroup("group-sus", store);
+
+    expect(result.error).toBeUndefined();
+    expect(store.confirmGroup).toHaveBeenCalledOnce();
+    const [groupId, , transferCatId] = vi.mocked(store.confirmGroup).mock.calls[0];
+    expect(groupId).toBe("group-sus");
+    expect(transferCatId).toBe("cat-transfer-id");
+  });
+});
+
+describe("rejectGroup — suspected transfer (singleton)", () => {
+  it("clears the group and re-runs the rule engine on the single member", async () => {
+    const single = makeTxn({
+      id: "sus-1",
+      reconciliationRole: "transfer_pair",
+      description: "העברה בנקאית",
+      reconciliationConfidence: 0.5,
+      reconciliationConfirmedAt: null,
+    });
+    const store = makeStore({
+      getGroupMembers: vi.fn().mockResolvedValue([single]),
+      getRulesOrderedByPriority: vi.fn().mockResolvedValue([]),
+    });
+
+    const result = await rejectGroup("group-sus", store);
+
+    expect(result.error).toBeUndefined();
+    expect(store.clearGroup).toHaveBeenCalledWith(["group-sus"]);
+    // No rule matches → the row goes back to uncategorized.
+    expect(store.setCategory).toHaveBeenCalledWith("sus-1", null);
+  });
+});
+
 describe("rejectGroup", () => {
   it("clears all reconciliation columns on all group members", async () => {
     const lump = makeTxn({ id: "lump-1", reconciliationRole: "settlement_lump" });
