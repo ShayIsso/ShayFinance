@@ -27,6 +27,16 @@ describe("resolveCategoryFilter", () => {
   it("returns all mode when uncategorized is false and no categoryId", () => {
     expect(resolveCategoryFilter({ uncategorized: false })).toEqual({ mode: "all" });
   });
+
+  it("returns needsReview mode when needsReview is true", () => {
+    expect(resolveCategoryFilter({ needsReview: true })).toEqual({ mode: "needsReview" });
+  });
+
+  it("needsReview wins over uncategorized and categoryId", () => {
+    expect(
+      resolveCategoryFilter({ needsReview: true, uncategorized: true, categoryId: "cat-1" }),
+    ).toEqual({ mode: "needsReview" });
+  });
 });
 
 describe("buildPaginatedResult", () => {
@@ -68,6 +78,26 @@ describe("transactionFiltersSchema uncategorized parsing", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("uncategorized חייב להיות true או false");
+    }
+  });
+});
+
+describe("transactionFiltersSchema needsReview parsing", () => {
+  it('parses "true" to boolean true', () => {
+    const parsed = transactionFiltersSchema.parse({ needsReview: "true" });
+    expect(parsed.needsReview).toBe(true);
+  });
+
+  it("defaults to false when omitted", () => {
+    const parsed = transactionFiltersSchema.parse({});
+    expect(parsed.needsReview).toBe(false);
+  });
+
+  it("rejects an invalid needsReview value with a Hebrew message", () => {
+    const result = transactionFiltersSchema.safeParse({ needsReview: "yes" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe("needsReview חייב להיות true או false");
     }
   });
 });

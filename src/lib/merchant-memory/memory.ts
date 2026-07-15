@@ -59,6 +59,12 @@ export type MerchantMemoryStore = {
   recordHits(keys: string[], now: Date): Promise<void>;
   getEntry(merchantKey: string): Promise<MemoryEntry | null>;
   upsertEntry(entry: MemoryEntry, now: Date): Promise<void>;
+  /**
+   * Retracts an ai-tier memory entry (ticket #149 — AI-assignment undo only).
+   * The tier constraint is part of the contract at every layer: implementations
+   * must refuse to delete a user-tier row even when handed its key.
+   */
+  deleteAiTierEntry(merchantKey: string): Promise<void>;
   getTransaction(id: string): Promise<CorrectionTxn | null>;
   getCategoryName(categoryId: string): Promise<string | null>;
   /**
@@ -187,6 +193,23 @@ export async function undoFanOut(
 ): Promise<void> {
   if (rows.length === 0) return;
   await store.restoreTransactionCategories(rows, now);
+}
+
+/**
+ * Retracts a merchant's memory entry if — and only if — it is still ai-tier
+ * (undoing an AI assignment, ticket #149: the cache must not re-apply a guess
+ * the user just reverted). A user-tier entry is a confirmed mapping and is
+ * never removed by this automated path, even under the same merchant key.
+ */
+export async function removeAiTierEntry(
+  merchantKey: string,
+  store: MerchantMemoryStore,
+): Promise<void> {
+  if (!merchantKey) return;
+  const entry = await store.getEntry(merchantKey);
+  if (entry?.source === "ai") {
+    await store.deleteAiTierEntry(merchantKey);
+  }
 }
 
 export type RecordAssignmentInput = {

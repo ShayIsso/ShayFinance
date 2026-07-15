@@ -115,6 +115,13 @@ export interface RunDeps {
 // Locked by the benchmark shape (#144): deterministic JSON output, not caller-tunable.
 const GENERATION: GenerationOptions = { temperature: 0, json: true };
 
+// An ai-tier cache apply gets a suggestion row like any fresh auto-apply, so
+// undo and suppression work uniformly (#144 stories 5 and 12). ai-tier memory
+// is only ever seeded by a confidence>=6 auto-apply, so 6 is an honest floor;
+// "memory" as the model identifier marks the guess as served from cache.
+const MEMORY_CACHE_MODEL = "memory";
+const MEMORY_CACHE_CONFIDENCE = 6;
+
 function transferKindsFor(bankType: BankType): TransferDescriptorKind[] {
   return bankType === "discount"
     ? ["inter_account", "bit_mirror", "card_settlement"]
@@ -148,6 +155,13 @@ export async function runAiCategorization(
   let suppressedCount = 0;
   let overwriteBlocked = 0;
 
+  // Suppression covers every automation path: a rejected/undone (transaction,
+  // category) pair is never re-applied by the memory cache nor re-suggested by
+  // a provider (#144 story 5). User-tier memory is exempt — it is the user's
+  // own decision, which outranks a past rejection of an AI guess.
+  const suppressedRows = await aiStore.getSuppressedPairs(all.map((t) => t.id));
+  const suppressed = new Set(suppressedRows.map((p) => `${p.transactionId}|${p.categoryId}`));
+
   // ── Step 1: bulk merchant-memory lookup (ADR-0010 §1) ──
   const keyByTxn = new Map<string, string>();
   for (const txn of all) keyByTxn.set(txn.id, deriveMerchantKey(txn.description));
@@ -162,6 +176,11 @@ export async function runAiCategorization(
       afterMemory.push(txn);
       continue;
     }
+    if (entry.source !== "user" && suppressed.has(`${txn.id}|${entry.categoryId}`)) {
+      suppressedCount++;
+      afterMemory.push(txn);
+      continue;
+    }
     // Re-check the overwrite law at apply time: a row categorized as
     // user/rule/memory since fetch is never overwritten by automation.
     const current = await memoryStore.getTransaction(txn.id);
@@ -173,6 +192,15 @@ export async function runAiCategorization(
     // entry writes `ai` — a cached AI guess never gains protected status.
     const source: CategorySource = entry.source === "user" ? "memory" : "ai";
     await memoryStore.setTransactionCategory([txn.id], entry.categoryId, source, now);
+    if (source === "ai") {
+      await aiStore.insertSuggestion({
+        transactionId: txn.id,
+        categoryId: entry.categoryId,
+        confidence: MEMORY_CACHE_CONFIDENCE,
+        model: MEMORY_CACHE_MODEL,
+        status: "auto_applied",
+      });
+    }
     memoryApplied++;
   }
 
@@ -205,9 +233,6 @@ export async function runAiCategorization(
       description: redactText(a.description),
       correctedToCategoryName: a.correctedToCategoryName,
     }));
-
-    const suppressedRows = await aiStore.getSuppressedPairs(afterTransfer.map((t) => t.id));
-    const suppressed = new Set(suppressedRows.map((p) => `${p.transactionId}|${p.categoryId}`));
 
     const batches = chunkIntoBatches(afterTransfer, batchSize);
     batchCount = batches.length;

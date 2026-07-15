@@ -12,6 +12,11 @@ export const transactionFiltersSchema = z.object({
     .enum(["true", "false"], { message: "uncategorized חייב להיות true או false" })
     .optional()
     .transform((v) => v === "true"),
+  // Needs-review: exactly the rows with a pending AI suggestion (ticket #149).
+  needsReview: z
+    .enum(["true", "false"], { message: "needsReview חייב להיות true או false" })
+    .optional()
+    .transform((v) => v === "true"),
   search: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),

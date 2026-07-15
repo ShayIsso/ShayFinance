@@ -21,6 +21,7 @@ export {
   applyCorrection,
   applyBulkCategorization,
   undoFanOut,
+  removeAiTierEntry,
 } from "./memory";
 export {
   createMerchantMemoryStore,

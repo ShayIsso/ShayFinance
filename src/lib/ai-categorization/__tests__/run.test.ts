@@ -64,6 +64,10 @@ function createFake(seed: {
         entries.push({ ...entry, hitCount: 0 });
       }
     },
+    async deleteAiTierEntry(merchantKey) {
+      const idx = entries.findIndex((x) => x.merchantKey === merchantKey && x.source === "ai");
+      if (idx !== -1) entries.splice(idx, 1);
+    },
     async getTransaction(id) {
       const t = txns.find((x) => x.id === id);
       return t
@@ -415,6 +419,77 @@ describe("runAiCategorization — full pipeline", () => {
     expect(summary.suppressed).toBe(1);
     expect(fake.suggestions.filter((s) => s.model === "test-model")).toHaveLength(0);
     expect(fake.txns[0].categoryId).toBeNull();
+  });
+
+  it("backs an ai-tier cache apply with an auto_applied suggestion row (undo/suppression parity)", async () => {
+    const fake = createFake({
+      categories: CATS,
+      entries: [{ merchantKey: keyOf("רמי לוי"), categoryId: "c-food", source: "ai", hitCount: 0 }],
+      txns: [
+        {
+          id: "t-cache",
+          description: "רמי לוי",
+          bankType: "max",
+          categoryId: null,
+          categorySource: null,
+        },
+      ],
+    });
+    const provider = scriptedProvider([]);
+
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+    });
+
+    expect(summary.memoryApplied).toBe(1);
+    expect(fake.txns[0]).toMatchObject({ categoryId: "c-food", categorySource: "ai" });
+    expect(fake.suggestions).toHaveLength(1);
+    expect(fake.suggestions[0]).toMatchObject({
+      transactionId: "t-cache",
+      categoryId: "c-food",
+      model: "memory",
+      status: "auto_applied",
+    });
+  });
+
+  it("never re-applies an undone pair from the memory cache; the txn still reaches the provider", async () => {
+    const fake = createFake({
+      categories: CATS,
+      entries: [{ merchantKey: keyOf("רמי לוי"), categoryId: "c-food", source: "ai", hitCount: 0 }],
+      suggestions: [
+        {
+          transactionId: "t-undone",
+          categoryId: "c-food",
+          confidence: 6,
+          model: "memory",
+          status: "undone",
+        },
+      ],
+      txns: [
+        {
+          id: "t-undone",
+          description: "רמי לוי",
+          bankType: "max",
+          categoryId: null,
+          categorySource: null,
+        },
+      ],
+    });
+    const provider = scriptedProvider([{ match: "רמי", category: "תחבורה", confidence: 7 }]);
+
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+    });
+
+    expect(summary.memoryApplied).toBe(0);
+    expect(summary.suppressed).toBe(1);
+    // A different category from the provider still applies — suppression is per pair.
+    expect(summary.autoApplied).toBe(1);
+    expect(fake.txns[0]).toMatchObject({ categoryId: "c-transport", categorySource: "ai" });
   });
 
   it("records provider errors as failures without throwing", async () => {

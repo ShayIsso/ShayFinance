@@ -10,6 +10,9 @@ import {
   Repeat,
   SearchX,
   Inbox,
+  Bot,
+  Check,
+  X,
 } from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
 import {
@@ -17,6 +20,11 @@ import {
   bulkCategorizeAction,
   undoFanOutAction,
 } from "@/app/actions/transactions";
+import {
+  acceptSuggestionAction,
+  rejectSuggestionAction,
+  undoAiAssignmentAction,
+} from "@/app/actions/ai-review";
 import type { FannedOutRow } from "@/lib/merchant-memory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +53,13 @@ type RecurringInfo = {
   cadence: "monthly" | "quarterly" | "annual";
 };
 
+type PendingSuggestion = {
+  suggestionId: string;
+  categoryId: string;
+  categoryName: string;
+  confidence: number;
+};
+
 type Transaction = {
   id: string;
   bankAccountId: string;
@@ -60,10 +75,12 @@ type Transaction = {
   installmentTotal: number | null;
   status: "completed" | "pending";
   categoryId: string | null;
+  categorySource: "rule" | "memory" | "ai" | "user" | null;
   reconciliationGroupId: string | null;
   reconciliationConfirmedAt: string | null;
   recurringExpenseId: string | null;
   recurringExpense: RecurringInfo | null;
+  pendingSuggestion: PendingSuggestion | null;
 };
 
 type Filters = {
@@ -177,48 +194,157 @@ function DescriptionCell({
   );
 }
 
+// ── AI review affordances (ticket #149) ──────────────────────────────────────
+// A pending suggestion renders as an inline chip with one-click accept/reject.
+// Accept composes the same fan-out notice as manual assignment (recordAssignment
+// at user-tier); reject just suppresses the suggestion. An ai-assigned row
+// carries a marker instead, with one-click undo back to uncategorized.
+
+function SuggestionChip({
+  suggestion,
+  onAccept,
+  onReject,
+}: {
+  suggestion: PendingSuggestion;
+  onAccept: () => Promise<void>;
+  onReject: () => Promise<void>;
+}) {
+  const [busy, setBusy] = React.useState<"accept" | "reject" | null>(null);
+
+  async function handleAccept() {
+    setBusy("accept");
+    await onAccept();
+    setBusy(null);
+  }
+
+  async function handleReject() {
+    setBusy("reject");
+    await onReject();
+    setBusy(null);
+  }
+
+  return (
+    <div className="flex max-w-full items-center gap-1 rounded-md border border-dashed border-emerald-200 bg-emerald-50/60 px-1.5 py-0.5 text-xs">
+      <span className="truncate text-emerald-800">הצעה: {suggestion.categoryName}</span>
+      <span
+        title={`רמת ביטחון ${suggestion.confidence} מתוך 7`}
+        className="text-muted-foreground shrink-0"
+      >
+        ({suggestion.confidence}/7)
+      </span>
+      <button
+        onClick={handleAccept}
+        disabled={busy !== null}
+        title="אשר הצעה"
+        aria-label="אשר הצעה"
+        className="shrink-0 text-emerald-700 hover:text-emerald-900 disabled:opacity-50"
+      >
+        <Check className="h-3.5 w-3.5" strokeWidth={2} />
+      </button>
+      <button
+        onClick={handleReject}
+        disabled={busy !== null}
+        title="דחה הצעה"
+        aria-label="דחה הצעה"
+        className="text-muted-foreground shrink-0 hover:text-red-600 disabled:opacity-50"
+      >
+        <X className="h-3.5 w-3.5" strokeWidth={2} />
+      </button>
+    </div>
+  );
+}
+
+function AiMarker({ onUndo }: { onUndo: () => Promise<void> }) {
+  const [undoing, setUndoing] = React.useState(false);
+
+  async function handleUndo() {
+    setUndoing(true);
+    await onUndo();
+    setUndoing(false);
+  }
+
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <span
+        title="הקטגוריה שויכה אוטומטית על ידי AI"
+        aria-label="קוטלג על ידי AI"
+        className="text-muted-foreground inline-flex"
+      >
+        <Bot className="h-3.5 w-3.5" strokeWidth={1.5} />
+      </span>
+      <button
+        onClick={handleUndo}
+        disabled={undoing}
+        title="בטל שיוך AI"
+        aria-label="בטל שיוך AI"
+        className="text-muted-foreground inline-flex items-center hover:text-red-600 disabled:opacity-50"
+      >
+        <Undo2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+      </button>
+    </span>
+  );
+}
+
 function CategoryCell({
   transaction,
   categories,
   onAssign,
+  onAcceptSuggestion,
+  onRejectSuggestion,
+  onUndoAi,
 }: {
   transaction: Transaction;
   categories: Category[];
   onAssign: (id: string, categoryId: string) => Promise<void>;
+  onAcceptSuggestion: (transaction: Transaction) => Promise<void>;
+  onRejectSuggestion: (transaction: Transaction) => Promise<void>;
+  onUndoAi: (transaction: Transaction) => Promise<void>;
 }) {
   const category = categories.find((c) => c.id === transaction.categoryId);
 
   return (
-    <Select
-      value={transaction.categoryId ?? "__none__"}
-      onValueChange={(v) => {
-        if (v && v !== "__none__") onAssign(transaction.id, v);
-      }}
-    >
-      <SelectTrigger className="hover:border-input hover:bg-background h-7 w-full min-w-[130px] gap-1 border-transparent bg-transparent px-1 text-sm shadow-none">
-        {category ? (
-          <span className="flex items-center gap-1.5">
-            <CategoryDot color={category.color} />
-            <span>{category.name}</span>
-          </span>
-        ) : (
-          <span className="text-muted-foreground">ללא קטגוריה</span>
-        )}
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="__none__">
-          <span className="text-muted-foreground">ללא קטגוריה</span>
-        </SelectItem>
-        {categories.map((cat) => (
-          <SelectItem key={cat.id} value={cat.id}>
-            <span className="flex items-center gap-1.5">
-              <CategoryDot color={cat.color} />
-              {cat.name}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <div className="flex w-full min-w-0 items-center gap-1">
+        <Select
+          value={transaction.categoryId ?? "__none__"}
+          onValueChange={(v) => {
+            if (v && v !== "__none__") onAssign(transaction.id, v);
+          }}
+        >
+          <SelectTrigger className="hover:border-input hover:bg-background h-7 w-full min-w-[130px] gap-1 border-transparent bg-transparent px-1 text-sm shadow-none">
+            {category ? (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <CategoryDot color={category.color} />
+                <span className="truncate">{category.name}</span>
+              </span>
+            ) : (
+              <span className="text-muted-foreground">ללא קטגוריה</span>
+            )}
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">
+              <span className="text-muted-foreground">ללא קטגוריה</span>
+            </SelectItem>
+            {categories.map((cat) => (
+              <SelectItem key={cat.id} value={cat.id}>
+                <span className="flex items-center gap-1.5">
+                  <CategoryDot color={cat.color} />
+                  {cat.name}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {transaction.categorySource === "ai" && <AiMarker onUndo={() => onUndoAi(transaction)} />}
+      </div>
+      {transaction.pendingSuggestion && (
+        <SuggestionChip
+          suggestion={transaction.pendingSuggestion}
+          onAccept={() => onAcceptSuggestion(transaction)}
+          onReject={() => onRejectSuggestion(transaction)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -322,6 +448,8 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
     if (filters.dateTo) params.set("dateTo", filters.dateTo);
     if (filters.categoryId === "__uncategorized__") {
       params.set("uncategorized", "true");
+    } else if (filters.categoryId === "__needs_review__") {
+      params.set("needsReview", "true");
     } else if (filters.categoryId) {
       params.set("categoryId", filters.categoryId);
     }
@@ -380,7 +508,11 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
     startTransition(async () => {
       const result = await updateTransactionAction({ id, categoryId });
       if (!result.error) {
-        setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, categoryId } : t)));
+        // Both the first-time label and the correction path land on 'user'
+        // (changeTransactionCategory), which also clears any AI marker.
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, categoryId, categorySource: "user" } : t)),
+        );
         applyFanOutResult(categoryId, result.fannedOut);
       }
     });
@@ -389,7 +521,11 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
   function applyFanOutResult(categoryId: string, fannedOut: FannedOutRow[] | undefined) {
     if (fannedOut && fannedOut.length > 0) {
       const fannedIds = new Set(fannedOut.map((r) => r.id));
-      setTransactions((prev) => prev.map((t) => (fannedIds.has(t.id) ? { ...t, categoryId } : t)));
+      // Fan-out siblings acquire the category via automation applying a
+      // user-tier memory entry — provenance 'memory', not 'user' (ADR-0010 §4).
+      setTransactions((prev) =>
+        prev.map((t) => (fannedIds.has(t.id) ? { ...t, categoryId, categorySource: "memory" } : t)),
+      );
       setFanOutNotice({ count: fannedOut.length, rows: fannedOut });
     } else {
       setFanOutNotice(null);
@@ -404,11 +540,67 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
       setTransactions((prev) =>
         prev.map((t) => {
           const restored = rows.find((r) => r.id === t.id);
-          return restored ? { ...t, categoryId: restored.previousCategoryId } : t;
+          return restored
+            ? {
+                ...t,
+                categoryId: restored.previousCategoryId,
+                categorySource: restored.previousCategorySource,
+              }
+            : t;
         }),
       );
       setFanOutNotice(null);
     }
+  }
+
+  async function handleAcceptSuggestion(tx: Transaction) {
+    const suggestion = tx.pendingSuggestion;
+    if (!suggestion) return;
+    startTransition(async () => {
+      const result = await acceptSuggestionAction({
+        transactionId: tx.id,
+        suggestionId: suggestion.suggestionId,
+      });
+      if (!result.error && result.accepted) {
+        setTransactions((prev) =>
+          prev.map((t) =>
+            t.id === tx.id
+              ? {
+                  ...t,
+                  categoryId: suggestion.categoryId,
+                  categorySource: "user",
+                  pendingSuggestion: null,
+                }
+              : t,
+          ),
+        );
+        applyFanOutResult(suggestion.categoryId, result.fannedOut);
+      }
+    });
+  }
+
+  async function handleRejectSuggestion(tx: Transaction) {
+    const suggestion = tx.pendingSuggestion;
+    if (!suggestion) return;
+    startTransition(async () => {
+      const result = await rejectSuggestionAction({ suggestionId: suggestion.suggestionId });
+      if (!result.error && result.rejected) {
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === tx.id ? { ...t, pendingSuggestion: null } : t)),
+        );
+      }
+    });
+  }
+
+  async function handleUndoAiAssignment(tx: Transaction) {
+    startTransition(async () => {
+      const result = await undoAiAssignmentAction({ transactionId: tx.id });
+      if (!result.error && result.undone) {
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === tx.id ? { ...t, categoryId: null, categorySource: null } : t)),
+        );
+      }
+    });
   }
 
   const allSelected = transactions.length > 0 && transactions.every((t) => selected.has(t.id));
@@ -438,7 +630,9 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
     startTransition(async () => {
       const result = await bulkCategorizeAction({ transactionIds, categoryId });
       if (!result.error) {
-        setTransactions((prev) => prev.map((t) => (selected.has(t.id) ? { ...t, categoryId } : t)));
+        setTransactions((prev) =>
+          prev.map((t) => (selected.has(t.id) ? { ...t, categoryId, categorySource: "user" } : t)),
+        );
         setSelected(new Set());
         setBulkCategoryId("");
         applyFanOutResult(categoryId, result.fannedOut);
@@ -490,14 +684,17 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
               <span>
                 {filters.categoryId === "__uncategorized__"
                   ? "ללא קטגוריה"
-                  : filters.categoryId
-                    ? (categories.find((c) => c.id === filters.categoryId)?.name ?? "קטגוריה")
-                    : "הכל"}
+                  : filters.categoryId === "__needs_review__"
+                    ? "ממתין לסקירה"
+                    : filters.categoryId
+                      ? (categories.find((c) => c.id === filters.categoryId)?.name ?? "קטגוריה")
+                      : "הכל"}
               </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">הכל</SelectItem>
               <SelectItem value="__uncategorized__">ללא קטגוריה</SelectItem>
+              <SelectItem value="__needs_review__">ממתין לסקירה</SelectItem>
               {categories.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>
                   {cat.name}
@@ -595,7 +792,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
               <TableHead className="w-28">תאריך</TableHead>
               <TableHead>תיאור</TableHead>
               <TableHead className="w-32 text-left">סכום</TableHead>
-              <TableHead className="w-40">קטגוריה</TableHead>
+              <TableHead className="w-48">קטגוריה</TableHead>
               <TableHead className="w-24">סטטוס</TableHead>
               <TableHead className="w-16">פרטים</TableHead>
             </TableRow>
@@ -685,6 +882,9 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
                       transaction={tx}
                       categories={categories}
                       onAssign={handleCategoryAssign}
+                      onAcceptSuggestion={handleAcceptSuggestion}
+                      onRejectSuggestion={handleRejectSuggestion}
+                      onUndoAi={handleUndoAiAssignment}
                     />
                   </TableCell>
                   <TableCell>

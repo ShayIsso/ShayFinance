@@ -9,6 +9,7 @@ import {
   applyCorrection,
   applyBulkCategorization,
   undoFanOut,
+  removeAiTierEntry,
   type MerchantMemoryStore,
   type MemoryEntry,
   type CorrectionTxn,
@@ -69,6 +70,10 @@ function createStore(seed?: {
         entries.push({ ...entry, hitCount: 0, lastHitAt: null });
       }
       void now;
+    },
+    async deleteAiTierEntry(merchantKey) {
+      const idx = entries.findIndex((x) => x.merchantKey === merchantKey && x.source === "ai");
+      if (idx !== -1) entries.splice(idx, 1);
     },
     async getTransaction(id) {
       const t = txns.find((x) => x.id === id);
@@ -366,6 +371,63 @@ describe("undoFanOut", () => {
     expect(byId("target")).toMatchObject({ categoryId: "cat-food", categorySource: "user" });
     expect(entries[0]).toMatchObject({ categoryId: "cat-food", source: "user" });
     expect(corrections).toHaveLength(0);
+  });
+});
+
+describe("removeAiTierEntry", () => {
+  it("deletes an ai-tier entry", async () => {
+    const { store, entries } = createStore({
+      entries: [
+        {
+          merchantKey: "שופרסל",
+          categoryId: "cat-food",
+          source: "ai",
+          hitCount: 3,
+          lastHitAt: null,
+        },
+      ],
+    });
+    await removeAiTierEntry("שופרסל", store);
+    expect(entries).toHaveLength(0);
+  });
+
+  it("never removes a user-tier entry — a confirmed mapping outranks automated undo", async () => {
+    const { store, entries } = createStore({
+      entries: [
+        {
+          merchantKey: "שופרסל",
+          categoryId: "cat-food",
+          source: "user",
+          hitCount: 3,
+          lastHitAt: null,
+        },
+      ],
+    });
+    await removeAiTierEntry("שופרסל", store);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ source: "user" });
+  });
+
+  it("is a no-op when no entry exists for the key", async () => {
+    const { store, entries } = createStore({});
+    await removeAiTierEntry("אין כזה", store);
+    expect(entries).toHaveLength(0);
+  });
+
+  it("is a no-op for an empty merchant key", async () => {
+    const { store, entries } = createStore({
+      entries: [
+        {
+          merchantKey: "שופרסל",
+          categoryId: "cat-food",
+          source: "ai",
+          hitCount: 0,
+          lastHitAt: null,
+        },
+      ],
+    });
+    await removeAiTierEntry("", store);
+    expect(entries).toHaveLength(1);
   });
 });
 

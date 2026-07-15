@@ -37,3 +37,14 @@ export type { OllamaProviderConfig } from "./ollama";
 export { createOllamaProvider, OLLAMA_DEFAULT_MODEL, OLLAMA_DEFAULT_ENDPOINT } from "./ollama";
 export type { AiProviderKind, AiCategorizationConfig, ProviderResolution } from "./config";
 export { resolveCategorizationProvider, createConfiguredProvider } from "./config";
+export type {
+  ReviewSuggestionStatus,
+  PendingSuggestionRow,
+  ActiveAutoAppliedSuggestion,
+  ReviewStore,
+  AcceptSuggestionInput,
+  RejectSuggestionInput,
+  UndoAiAssignmentInput,
+} from "./review";
+export { acceptSuggestion, rejectSuggestion, undoAiAssignment } from "./review";
+export { createReviewStore, needsReviewSql } from "./review-store";

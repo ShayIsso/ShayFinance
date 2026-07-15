@@ -14,7 +14,7 @@ import {
 // Both `db` and a transaction handle satisfy this surface, so the store can be
 // bound either to the connection (import lookups) or to a single transaction
 // (atomic corrections — ADR-0010 §6).
-type DbClient = Pick<typeof db, "select" | "insert" | "update">;
+type DbClient = Pick<typeof db, "select" | "insert" | "update" | "delete">;
 
 /**
  * The overwrite law (ADR-0010 §3) as a Drizzle predicate — the single SQL
@@ -94,6 +94,14 @@ export function createMerchantMemoryStore(client: DbClient = db): MerchantMemory
           target: merchantMemory.merchantKey,
           set: { categoryId: entry.categoryId, source: entry.source, updatedAt: now },
         });
+    },
+
+    async deleteAiTierEntry(merchantKey) {
+      // Tier guard in the WHERE itself, like overwriteLawSql: a user-tier row
+      // survives even a buggy caller or a check-then-delete race.
+      await client
+        .delete(merchantMemory)
+        .where(and(eq(merchantMemory.merchantKey, merchantKey), eq(merchantMemory.source, "ai")));
     },
 
     async getTransaction(id) {
