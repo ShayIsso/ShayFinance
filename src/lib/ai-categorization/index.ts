@@ -29,3 +29,11 @@ export type {
 } from "./run";
 export { runAiCategorization } from "./run";
 export { createAiCategorizationStore } from "./store";
+export type { ProviderErrorKind } from "./provider-http";
+export { ProviderError } from "./provider-http";
+export type { GeminiProviderConfig, GeminiModel } from "./gemini";
+export { createGeminiProvider, GEMINI_DEFAULT_MODEL } from "./gemini";
+export type { OllamaProviderConfig } from "./ollama";
+export { createOllamaProvider, OLLAMA_DEFAULT_MODEL, OLLAMA_DEFAULT_ENDPOINT } from "./ollama";
+export type { AiProviderKind, AiCategorizationConfig, ProviderResolution } from "./config";
+export { resolveCategorizationProvider, createConfiguredProvider } from "./config";
