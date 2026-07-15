@@ -9,6 +9,11 @@ import type { transactionFiltersSchema } from "./schemas";
 import type { z } from "zod";
 import { extractMerchant, amountsMatch } from "@/lib/transaction-matching";
 import { createMerchantMemoryStore, deriveMerchantKey, lookupMemory } from "@/lib/merchant-memory";
+import {
+  createReviewStore,
+  needsReviewSql,
+  type PendingSuggestionRow,
+} from "@/lib/ai-categorization";
 
 export async function importScrapedAccounts(
   credentialId: string,
@@ -74,18 +79,22 @@ export async function importScrapedAccounts(
 
 export type CategoryFilterIntent =
   | { mode: "uncategorized" }
+  | { mode: "needsReview" }
   | { mode: "category"; categoryId: string }
   | { mode: "all" };
 
 /**
- * Resolves how to filter by category. `uncategorized` always wins: when true we
- * match rows with no category and IGNORE any categoryId. Otherwise a concrete
- * categoryId selects that category, and neither means no category constraint.
+ * Resolves how to filter by category. `needsReview` wins first (ticket #149 —
+ * the review queue: exactly the rows with a pending AI suggestion), then
+ * `uncategorized` — when either is true we IGNORE any categoryId. Otherwise a
+ * concrete categoryId selects that category, and neither means no constraint.
  */
 export function resolveCategoryFilter(input: {
   uncategorized?: boolean;
+  needsReview?: boolean;
   categoryId?: string;
 }): CategoryFilterIntent {
+  if (input.needsReview) return { mode: "needsReview" };
   if (input.uncategorized) return { mode: "uncategorized" };
   if (input.categoryId) return { mode: "category", categoryId: input.categoryId };
   return { mode: "all" };
@@ -117,6 +126,7 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
     status,
     search,
     uncategorized,
+    needsReview,
     page,
     pageSize,
   } = filters;
@@ -126,8 +136,10 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
   if (dateFrom) conditions.push(gte(transactions.date, dateFrom));
   if (dateTo) conditions.push(lte(transactions.date, dateTo));
   if (bankAccountId) conditions.push(eq(transactions.bankAccountId, bankAccountId));
-  const categoryFilter = resolveCategoryFilter({ uncategorized, categoryId });
-  if (categoryFilter.mode === "uncategorized") {
+  const categoryFilter = resolveCategoryFilter({ uncategorized, needsReview, categoryId });
+  if (categoryFilter.mode === "needsReview") {
+    conditions.push(needsReviewSql());
+  } else if (categoryFilter.mode === "uncategorized") {
     conditions.push(isNull(transactions.categoryId));
   } else if (categoryFilter.mode === "category") {
     conditions.push(eq(transactions.categoryId, categoryFilter.categoryId));
@@ -171,6 +183,14 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
 
   const total = totalResult[0]?.count ?? 0;
 
+  // Pending-suggestion overlay (ticket #149): depends on this page's ids, so it
+  // can't join the Promise.all above. Same non-essential-overlay degrade as
+  // the recurring badges — a lookup failure hides suggestion chips, not the page.
+  const pendingSuggestions = await createReviewStore()
+    .getPendingSuggestions(rows.map((r) => r.id))
+    .catch(() => [] as PendingSuggestionRow[]);
+  const suggestionByTxnId = new Map(pendingSuggestions.map((s) => [s.transactionId, s]));
+
   const data = rows.map((r) => {
     const txnMerchant = extractMerchant(r.description);
     // Detection stores expectedAmount as an absolute (positive) value, while
@@ -198,6 +218,7 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
       installmentTotal: r.installmentTotal,
       status: r.status,
       categoryId: r.categoryId,
+      categorySource: r.categorySource,
       reconciliationGroupId: r.reconciliationGroupId,
       reconciliationConfirmedAt: r.reconciliationConfirmedAt
         ? r.reconciliationConfirmedAt.toISOString()
@@ -207,6 +228,7 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
       recurringExpense: matched
         ? { id: matched.id, merchant: matched.merchant, cadence: matched.expectedCadence }
         : null,
+      pendingSuggestion: suggestionByTxnId.get(r.id) ?? null,
     };
   });
 

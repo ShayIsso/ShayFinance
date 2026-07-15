@@ -29,3 +29,14 @@ export type {
 } from "./run";
 export { runAiCategorization } from "./run";
 export { createAiCategorizationStore } from "./store";
+export type {
+  ReviewSuggestionStatus,
+  PendingSuggestionRow,
+  ActiveAutoAppliedSuggestion,
+  ReviewStore,
+  AcceptSuggestionInput,
+  RejectSuggestionInput,
+  UndoAiAssignmentInput,
+} from "./review";
+export { acceptSuggestion, rejectSuggestion, undoAiAssignment } from "./review";
+export { createReviewStore, needsReviewSql } from "./review-store";

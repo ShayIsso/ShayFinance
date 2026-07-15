@@ -64,6 +64,10 @@ function createFake(seed: {
         entries.push({ ...entry, hitCount: 0 });
       }
     },
+    async deleteEntry(merchantKey) {
+      const idx = entries.findIndex((x) => x.merchantKey === merchantKey);
+      if (idx !== -1) entries.splice(idx, 1);
+    },
     async getTransaction(id) {
       const t = txns.find((x) => x.id === id);
       return t
