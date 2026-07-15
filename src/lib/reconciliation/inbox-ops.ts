@@ -52,6 +52,9 @@ export type InboxStore = {
  * bridges the gap until then.
  */
 export function identifyBankSide(members: InboxTransaction[]): InboxTransaction | null {
+  // A singleton suspected-transfer group (AI-step routing, #148): its only member
+  // is the side to flip to the transfer category on approve. Genuine pairs below.
+  if (members.length === 1) return members[0];
   if (members.length !== 2) return null;
   const [a, b] = members;
 

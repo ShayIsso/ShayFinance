@@ -6,6 +6,8 @@ export { detectP3InterAccount } from "./detect-p3";
 export { applyP3InterAccount } from "./apply-p3";
 export { drizzleReconciliationStore } from "./store";
 export type { ReconciliationStore } from "./store";
+export { drizzleSuspectedTransferRouter } from "./suspected-transfer";
+export type { SuspectedTransferRouter } from "./suspected-transfer";
 export type {
   ReconciliationTransaction,
   ReconciliationCandidate,

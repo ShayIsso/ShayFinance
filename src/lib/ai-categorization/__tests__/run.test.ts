@@ -559,6 +559,88 @@ describe("runAiCategorization — full pipeline", () => {
     expect(provider.prompts).toHaveLength(3);
   });
 
+  it("reports the transfer-guarded transaction ids for downstream inbox routing", async () => {
+    const fake = createFake({
+      categories: CATS,
+      txns: [
+        {
+          id: "t-xfer",
+          description: "העברה בנקאית",
+          bankType: "discount",
+          categoryId: null,
+          categorySource: null,
+        },
+        {
+          id: "t-normal",
+          description: "מסעדה כלשהי",
+          bankType: "max",
+          categoryId: null,
+          categorySource: null,
+        },
+      ],
+    });
+    const provider = scriptedProvider([{ match: "מסעדה", category: "מסעדות וקפה", confidence: 7 }]);
+
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+    });
+
+    expect(summary.transferSkipped).toBe(1);
+    expect(summary.transferSkippedIds).toEqual(["t-xfer"]);
+  });
+
+  it("spaces batches by the pacing policy's inter-batch delay (injected sleep, no real timers)", async () => {
+    const txns: StoredTxn[] = Array.from({ length: 5 }, (_, i) => ({
+      id: `t${i}`,
+      description: `מסעדה ${String.fromCharCode(0x5d0 + i)}`,
+      bankType: "max" as const,
+      categoryId: null,
+      categorySource: null,
+    }));
+    const fake = createFake({ categories: CATS, txns });
+    const provider = scriptedProvider([{ match: "מסעדה", category: "מסעדות וקפה", confidence: 7 }]);
+
+    const sleeps: number[] = [];
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+      options: { batchSize: 2 },
+      pacing: {
+        policy: { maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 20000, interBatchDelayMs: 500 },
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+    });
+
+    // 5 txns / batch 2 = 3 batches → paced between them = 2 pauses, none leading.
+    expect(summary.batches).toBe(3);
+    expect(sleeps).toEqual([500, 500]);
+  });
+
+  it("does not pace when no policy is injected (batches fire back-to-back)", async () => {
+    const txns: StoredTxn[] = Array.from({ length: 4 }, (_, i) => ({
+      id: `t${i}`,
+      description: `מסעדה ${String.fromCharCode(0x5d0 + i)}`,
+      bankType: "max" as const,
+      categoryId: null,
+      categorySource: null,
+    }));
+    const fake = createFake({ categories: CATS, txns });
+    const provider = scriptedProvider([{ match: "מסעדה", category: "מסעדות וקפה", confidence: 7 }]);
+
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+      options: { batchSize: 2 },
+    });
+    expect(summary.batches).toBe(2);
+  });
+
   it("sends only redacted payloads to the provider (5+ digit runs are stripped)", async () => {
     const fake = createFake({
       categories: CATS,

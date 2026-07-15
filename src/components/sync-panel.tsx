@@ -46,6 +46,7 @@ type ClientSyncEvent =
       screenshotFilename?: string;
     }
   | { type: "reconciliation_summary"; autoApplied: number; queued: number }
+  | { type: "ai_summary"; applied: number; queued: number; skipped: number }
   | { type: "sync_complete"; summary: SyncSummary };
 
 type Bank = {
@@ -91,6 +92,11 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
     autoApplied: number;
     queued: number;
   } | null>(null);
+  const [aiSummary, setAiSummary] = useState<{
+    applied: number;
+    queued: number;
+    skipped: number;
+  } | null>(null);
   const [connectionError, setConnectionError] = useState(false);
   const [otpCodes, setOtpCodes] = useState<Record<string, string>>({});
   const [otpCountdowns, setOtpCountdowns] = useState<Record<string, number>>({});
@@ -123,6 +129,7 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
     setBankStates({});
     setSummary(null);
     setReconciliationToast(null);
+    setAiSummary(null);
     setConnectionError(false);
     setOtpCodes({});
     setOtpCountdowns({});
@@ -181,6 +188,10 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
       } else if (event.type === "reconciliation_summary") {
         if (event.autoApplied > 0 || event.queued > 0) {
           setReconciliationToast({ autoApplied: event.autoApplied, queued: event.queued });
+        }
+      } else if (event.type === "ai_summary") {
+        if (event.applied > 0 || event.queued > 0 || event.skipped > 0) {
+          setAiSummary({ applied: event.applied, queued: event.queued, skipped: event.skipped });
         }
       } else if (event.type === "sync_complete") {
         setBankStates((prev) => {
@@ -390,6 +401,25 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
             >
               ✕
             </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {aiSummary && (
+        <Card>
+          <CardContent className="space-y-2 py-4">
+            <p className="font-semibold">סיווג חכם</p>
+            <div className="space-y-0.5 text-sm">
+              {aiSummary.applied > 0 && (
+                <p className="text-muted-foreground">{aiSummary.applied} עסקאות סווגו אוטומטית</p>
+              )}
+              {aiSummary.queued > 0 && (
+                <p className="text-muted-foreground">{aiSummary.queued} עסקאות ממתינות לבדיקה</p>
+              )}
+              {aiSummary.skipped > 0 && (
+                <p className="text-muted-foreground">{aiSummary.skipped} עסקאות נותרו ללא סיווג</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

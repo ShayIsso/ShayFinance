@@ -2,16 +2,14 @@ import { listCredentials, getDecryptedCredentials } from "@/lib/credentials";
 import { syncBank, getSyncStartDate } from "@/lib/scraper";
 import type { SyncEvent, OtpHandler } from "@/lib/scraper";
 import { importScrapedAccounts } from "@/lib/transactions";
-import {
-  detectP1Settlement,
-  applyReconciliation,
-  detectP2Mirror,
-  applyP2Mirror,
-  detectP3InterAccount,
-  applyP3InterAccount,
-  drizzleReconciliationStore,
-} from "@/lib/reconciliation";
+import { drizzleReconciliationStore, drizzleSuspectedTransferRouter } from "@/lib/reconciliation";
 import { runDetection, drizzleRecurringStore } from "@/lib/recurring-detection";
+import {
+  createAiCategorizationStore,
+  createConfiguredProvider,
+  DEFAULT_PACING,
+} from "@/lib/ai-categorization";
+import { createMerchantMemoryStore } from "@/lib/merchant-memory";
 import { db } from "@/db";
 import { bankAccounts } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -22,6 +20,8 @@ import {
   syncRunStatusForEvent,
   drizzleSyncRunStore,
 } from "./runs";
+import { runAiSyncStep } from "./ai-step";
+import { runPostImportPipeline, type PostSyncEvent } from "./post-import";
 
 // Module-level OTP handler — set during active sync, used by POST /api/sync/otp
 let activeOtpHandler: OtpHandler | null = null;
@@ -45,9 +45,11 @@ export type SyncOptions = {
   otpMode?: "interactive" | "skip";
 };
 
-export type SyncSummaryEvent =
-  | (SyncEvent & { _credentialId?: string })
-  | { type: "reconciliation_summary"; autoApplied: number; queued: number };
+export type SyncSummaryEvent = (SyncEvent & { _credentialId?: string }) | PostSyncEvent;
+
+// Real inter-batch pacing wiring: the pure DEFAULT_PACING policy decides the
+// delay; the timer lives here (setTimeout), out of the pure run/policy code.
+const syncBatchSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<SyncSummaryEvent> {
   const triggeredBy = opts.triggeredBy ?? "manual";
@@ -174,35 +176,20 @@ export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<Sync
     activeOtpHandler = null;
   }
 
-  // P1: credit-card settlement lump detection
-  const recentTxns = await drizzleReconciliationStore.getRecentTransactions(90);
-  const p1Candidates = detectP1Settlement(recentTxns);
-  const p1Result = await applyReconciliation(p1Candidates, drizzleReconciliationStore);
-
-  // P2: 1:1 mirror detection — re-fetch so P1's updates are visible
-  const recentTxnsAfterP1 = await drizzleReconciliationStore.getRecentTransactions(90);
-  const p2Candidates = detectP2Mirror(recentTxnsAfterP1);
-  const p2Result = await applyP2Mirror(p2Candidates, drizzleReconciliationStore);
-
-  // P3: inter-account transfer detection — re-fetch so P2's updates are visible
-  const recentTxnsAfterP2 = await drizzleReconciliationStore.getRecentTransactions(90);
-  const p3Candidates = detectP3InterAccount(recentTxnsAfterP2);
-  const p3Result = await applyP3InterAccount(p3Candidates, drizzleReconciliationStore);
-
-  yield {
-    type: "reconciliation_summary",
-    autoApplied: p1Result.autoApplied + p2Result.autoApplied + p3Result.autoApplied,
-    queued: p1Result.queued + p2Result.queued + p3Result.queued,
-  };
-
-  // Recurring detection: runs after reconciliation so category-flipped transactions
-  // are already settled. Wrapped in try/catch so a detection failure never breaks
-  // sync completion — detection results surface on /subscriptions, not the SSE stream.
-  try {
-    await runDetection(drizzleRecurringStore);
-  } catch {
-    // Detection failure is non-fatal. The sync_complete event still fires below.
-  }
-
-  yield { type: "sync_complete", summary: { total, byBank: importedByBank } };
+  // Post-import pipeline: reconciliation P1–P3 → recurring detection → AI step →
+  // sync_complete. Extracted to post-import.ts so the ordering and failure
+  // isolation are testable with store fakes.
+  yield* runPostImportPipeline({
+    reconciliationStore: drizzleReconciliationStore,
+    runRecurring: () => runDetection(drizzleRecurringStore),
+    runAiStep: runAiSyncStep,
+    ai: {
+      createProvider: createConfiguredProvider,
+      aiStore: createAiCategorizationStore(),
+      memoryStore: createMerchantMemoryStore(),
+      transferRouter: drizzleSuspectedTransferRouter,
+      pacing: { policy: DEFAULT_PACING, sleep: syncBatchSleep },
+    },
+    importSummary: { total, byBank: importedByBank },
+  });
 }
