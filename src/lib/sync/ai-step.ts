@@ -41,9 +41,11 @@ export interface AiStepDeps {
  * recurring detection (see `post-import.ts`).
  *
  * Failure isolation (recurring-detection idiom): provider construction, a thrown
- * run, rate-limit exhaustion, and routing errors are all swallowed — the step
- * yields no summary and the sync still completes, leaving those rows honestly
- * uncategorized. Provider "off" short-circuits before any AI code path.
+ * run, rate-limit exhaustion, and routing errors are all swallowed and the sync
+ * still completes, leaving unresolved rows honestly uncategorized. A failure
+ * before the run yields no summary; a failure during inbox routing still yields
+ * it — categories were already applied, and hiding them would misreport the
+ * sync. Provider "off" short-circuits before any AI code path.
  */
 export async function* runAiSyncStep(deps: AiStepDeps): AsyncGenerator<AiStepEvent> {
   let provider: CategorizationProvider | null;
@@ -55,7 +57,6 @@ export async function* runAiSyncStep(deps: AiStepDeps): AsyncGenerator<AiStepEve
   if (!provider) return;
 
   let summary;
-  let routed = 0;
   try {
     summary = await runAiCategorization(
       {
@@ -66,14 +67,20 @@ export async function* runAiSyncStep(deps: AiStepDeps): AsyncGenerator<AiStepEve
       },
       deps.now ?? new Date(),
     );
+  } catch {
+    return;
+  }
 
+  let routed = 0;
+  try {
     const unpaired = await deps.transferRouter.filterUnpaired([...summary.transferSkippedIds]);
     for (const id of unpaired) {
       await deps.transferRouter.queueSuspectedTransfer(id);
       routed++;
     }
   } catch {
-    return;
+    // Routing is best-effort: the guarded rows stay out of AI either way and
+    // surface again next sync; the applied/queued counts below stay honest.
   }
 
   const applied = summary.memoryApplied + summary.autoApplied;

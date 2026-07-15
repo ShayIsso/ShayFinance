@@ -176,9 +176,6 @@ export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<Sync
     activeOtpHandler = null;
   }
 
-  // Post-import pipeline: reconciliation P1–P3 → recurring detection → AI step →
-  // sync_complete. Extracted to post-import.ts so the ordering and failure
-  // isolation are testable with store fakes.
   yield* runPostImportPipeline({
     reconciliationStore: drizzleReconciliationStore,
     runRecurring: () => runDetection(drizzleRecurringStore),
