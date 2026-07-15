@@ -6,6 +6,14 @@ const envSchema = z.object({
   APP_PASSWORD: z.string().min(1),
   CHROMIUM_PATH: z.string().min(1).optional(),
   SCHEDULER_ENABLED: z.enum(["true", "false"]).optional().default("false"),
+  // AI categorization (ADR-0008). Unset AI_PROVIDER resolves to off — a fresh
+  // install makes zero external calls. `gemini` needs GEMINI_API_KEY or it too
+  // resolves to off; `ollama` is the zero-egress mode. Resolution lives in the
+  // pure `resolveCategorizationProvider` (src/lib/ai-categorization/config.ts).
+  AI_PROVIDER: z.enum(["gemini", "ollama", "off"]).optional(),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  OLLAMA_ENDPOINT: z.string().url().optional(),
+  OLLAMA_MODEL: z.string().min(1).optional(),
 });
 
 let _env: z.infer<typeof envSchema> | undefined;
