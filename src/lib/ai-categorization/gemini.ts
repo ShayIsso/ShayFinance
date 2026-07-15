@@ -74,9 +74,16 @@ export function unwrapGeminiText(payload: unknown): string {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Models sanctioned by the ADR-0005/ADR-0008 benchmark gate: flash-latest is
+ * the GO model, pro stays reserved. flash-lite failed the gate twice and is
+ * structurally precluded — not just absent from the env path.
+ */
+export type GeminiModel = "gemini-flash-latest" | "gemini-pro";
+
 export interface GeminiProviderConfig {
   readonly apiKey: string;
-  readonly model?: string;
+  readonly model?: GeminiModel;
   readonly baseUrl?: string;
   readonly pacing?: PacingPolicy;
 }

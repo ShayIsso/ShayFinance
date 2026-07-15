@@ -32,8 +32,7 @@ export const OLLAMA_NUM_CTX = 8192;
 export interface OllamaRequestBody {
   readonly model: string;
   readonly prompt: string;
-  /** Always true — the response is read as a stream (see createOllamaProvider). */
-  readonly stream: boolean;
+  readonly stream: true;
   readonly format?: "json";
   readonly options: {
     readonly temperature: number;

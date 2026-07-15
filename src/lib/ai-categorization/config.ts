@@ -1,6 +1,6 @@
 import { getEnv } from "@/lib/env";
 import type { CategorizationProvider } from "./provider";
-import { createGeminiProvider, GEMINI_DEFAULT_MODEL } from "./gemini";
+import { createGeminiProvider, GEMINI_DEFAULT_MODEL, type GeminiModel } from "./gemini";
 import { createOllamaProvider, OLLAMA_DEFAULT_ENDPOINT, OLLAMA_DEFAULT_MODEL } from "./ollama";
 
 export type AiProviderKind = "gemini" | "ollama" | "off";
@@ -20,7 +20,7 @@ export interface AiCategorizationConfig {
 
 export type ProviderResolution =
   | { readonly kind: "off"; readonly reason: "unset" | "explicit" | "missing_gemini_key" }
-  | { readonly kind: "gemini"; readonly model: string }
+  | { readonly kind: "gemini"; readonly model: GeminiModel }
   | { readonly kind: "ollama"; readonly endpoint: string; readonly model: string };
 
 /**
