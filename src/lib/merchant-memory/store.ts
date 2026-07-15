@@ -96,8 +96,12 @@ export function createMerchantMemoryStore(client: DbClient = db): MerchantMemory
         });
     },
 
-    async deleteEntry(merchantKey) {
-      await client.delete(merchantMemory).where(eq(merchantMemory.merchantKey, merchantKey));
+    async deleteAiTierEntry(merchantKey) {
+      // Tier guard in the WHERE itself, like overwriteLawSql: a user-tier row
+      // survives even a buggy caller or a check-then-delete race.
+      await client
+        .delete(merchantMemory)
+        .where(and(eq(merchantMemory.merchantKey, merchantKey), eq(merchantMemory.source, "ai")));
     },
 
     async getTransaction(id) {

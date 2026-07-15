@@ -560,9 +560,8 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
       const result = await acceptSuggestionAction({
         transactionId: tx.id,
         suggestionId: suggestion.suggestionId,
-        categoryId: suggestion.categoryId,
       });
-      if (!result.error) {
+      if (!result.error && result.accepted) {
         setTransactions((prev) =>
           prev.map((t) =>
             t.id === tx.id
@@ -585,7 +584,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
     if (!suggestion) return;
     startTransition(async () => {
       const result = await rejectSuggestionAction({ suggestionId: suggestion.suggestionId });
-      if (!result.error) {
+      if (!result.error && result.rejected) {
         setTransactions((prev) =>
           prev.map((t) => (t.id === tx.id ? { ...t, pendingSuggestion: null } : t)),
         );

@@ -65,8 +65,8 @@ function createFake(seed: {
         entries.push({ ...entry, hitCount: 0 });
       }
     },
-    async deleteEntry(merchantKey) {
-      const idx = entries.findIndex((x) => x.merchantKey === merchantKey);
+    async deleteAiTierEntry(merchantKey) {
+      const idx = entries.findIndex((x) => x.merchantKey === merchantKey && x.source === "ai");
       if (idx !== -1) entries.splice(idx, 1);
     },
     async getTransaction(id) {
@@ -126,6 +126,18 @@ function createFake(seed: {
           confidence: s.confidence,
         }));
     },
+    async getPendingSuggestion(suggestionId): Promise<PendingSuggestionRow | null> {
+      const s = suggestions.find((x) => x.id === suggestionId && x.status === "pending_review");
+      return s
+        ? {
+            transactionId: s.transactionId,
+            suggestionId: s.id,
+            categoryId: s.categoryId,
+            categoryName: s.categoryName,
+            confidence: s.confidence,
+          }
+        : null;
+    },
     async getActiveAutoApplied(transactionId): Promise<ActiveAutoAppliedSuggestion | null> {
       const s = suggestions
         .filter((x) => x.transactionId === transactionId && x.status === "auto_applied")
@@ -175,11 +187,12 @@ describe("acceptSuggestion", () => {
     });
 
     const result = await acceptSuggestion(
-      { transactionId: "target", suggestionId: "sugg-1", categoryId: "cat-food" },
+      { transactionId: "target", suggestionId: "sugg-1" },
       reviewStore,
       memoryStore,
     );
 
+    expect(result.accepted).toBe(true);
     expect(txns.find((t) => t.id === "target")).toMatchObject({
       categoryId: "cat-food",
       categorySource: "user",
@@ -209,12 +222,44 @@ describe("acceptSuggestion", () => {
     });
 
     await acceptSuggestion(
-      { transactionId: "target", suggestionId: "sugg-1", categoryId: "cat-food" },
+      { transactionId: "target", suggestionId: "sugg-1" },
       reviewStore,
       memoryStore,
     );
 
     expect(corrections).toHaveLength(0);
+  });
+
+  it("no-ops on a resolved or mismatched suggestion — the stored row decides, not the client", async () => {
+    const { memoryStore, reviewStore, txns, entries } = createFake({
+      txns: [{ id: "target", description: "שופרסל דיל", categoryId: null, categorySource: null }],
+      suggestions: [
+        {
+          id: "sugg-1",
+          transactionId: "target",
+          categoryId: "cat-food",
+          categoryName: "מזון",
+          confidence: 4,
+          status: "rejected",
+        },
+      ],
+    });
+
+    const resolved = await acceptSuggestion(
+      { transactionId: "target", suggestionId: "sugg-1" },
+      reviewStore,
+      memoryStore,
+    );
+    const mismatched = await acceptSuggestion(
+      { transactionId: "other-txn", suggestionId: "sugg-1" },
+      reviewStore,
+      memoryStore,
+    );
+
+    expect(resolved.accepted).toBe(false);
+    expect(mismatched.accepted).toBe(false);
+    expect(txns[0]).toMatchObject({ categoryId: null, categorySource: null });
+    expect(entries).toHaveLength(0);
   });
 });
 
@@ -342,9 +387,10 @@ describe("undoAiAssignment", () => {
     expect(suggestions).toHaveLength(0);
   });
 
-  it("no-ops when the row is ai-sourced but no active auto_applied suggestion backs it", async () => {
-    // Defensive: categorySource says 'ai' but the suggestion row is missing/already
-    // resolved — undo must not blindly null the category with nothing to mark undone.
+  it("still undoes an ai-sourced row with no backing suggestion (pre-row cache applies)", async () => {
+    // The revert and memory retraction never depend on a row existing — an
+    // ai-sourced row written before cache applies carried suggestion rows must
+    // not become a dead undo button; there is just nothing to mark undone.
     const { memoryStore, reviewStore, txns, entries } = createFake({
       txns: [
         { id: "target", description: "שופרסל דיל", categoryId: "cat-food", categorySource: "ai" },
@@ -355,9 +401,9 @@ describe("undoAiAssignment", () => {
 
     const result = await undoAiAssignment({ transactionId: "target" }, reviewStore, memoryStore);
 
-    expect(result.undone).toBe(false);
-    expect(txns[0]).toMatchObject({ categoryId: "cat-food", categorySource: "ai" });
-    expect(entries).toHaveLength(1);
+    expect(result.undone).toBe(true);
+    expect(txns[0]).toMatchObject({ categoryId: null, categorySource: null });
+    expect(entries).toHaveLength(0);
   });
 });
 

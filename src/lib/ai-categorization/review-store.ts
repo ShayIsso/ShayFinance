@@ -33,6 +33,22 @@ export function createReviewStore(client: DbClient = db): ReviewStore {
       return rows;
     },
 
+    async getPendingSuggestion(suggestionId) {
+      const rows = await client
+        .select({
+          transactionId: aiSuggestions.transactionId,
+          suggestionId: aiSuggestions.id,
+          categoryId: aiSuggestions.categoryId,
+          categoryName: categories.name,
+          confidence: aiSuggestions.confidence,
+        })
+        .from(aiSuggestions)
+        .innerJoin(categories, eq(aiSuggestions.categoryId, categories.id))
+        .where(and(eq(aiSuggestions.id, suggestionId), eq(aiSuggestions.status, "pending_review")))
+        .limit(1);
+      return rows[0] ?? null;
+    },
+
     async getActiveAutoApplied(transactionId) {
       const rows = await client
         .select({ suggestionId: aiSuggestions.id, categoryId: aiSuggestions.categoryId })

@@ -17,7 +17,6 @@ import { createMerchantMemoryStore, type FannedOutRow } from "@/lib/merchant-mem
 const acceptSuggestionSchema = z.object({
   transactionId: z.string().uuid({ message: "מזהה עסקה לא תקין" }),
   suggestionId: z.string().uuid({ message: "מזהה הצעה לא תקין" }),
-  categoryId: z.string().uuid({ message: "מזהה קטגוריה לא תקין" }),
 });
 
 const rejectSuggestionSchema = z.object({
@@ -53,6 +52,7 @@ export async function acceptSuggestionAction(data: unknown): Promise<{
   const result = await db.transaction(async (tx) =>
     acceptSuggestion(parsed.data, createReviewStore(tx), createMerchantMemoryStore(tx)),
   );
+  if (!result.accepted) return { error: "ההצעה כבר טופלה" };
 
   revalidateTransactionPages();
   return { accepted: true, fanOutCount: result.fanOutCount, fannedOut: result.fannedOut };
@@ -64,7 +64,8 @@ export async function rejectSuggestionAction(
   const parsed = rejectSuggestionSchema.safeParse(data);
   if (!parsed.success) return { error: formatZodError(parsed.error) };
 
-  await rejectSuggestion(parsed.data, createReviewStore());
+  const result = await rejectSuggestion(parsed.data, createReviewStore());
+  if (!result.rejected) return { error: "ההצעה כבר טופלה" };
 
   revalidateTransactionPages();
   return { rejected: true };

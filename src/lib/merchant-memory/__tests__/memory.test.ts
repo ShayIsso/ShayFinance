@@ -71,8 +71,8 @@ function createStore(seed?: {
       }
       void now;
     },
-    async deleteEntry(merchantKey) {
-      const idx = entries.findIndex((x) => x.merchantKey === merchantKey);
+    async deleteAiTierEntry(merchantKey) {
+      const idx = entries.findIndex((x) => x.merchantKey === merchantKey && x.source === "ai");
       if (idx !== -1) entries.splice(idx, 1);
     },
     async getTransaction(id) {
