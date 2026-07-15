@@ -25,7 +25,7 @@ const envSchema = z.object({
 let _env: z.infer<typeof envSchema> | undefined;
 
 /** Pure parse over an env-shaped source; the seam that makes the schema testable. */
-export function parseEnv(source: NodeJS.ProcessEnv): z.infer<typeof envSchema> {
+export function parseEnv(source: Record<string, string | undefined>): z.infer<typeof envSchema> {
   return envSchema.parse(source);
 }
 
