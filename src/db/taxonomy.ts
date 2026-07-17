@@ -7,6 +7,20 @@ export interface CategoryDef {
 }
 
 /**
+ * A default expense group and the leaf names (from TAXONOMY_V2) it parents.
+ * `type` is always `expense` — the only typed hierarchy the default grouping
+ * seeds (ADR-0011 §7). Groups carry no `description`: they are never assignable
+ * and never rendered into the AI prompt (§6). Groups have no children of their
+ * own (depth cap), and each must earn ≥2 leaves.
+ */
+export interface CategoryGroupDef {
+  name: string;
+  icon: string;
+  color: string;
+  children: string[];
+}
+
+/**
  * Canonical Taxonomy v2 (#133): the 17 flat categories, their presentation, and
  * the Hebrew positive/anti-example descriptions rendered into the AI
  * categorization prompt. Single source of truth shared by the seed and the
@@ -148,5 +162,33 @@ export const TAXONOMY_V2: CategoryDef[] = [
     color: "#cbd5e1",
     description:
       "כולל: חיוב כרטיס האשראי המרוכז בחשבון העובר ושב; מנוטרל מהחישובים כדי למנוע ספירה כפולה מול החיובים המפורטים. לא כולל: העסקאות הפרטניות עצמן (→ הסדרה - כרטיס אשראי).",
+  },
+];
+
+/**
+ * Default expense grouping (ADR-0011 §7). Seeded and backfilled by-name for the
+ * live DB and fresh installs alike, so hierarchy is a feature users meet rather
+ * than an empty affordance. Root leaves (תחבורה, בריאות וטיפוח, מזומן ומשיכות)
+ * and every non-expense category stay flat. The 17-leaf set is untouched — this
+ * only adds three group rows and sets `parent_id` on the named leaves.
+ */
+export const DEFAULT_GROUPS: CategoryGroupDef[] = [
+  {
+    name: "אוכל",
+    icon: "Utensils",
+    color: "#f59e0b",
+    children: ["מזון וסופר", "מסעדות וקפה"],
+  },
+  {
+    name: "בית וחשבונות",
+    icon: "Home",
+    color: "#8b5cf6",
+    children: ["דיור ושכירות", "חשבונות ושירותים", "מנויים"],
+  },
+  {
+    name: "פנאי וקניות",
+    icon: "ShoppingBag",
+    color: "#ec4899",
+    children: ["בילויים ופנאי", "קניות וביגוד", "מתנות ואירועים"],
   },
 ];

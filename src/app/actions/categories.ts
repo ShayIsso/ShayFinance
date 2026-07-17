@@ -5,7 +5,7 @@ import { formatZodError, formatZodFieldErrors, type FieldErrors } from "@/lib/ap
 import { createCategory, updateCategory, deleteCategory } from "@/lib/categories";
 // Imported from the dedicated errors module (not the mocked barrel) so
 // instanceof keeps working in action-seam tests that mock "@/lib/categories".
-import { DefaultCategoryDeletionError } from "@/lib/categories/errors";
+import { DefaultCategoryDeletionError, DuplicateCategoryNameError } from "@/lib/categories/errors";
 import {
   createCategorySchema,
   updateCategoryActionSchema,
@@ -16,11 +16,14 @@ const DUPLICATE_NAME_MESSAGE = "קטגוריה בשם זה כבר קיימת";
 const DEFAULT_CATEGORY_DELETE_MESSAGE = "לא ניתן למחוק קטגוריית ברירת מחדל";
 
 /**
- * postgres.js surfaces unique-constraint violations with SQLSTATE 23505.
- * Drizzle wraps the PostgresError in a DrizzleQueryError, so walk the
- * `cause` chain rather than only inspecting the top-level error.
+ * A duplicate name is caught two ways: the categories module's pure validator
+ * throws DuplicateCategoryNameError before the write, and postgres.js still
+ * surfaces the unique-constraint violation (SQLSTATE 23505) as a race backstop.
+ * Drizzle wraps the PostgresError in a DrizzleQueryError, so walk the `cause`
+ * chain rather than only inspecting the top-level error.
  */
-function isUniqueViolation(err: unknown): boolean {
+function isDuplicateName(err: unknown): boolean {
+  if (err instanceof DuplicateCategoryNameError) return true;
   let current: unknown = err;
   for (let depth = 0; depth < 5 && typeof current === "object" && current !== null; depth++) {
     if ((current as { code?: unknown }).code === "23505") return true;
@@ -61,7 +64,7 @@ export async function createCategoryAction(
     revalidateCategoryPages();
     return { id };
   } catch (err) {
-    if (isUniqueViolation(err)) return duplicateNameResult();
+    if (isDuplicateName(err)) return duplicateNameResult();
     throw err;
   }
 }
@@ -81,7 +84,7 @@ export async function updateCategoryAction(
     revalidateCategoryPages();
     return { updated: true };
   } catch (err) {
-    if (isUniqueViolation(err)) return duplicateNameResult();
+    if (isDuplicateName(err)) return duplicateNameResult();
     throw err;
   }
 }

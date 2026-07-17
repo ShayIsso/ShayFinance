@@ -29,6 +29,13 @@
       "when": 1784066856393,
       "tag": "0003_broad_pretty_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784312711277,
+      "tag": "0004_vengeful_magma",
+      "breakpoints": true
     }
   ]
 }
