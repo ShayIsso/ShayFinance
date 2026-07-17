@@ -89,7 +89,21 @@ Invariants: it is **display-only** — it never enters Net Savings, expenses, or
 
 ### `category` and `category rule`
 
-A `category` is a Hebrew-named bucket with a `type` (see above). `מזומן ומשיכות` (#133) is the honest home for purpose-unknowable money movement — ATM/cash withdrawals and generic P2P (bit/PayBox) — kept distinct from `העברה פנימית` (genuine own-account self-transfers). A `category rule` is a pattern that auto-assigns a category to matching transactions. Rules have a `priority` integer; higher priority wins. Rules are the top precedence layer — deliberately-authored law for pattern-shaped semantics (chain-wide matches, bank-mechanics strings). Per [ADR-0010](./docs/adr/0010-categorization-precedence-and-merchant-memory.md) they no longer grow by default: the "Create rule?" suggestion on manual assignment is removed; merchant memory is the default learning path.
+A `category` is a Hebrew-named bucket with a `type` (see above). Categories form an optional one-level hierarchy: a category may be a `category group` or a `root leaf` (see below). `מזומן ומשיכות` (#133) is the honest home for purpose-unknowable money movement — ATM/cash withdrawals and generic P2P (bit/PayBox) — kept distinct from `העברה פנימית` (genuine own-account self-transfers). A `category rule` is a pattern that auto-assigns a category to matching transactions. Rules have a `priority` integer; higher priority wins. Rules are the top precedence layer — deliberately-authored law for pattern-shaped semantics (chain-wide matches, bank-mechanics strings). Per [ADR-0010](./docs/adr/0010-categorization-precedence-and-merchant-memory.md) they no longer grow by default: the "Create rule?" suggestion on manual assignment is removed; merchant memory is the default learning path.
+
+### `category group` / `root leaf` — load-bearing
+
+Categories form an **optional, exactly-one-level** hierarchy ([ADR-0011](./docs/adr/0011-hierarchical-categories-one-level-typed-leaf-only.md)). A `category group` is a category with children; a `root leaf` is a category with no parent and no children (all pre-hierarchy categories are root leaves). Every category has a `type`; a parent-child link requires **matching types** on both ends — there is no typeless or mixed-type group.
+
+Say "group" and "leaf" — never "parent category" / "subcategory" as primary vocabulary.
+
+### `leaf-only assignment` — load-bearing
+
+A category with children is **not assignable** — derived from "has children", not a flag. Binds every assignment surface: the transaction picker, category rules, merchant memory, AI answers, and retroactive application. The AI's answer space is exactly the assignable (childless) categories; group structure is never rendered into the prompt. A group needing a catch-all gets an explicit general leaf, created deliberately — never auto-created.
+
+### `aggregation lens` — load-bearing
+
+The hierarchy invariant: grouping **never changes financial totals**. Net Savings, Total Expenses, and all type-driven calculations flow from leaves exactly as without hierarchy; a group's total is _defined_ as the sum of its leaves' totals, so a transaction contributes through exactly one leaf and double-counting is structurally impossible. Breakdowns present group-first with drill-down; root leaves appear beside groups.
 
 ### `match type`
 
