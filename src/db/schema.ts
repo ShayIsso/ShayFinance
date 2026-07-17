@@ -284,6 +284,23 @@ export const categoryCorrections = pgTable("category_corrections", {
  * suppression lookup (a `rejected`/`undone` pair is never re-suggested); the
  * status index serves the pending-review queue.
  */
+/**
+ * Savings goals (CONTEXT.md "savings goal"). Months are stored as "YYYY-MM"
+ * (day is not meaningful) so a goal's window is the same calendar month on
+ * `transactions.date` that every analytics/Dashboard widget uses. Progress
+ * semantics, deadline pacing, and the accumulate-vs-reset law live in CONTEXT.md.
+ */
+export const savingsGoals = pgTable("savings_goals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }).notNull(),
+  targetAmount: decimal("target_amount", { precision: 12, scale: 2 }).notNull(),
+  startMonth: varchar("start_month", { length: 7 }).notNull(),
+  openingAmount: decimal("opening_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  targetMonth: varchar("target_month", { length: 7 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const aiSuggestions = pgTable(
   "ai_suggestions",
   {

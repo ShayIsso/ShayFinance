@@ -157,6 +157,22 @@ Running categorization against local Ollama behind the same adapter boundary —
 
 ---
 
+## Budgets and goals vocabulary (Phase 3)
+
+Locked in decision record #105 (budgets-goals-reports epic). Use these exact terms.
+
+### `goals accumulate, budgets reset monthly` — load-bearing
+
+The one law separating the two tracking primitives. A **goal** carries a running balance forward across months and measures progress toward a target. A **budget** (and the monthly savings target) evaluates one calendar month in isolation and resets — it never accumulates. When a feature is unsure which primitive it belongs to, this law decides.
+
+### `savings goal` — load-bearing
+
+A named cumulative target with a start month, an optional opening amount, and an optional target month. **Progress = opening amount + cumulative Net Savings since the start month**, computed live from analytics — no contribution ledger, no linked categories. Negative months honestly drag progress down; progress is **never clamped**. `investment` spend does not reduce progress (the standing deployment-of-savings rule).
+
+A target month turns on **deadline pace**: a linear expected line, `expected = opening + (target − opening) × elapsed ∕ total`, measured on the remaining span. **Month counts are inclusive** — the start month is month 1, so a Jan→Dec goal is 12 months and an on-rate saver reaches exactly 100% at the deadline with no overshoot. Per-month phrasing ("₪X לחודש עד תאריך") is form-entry **sugar** that derives the same cumulative target over that inclusive span; it is one goal kind in storage, not a separate shape. Manual contributions and linked-category progress were rejected.
+
+---
+
 ## Architectural vocabulary
 
 ### `deep module`
