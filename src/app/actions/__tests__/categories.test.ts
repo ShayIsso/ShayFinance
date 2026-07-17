@@ -22,7 +22,7 @@ import {
   deleteCategoryAction,
 } from "@/app/actions/categories";
 import { createCategorySchema } from "@/lib/categories/schemas";
-import { DefaultCategoryDeletionError } from "@/lib/categories/errors";
+import { DefaultCategoryDeletionError, DuplicateCategoryNameError } from "@/lib/categories/errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 const VALID_INPUT = {
@@ -118,6 +118,15 @@ describe("createCategoryAction", () => {
     const result = await createCategoryAction(VALID_INPUT);
 
     expect(result.fieldErrors?.name).toBe("קטגוריה בשם זה כבר קיימת");
+  });
+
+  it("surfaces the module's DuplicateCategoryNameError as an inline field error", async () => {
+    vi.mocked(createCategory).mockRejectedValue(new DuplicateCategoryNameError());
+
+    const result = await createCategoryAction(VALID_INPUT);
+
+    expect(result.fieldErrors?.name).toBe("קטגוריה בשם זה כבר קיימת");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("rethrows unexpected module failures", async () => {

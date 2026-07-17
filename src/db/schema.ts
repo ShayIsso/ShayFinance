@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   index,
   customType,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -111,6 +112,12 @@ export const categories = pgTable(
     // prompt (#133). Nullable: user-created categories have none.
     description: text("description"),
     isDefault: boolean("is_default").default(false).notNull(),
+    // One-level typed hierarchy (ADR-0011). Self-FK; a parent must itself be a
+    // root (depth cap enforced at write time in categories/hierarchy.ts, not by
+    // the DB). ON DELETE SET NULL matches the detach-on-group-delete rule (§8).
+    parentId: uuid("parent_id").references((): AnyPgColumn => categories.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [uniqueIndex("uq_category_name").on(table.name)],
 );
