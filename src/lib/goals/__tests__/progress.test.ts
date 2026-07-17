@@ -102,18 +102,18 @@ describe("computeDeadlinePace", () => {
     expect(computeDeadlinePace(0, 12000, ym(2026, 1), null, ym(2026, 6))).toBeNull();
   });
 
-  it("rises linearly from opening at start to target at the deadline", () => {
+  it("rises linearly over the inclusive span, one increment at the start month", () => {
     const start = ym(2026, 1);
-    const target = ym(2026, 12);
-    expect(computeDeadlinePace(0, 11000, start, target, start)).toBe(0);
-    expect(computeDeadlinePace(0, 11000, start, target, ym(2026, 6))).toBe(5000);
-    expect(computeDeadlinePace(0, 11000, start, target, target)).toBe(11000);
+    const target = ym(2026, 12); // inclusive span = 12 months, ₪1000/month
+    expect(computeDeadlinePace(0, 12000, start, target, start)).toBe(1000);
+    expect(computeDeadlinePace(0, 12000, start, target, ym(2026, 6))).toBe(6000);
+    expect(computeDeadlinePace(0, 12000, start, target, target)).toBe(12000);
   });
 
   it("respects the opening amount in the pace line", () => {
     const start = ym(2026, 1);
-    const target = ym(2026, 11);
-    expect(computeDeadlinePace(1000, 11000, start, target, ym(2026, 6))).toBe(6000);
+    const target = ym(2026, 11); // inclusive span = 11 months
+    expect(computeDeadlinePace(1000, 12000, start, target, ym(2026, 6))).toBe(7000);
   });
 
   it("clamps to opening before the start and to target past the deadline", () => {
@@ -123,16 +123,16 @@ describe("computeDeadlinePace", () => {
     expect(computeDeadlinePace(200, 6200, start, target, ym(2027, 5))).toBe(6200);
   });
 
-  it("returns the full target when the span is zero (start == target)", () => {
+  it("returns the full target when the span is one month (start == target)", () => {
     const m = ym(2026, 4);
     expect(computeDeadlinePace(0, 5000, m, m, m)).toBe(5000);
   });
 });
 
 describe("per-month phrasing derivation", () => {
-  it("derives the cumulative target from a per-month amount", () => {
-    expect(cumulativeTargetFromMonthly(0, 1000, ym(2026, 1), ym(2026, 12))).toBe(11000);
-    expect(cumulativeTargetFromMonthly(2000, 500, ym(2026, 1), ym(2026, 11))).toBe(7000);
+  it("derives the cumulative target from a per-month amount over the inclusive span", () => {
+    expect(cumulativeTargetFromMonthly(0, 1000, ym(2026, 1), ym(2026, 12))).toBe(12000);
+    expect(cumulativeTargetFromMonthly(2000, 500, ym(2026, 1), ym(2026, 11))).toBe(7500);
   });
 
   it("round-trips through the inverse at exactly the per-month rate", () => {
@@ -142,13 +142,42 @@ describe("per-month phrasing derivation", () => {
     expect(monthlyAmountFromCumulative(500, cumulative, start, target)).toBe(800);
   });
 
-  it("returns null from the inverse when there is no finite span", () => {
+  it("returns null from the inverse only without a target or with target before start", () => {
     expect(monthlyAmountFromCumulative(0, 5000, ym(2026, 1), null)).toBeNull();
-    expect(monthlyAmountFromCumulative(0, 5000, ym(2026, 6), ym(2026, 6))).toBeNull();
     expect(monthlyAmountFromCumulative(0, 5000, ym(2026, 6), ym(2026, 3))).toBeNull();
   });
 
-  it("accumulates nothing beyond opening for a non-positive span", () => {
-    expect(cumulativeTargetFromMonthly(3000, 900, ym(2026, 6), ym(2026, 6))).toBe(3000);
+  it("treats start == target as a valid one-month span in both directions", () => {
+    expect(cumulativeTargetFromMonthly(3000, 900, ym(2026, 6), ym(2026, 6))).toBe(3900);
+    expect(monthlyAmountFromCumulative(0, 5000, ym(2026, 6), ym(2026, 6))).toBe(5000);
+  });
+});
+
+describe("cross-curve consistency (on-rate saver)", () => {
+  const income = (n: number): AnalyticsTransaction => ({
+    chargedAmount: n,
+    categoryType: "income",
+  });
+
+  const start = ym(2026, 1);
+  const target = ym(2026, 12);
+  const opening = 500;
+  const rate = 1000;
+  const derivedTarget = cumulativeTargetFromMonthly(opening, rate, start, target);
+  const monthly = Array.from({ length: 12 }, (_, i) => month(2026, i + 1, [income(rate)]));
+
+  it("progress reaches exactly the derived target at the deadline, no overshoot", () => {
+    const progress = computeGoalProgress(opening, start, target, monthly);
+    expect(progress.current).toBe(derivedTarget);
+    expect(computeDeadlinePace(opening, derivedTarget, start, target, target)).toBe(derivedTarget);
+  });
+
+  it("current equals expected at every intermediate month", () => {
+    for (let m = 1; m <= 12; m++) {
+      const current = ym(2026, m);
+      const progress = computeGoalProgress(opening, start, current, monthly);
+      const expected = computeDeadlinePace(opening, derivedTarget, start, target, current);
+      expect(progress.current).toBe(expected);
+    }
   });
 });

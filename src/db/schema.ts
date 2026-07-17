@@ -285,14 +285,10 @@ export const categoryCorrections = pgTable("category_corrections", {
  * status index serves the pending-review queue.
  */
 /**
- * Savings goals (#105, #159). Domain law: **goals accumulate, budgets reset
- * monthly** — a goal's progress is opening amount + cumulative Net Savings from
- * `start_month` onward, computed live from analytics (no contribution
- * bookkeeping, no linked categories). Months are calendar months on
- * `transactions.date`, stored as "YYYY-MM" (day is not meaningful); this keeps
- * the goal window identical to every analytics/Dashboard widget. `target_month`
- * is the optional deadline that turns on linear pacing; per-month phrasing
- * ("₪X/חודש עד תאריך") is form-entry sugar deriving the same cumulative target.
+ * Savings goals (CONTEXT.md "savings goal"). Months are stored as "YYYY-MM"
+ * (day is not meaningful) so a goal's window is the same calendar month on
+ * `transactions.date` that every analytics/Dashboard widget uses. Progress
+ * semantics, deadline pacing, and the accumulate-vs-reset law live in CONTEXT.md.
  */
 export const savingsGoals = pgTable("savings_goals", {
   id: uuid("id").primaryKey().defaultRandom(),

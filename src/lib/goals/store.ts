@@ -125,7 +125,7 @@ export const drizzleGoalStore: GoalStore = {
   },
 
   async update(id, changes) {
-    const values: Record<string, unknown> = {};
+    const values: Partial<typeof savingsGoals.$inferInsert> = {};
     if (changes.name !== undefined) values.name = changes.name;
     if (changes.targetAmount !== undefined) values.targetAmount = String(changes.targetAmount);
     if (changes.startMonth !== undefined) values.startMonth = changes.startMonth;

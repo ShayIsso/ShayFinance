@@ -1,11 +1,8 @@
 /**
- * Public interface of the goals module (#105, #159). Savings goals are data
- * with a pure, fully tested progress core; the DB-backed wrappers here compose
- * that core with the same calendar-month transaction window analytics uses, so
- * goal numbers always agree with the Dashboard.
- *
- * Domain law: goals accumulate (progress = opening + cumulative Net Savings
- * since the start month), budgets reset monthly.
+ * Public interface of the goals module (CONTEXT.md "savings goal"). The
+ * DB-backed wrappers compose the pure progress core with the same calendar-month
+ * transaction window analytics uses, so goal numbers always agree with the
+ * Dashboard.
  */
 import { db } from "@/db";
 import { transactions, categories } from "@/db/schema";
