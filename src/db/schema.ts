@@ -284,6 +284,27 @@ export const categoryCorrections = pgTable("category_corrections", {
  * suppression lookup (a `rejected`/`undone` pair is never re-suggested); the
  * status index serves the pending-review queue.
  */
+/**
+ * Savings goals (#105, #159). Domain law: **goals accumulate, budgets reset
+ * monthly** — a goal's progress is opening amount + cumulative Net Savings from
+ * `start_month` onward, computed live from analytics (no contribution
+ * bookkeeping, no linked categories). Months are calendar months on
+ * `transactions.date`, stored as "YYYY-MM" (day is not meaningful); this keeps
+ * the goal window identical to every analytics/Dashboard widget. `target_month`
+ * is the optional deadline that turns on linear pacing; per-month phrasing
+ * ("₪X/חודש עד תאריך") is form-entry sugar deriving the same cumulative target.
+ */
+export const savingsGoals = pgTable("savings_goals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }).notNull(),
+  targetAmount: decimal("target_amount", { precision: 12, scale: 2 }).notNull(),
+  startMonth: varchar("start_month", { length: 7 }).notNull(),
+  openingAmount: decimal("opening_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  targetMonth: varchar("target_month", { length: 7 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const aiSuggestions = pgTable(
   "ai_suggestions",
   {
