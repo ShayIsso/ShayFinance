@@ -301,6 +301,45 @@ export const savingsGoals = pgTable("savings_goals", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+/**
+ * Per-category monthly budgets (CONTEXT.md "budget pace"; decision record #105).
+ * Budgets are gauges, not allocations: one optional cap per expense-type
+ * category (uniqueness enforced here), measuring subtree spend for the calendar
+ * month and resetting monthly. Expense-type-only attachment is a write invariant
+ * in `src/lib/budgets` — the DB does not encode category type.
+ *
+ * `ON DELETE CASCADE` is the pre-accepted default from ADR-0011 §8: deleting a
+ * category drops its budget. BGR8's delete-confirm dialog names this cascade
+ * (see `getBudgetForCategory`); nothing else needs a detach story.
+ */
+export const budgets = pgTable(
+  "budgets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    categoryId: uuid("category_id")
+      .references(() => categories.id, { onDelete: "cascade" })
+      .notNull(),
+    monthlyLimit: decimal("monthly_limit", { precision: 12, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("uq_budget_category").on(table.categoryId)],
+);
+
+/**
+ * Singleton monthly targets (decision record #105 §1, §6). One row (id=1 —
+ * mirrors `scheduler_config`, always upsert, never insert additional rows)
+ * carrying the overall monthly expense target and the monthly net-savings
+ * target. Both nullable: a target is opt-in. The savings target resets monthly
+ * and is evaluated at month close (budgets reset monthly, goals accumulate).
+ */
+export const monthlyTargets = pgTable("monthly_targets", {
+  id: integer("id").primaryKey().default(1),
+  expenseTarget: decimal("expense_target", { precision: 12, scale: 2 }),
+  savingsTarget: decimal("savings_target", { precision: 12, scale: 2 }),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const aiSuggestions = pgTable(
   "ai_suggestions",
   {

@@ -171,6 +171,27 @@ A named cumulative target with a start month, an optional opening amount, and an
 
 A target month turns on **deadline pace**: a linear expected line, `expected = opening + (target − opening) × elapsed ∕ total`, measured on the remaining span. **Month counts are inclusive** — the start month is month 1, so a Jan→Dec goal is 12 months and an on-rate saver reaches exactly 100% at the deadline with no overshoot. Per-month phrasing ("₪X לחודש עד תאריך") is form-entry **sugar** that derives the same cumulative target over that inclusive span; it is one goal kind in storage, not a separate shape. Manual contributions and linked-category progress were rejected.
 
+### `budget` — load-bearing
+
+An optional monthly spending cap on a single **expense-type** category (one budget per category; enforced in `src/lib/budgets`, backstopped by the DB `uq_budget_category` index). A budget is a **gauge, not an allocation**: it evaluates one calendar month in isolation on `transactions.date` — the same window analytics uses — and resets (see `goals accumulate, budgets reset monthly`). Deleting a category cascade-deletes its budget (`ON DELETE CASCADE`).
+
+**Budget spend = subtree spend**: the category's own expense spend plus its direct children's, over the one-level hierarchy — so it degenerates to self for a `root leaf`. A parent (group) budget and a child (leaf) budget may **coexist and evaluate independently**; there is no precedence or roll-up law between them.
+
+### `budget pace` — load-bearing
+
+Where a budget stands mid-month, from its spent fraction (`spent ∕ limit`) against the elapsed fraction of the month (inclusive day count: day 1 is `1∕daysInMonth`, the last day is exactly 1). One of four **pace verdicts**:
+
+- `over` — spent ≥ 100% of the limit (outranks every other verdict, even early in the month);
+- `at-risk` — spent fraction exceeds elapsed by more than the **warn margin** (+10 points);
+- `comfortably-under` — spent fraction is below elapsed by more than the **reassure margin** (−20 points), but **never during the early-month mute window** (through day 7), so a sparse early month never over-reassures;
+- `on-pace` — everything else, including exactly on either band edge.
+
+The bands are deliberately **asymmetric** (warn eagerly, reassure reluctantly). The three tuning values (warn +10, reassure −20, mute through day 7) are named constants in `src/lib/budgets/pace.ts` — one edit point.
+
+### `monthly targets` — load-bearing
+
+Two optional overall (non-per-category) monthly numbers, stored as a single row (id=1, mirrors `scheduler_config`): the **monthly expense target** and the **monthly savings target**. The savings target is gauged against the month's Net Savings and, like every budget, **resets monthly** — but in V1 it is **evaluated at month close only** (`met`/`missed` once the month's last day has passed); intra-month savings pacing is deliberately deferred.
+
 ---
 
 ## Architectural vocabulary
