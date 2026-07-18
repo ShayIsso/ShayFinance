@@ -36,6 +36,7 @@ import {
   Globe,
   Volleyball,
   HandCoins,
+  Unlink,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,11 @@ import {
   applyActionErrors,
 } from "@/components/ui/form";
 import { createCategorySchema } from "@/lib/categories/schemas";
+// Value import from the pure hierarchy module (no DB dependency) — importing
+// the tree builder from "@/lib/categories" itself would pull the
+// Drizzle-backed index.ts (and postgres) into the client bundle. Prior art:
+// rules-section.tsx does the same for firstAssignableCategoryId.
+import { buildCategoryTree, type CategoryTreeNode } from "@/lib/categories/hierarchy";
 import {
   createCategoryAction,
   updateCategoryAction,
@@ -75,6 +81,7 @@ type Category = {
   icon: string;
   color: string;
   isDefault: boolean;
+  parentId: string | null;
 };
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -163,6 +170,11 @@ const TYPE_CLASSES: Record<CategoryType, string> = {
   ignore: "bg-gray-100 text-gray-500 border-gray-200",
 };
 
+// Sentinel for the "no parent — root category" Select option (ADR-0011: a
+// category's own group-ness is derived from having children, never a flag —
+// the form just offers "root" vs "under this existing root category").
+const NO_PARENT = "__none__";
+
 function CategoryIcon({ name, color }: { name: string; color: string }) {
   const Icon = ICON_MAP[name] ?? MoreHorizontal;
   return <Icon className="size-4" style={{ color }} />;
@@ -170,12 +182,16 @@ function CategoryIcon({ name, color }: { name: string; color: string }) {
 
 type CategoryFormValues = z.infer<typeof createCategorySchema>;
 
-const EMPTY_FORM: CategoryFormValues = {
-  name: "",
-  type: "expense",
-  icon: "MoreHorizontal",
-  color: "#6366f1",
-};
+function emptyForm(): CategoryFormValues {
+  return { name: "", type: "expense", icon: "MoreHorizontal", color: "#6366f1", parentId: null };
+}
+
+/** Root-level categories of the given type, minus `excludeId` — every valid move/detach target (ADR-0011: a parent must itself be a root; a populated one is rejected server-side with the guided path). */
+function candidateParents(all: Category[], type: CategoryType, excludeId?: string): Category[] {
+  return all
+    .filter((c) => c.parentId === null && c.type === type && c.id !== excludeId)
+    .sort((a, b) => a.name.localeCompare(b.name, "he"));
+}
 
 export function CategoriesSection({ initialCategories }: { initialCategories: Category[] }) {
   const [categories, setCategories] = React.useState<Category[]>(initialCategories);
@@ -184,23 +200,59 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
   const [editing, setEditing] = React.useState<Category | null>(null);
   const [deleting, setDeleting] = React.useState<Category | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [detachError, setDetachError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [isDeletePending, startDeleteTransition] = React.useTransition();
+  const [isDetachPending, startDetachTransition] = React.useTransition();
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(createCategorySchema),
-    defaultValues: EMPTY_FORM,
+    defaultValues: emptyForm(),
   });
+
+  const tree = React.useMemo(
+    (): CategoryTreeNode<Category>[] => buildCategoryTree(categories),
+    [categories],
+  );
+
+  const childrenCount = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of categories) {
+      if (c.parentId) counts.set(c.parentId, (counts.get(c.parentId) ?? 0) + 1);
+    }
+    return counts;
+  }, [categories]);
+
+  const watchedType = form.watch("type");
+  const parentCandidates = React.useMemo(
+    () => candidateParents(categories, watchedType, editing?.id),
+    [categories, watchedType, editing],
+  );
+  const parentNameById = React.useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories],
+  );
+
+  // A category already carrying children can never gain a parent of its own
+  // (ADR-0011: depth capped at one level, enforced from the child side too) —
+  // the picker is disabled rather than left to fail server-side every time.
+  const editingIsGroup = editing ? (childrenCount.get(editing.id) ?? 0) > 0 : false;
 
   function openAdd() {
     setEditing(null);
-    form.reset(EMPTY_FORM);
+    form.reset(emptyForm());
     setFormOpen(true);
   }
 
   function openEdit(cat: Category) {
     setEditing(cat);
-    form.reset({ name: cat.name, type: cat.type, icon: cat.icon, color: cat.color });
+    form.reset({
+      name: cat.name,
+      type: cat.type,
+      icon: cat.icon,
+      color: cat.color,
+      parentId: cat.parentId,
+    });
     setFormOpen(true);
   }
 
@@ -224,10 +276,17 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
 
       // Optimistic local state, layered on top of the server revalidation.
       if (editing) {
-        setCategories((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...values } : c)));
+        setCategories((prev) =>
+          prev.map((c) =>
+            c.id === editing.id ? { ...c, ...values, parentId: values.parentId ?? null } : c,
+          ),
+        );
       } else if ("id" in result && result.id) {
         const id = result.id;
-        setCategories((prev) => [...prev, { id, ...values, isDefault: false }]);
+        setCategories((prev) => [
+          ...prev,
+          { id, ...values, parentId: values.parentId ?? null, isDefault: false },
+        ]);
       }
       setFormOpen(false);
     });
@@ -241,61 +300,112 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
         setDeleteError(result.error);
         return;
       }
-      setCategories((prev) => prev.filter((c) => c.id !== deleting.id));
+      const detachedIds = categories.filter((c) => c.parentId === deleting.id).map((c) => c.id);
+      setCategories((prev) =>
+        prev
+          .filter((c) => c.id !== deleting.id)
+          .map((c) => (detachedIds.includes(c.id) ? { ...c, parentId: null } : c)),
+      );
       setDeleteOpen(false);
     });
+  }
+
+  function handleDetach(cat: Category) {
+    setDetachError(null);
+    startDetachTransition(async () => {
+      const result = await updateCategoryAction({ id: cat.id, parentId: null });
+      if (result.error) {
+        setDetachError(result.error);
+        return;
+      }
+      setCategories((prev) => prev.map((c) => (c.id === cat.id ? { ...c, parentId: null } : c)));
+    });
+  }
+
+  function renderRow(cat: Category, opts: { isGroup: boolean; indent: boolean }) {
+    return (
+      <div
+        key={cat.id}
+        className={`flex items-center justify-between gap-3 px-4 py-3 ${opts.indent ? "ps-10" : ""}`}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="flex size-8 shrink-0 items-center justify-center rounded-md"
+            style={{ backgroundColor: `${cat.color}20` }}
+          >
+            <CategoryIcon name={cat.icon} color={cat.color} />
+          </div>
+          <span className="text-sm font-medium">{cat.name}</span>
+          <span
+            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_CLASSES[cat.type]}`}
+          >
+            {TYPE_LABELS[cat.type]}
+          </span>
+          {opts.isGroup && (
+            <span className="text-muted-foreground inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-xs font-medium">
+              קבוצה
+            </span>
+          )}
+          <span
+            className="size-4 shrink-0 rounded-full border"
+            style={{ backgroundColor: cat.color }}
+            title={cat.color}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          {opts.indent && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleDetach(cat)}
+              disabled={isDetachPending}
+            >
+              <Unlink />
+              נתק מהקבוצה
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => openEdit(cat)}>
+            ערוך
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={cat.isDefault}
+            onClick={() => !cat.isDefault && openDelete(cat)}
+            className={
+              cat.isDefault ? "cursor-not-allowed opacity-40" : "text-red-600 hover:text-red-700"
+            }
+          >
+            מחק
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">קטגוריות</h3>
+        <div>
+          <h3 className="text-lg font-semibold">קטגוריות</h3>
+          <p className="text-muted-foreground text-sm">
+            קטגוריה שיש לה תתי-קטגוריות הופכת אוטומטית לקבוצה. ניתן ליצור קבוצה חדשה, להעביר
+            קטגוריות אליה ולנתק אותן בחזרה — מבלי לשנות סיווג של אף עסקה.
+          </p>
+        </div>
         <Button size="sm" onClick={openAdd}>
           הוסף קטגוריה
         </Button>
       </div>
 
+      {detachError && <p className="text-destructive text-sm">{detachError}</p>}
+
       <div className="divide-y rounded-lg border">
-        {categories.map((cat) => (
-          <div key={cat.id} className="flex items-center justify-between gap-3 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div
-                className="flex size-8 shrink-0 items-center justify-center rounded-md"
-                style={{ backgroundColor: `${cat.color}20` }}
-              >
-                <CategoryIcon name={cat.icon} color={cat.color} />
-              </div>
-              <span className="text-sm font-medium">{cat.name}</span>
-              <span
-                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_CLASSES[cat.type]}`}
-              >
-                {TYPE_LABELS[cat.type]}
-              </span>
-              <span
-                className="size-4 shrink-0 rounded-full border"
-                style={{ backgroundColor: cat.color }}
-                title={cat.color}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => openEdit(cat)}>
-                ערוך
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={cat.isDefault}
-                onClick={() => !cat.isDefault && openDelete(cat)}
-                className={
-                  cat.isDefault
-                    ? "cursor-not-allowed opacity-40"
-                    : "text-red-600 hover:text-red-700"
-                }
-              >
-                מחק
-              </Button>
-            </div>
-          </div>
+        {tree.map((node) => (
+          <React.Fragment key={node.id}>
+            {renderRow(node, { isGroup: node.children.length > 0, indent: false })}
+            {node.children.map((child) => renderRow(child, { isGroup: false, indent: true }))}
+          </React.Fragment>
         ))}
       </div>
 
@@ -331,7 +441,11 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
                       <Select
                         value={field.value}
                         onValueChange={(v) => {
-                          if (v) field.onChange(v);
+                          if (v) {
+                            field.onChange(v);
+                            // Switching type invalidates a parent of the old type.
+                            form.setValue("parentId", null);
+                          }
                         }}
                       >
                         <FormControl>
@@ -348,6 +462,48 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
                         </SelectContent>
                       </Select>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="parentId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>קבוצת אב</FormLabel>
+                      <Select
+                        value={field.value ?? NO_PARENT}
+                        onValueChange={(v) => {
+                          if (v) field.onChange(v === NO_PARENT ? null : v);
+                        }}
+                        disabled={editingIsGroup}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <span>
+                              {field.value
+                                ? (parentNameById.get(field.value) ?? "קטגוריית שורש")
+                                : "ללא (קטגוריית שורש)"}
+                            </span>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={NO_PARENT}>ללא (קטגוריית שורש)</SelectItem>
+                          {parentCandidates.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {editingIsGroup ? (
+                        <p className="text-muted-foreground text-sm">
+                          לקבוצה עם תתי-קטגוריות אין קבוצת אב משלה.
+                        </p>
+                      ) : (
+                        <FormMessage />
+                      )}
                     </FormItem>
                   )}
                 />
@@ -441,10 +597,22 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>מחיקת קטגוריה</DialogTitle>
+            <DialogTitle>
+              {deleting && childrenCount.get(deleting.id) ? "מחיקת קבוצה" : "מחיקת קטגוריה"}
+            </DialogTitle>
           </DialogHeader>
           <p className="text-muted-foreground py-2 text-sm">
-            האם למחוק את הקטגוריה &quot;{deleting?.name}&quot;? עסקאות משויכות יאבדו את הסיווג שלהן.
+            {deleting && childrenCount.get(deleting.id) ? (
+              <>
+                מחיקת הקבוצה &quot;{deleting.name}&quot; תנתק את תתי-הקטגוריות שבתוכה בחזרה
+                לקטגוריות שורש. שום עסקה, כלל סיווג או זיכרון ספק המשויכים אליהן לא ייפגעו.
+              </>
+            ) : (
+              <>
+                האם למחוק את הקטגוריה &quot;{deleting?.name}&quot;? עסקאות משויכות יאבדו את הסיווג
+                שלהן.
+              </>
+            )}
           </p>
           {deleteError && <p className="text-destructive text-sm">{deleteError}</p>}
           <DialogFooter>
