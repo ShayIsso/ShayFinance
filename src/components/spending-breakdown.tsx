@@ -118,13 +118,11 @@ function Donut({
 
 function LeafRow({
   leaf,
-  total,
   max,
   onEmphasize,
   onClearEmphasis,
 }: {
   leaf: CategorySpendingNode["children"][number];
-  total: number;
   max: number;
   onEmphasize: () => void;
   onClearEmphasis: () => void;
@@ -237,7 +235,6 @@ function NodeRow({
             <LeafRow
               key={leaf.categoryId}
               leaf={leaf}
-              total={total}
               max={max}
               onEmphasize={onEmphasize}
               onClearEmphasis={onClearEmphasis}
