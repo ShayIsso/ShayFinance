@@ -117,7 +117,25 @@ export function buildPaginatedResult<T>(
   return { data, total, page, pageSize };
 }
 
-export async function getTransactions(filters: z.infer<typeof transactionFiltersSchema>) {
+/**
+ * The subset of the transactions filter schema that constrains WHICH rows
+ * match — every consumer that reads filtered rows (paginated listing, the
+ * unpaginated CSV export in `@/lib/reports`) shares this exact condition
+ * set, so "what you filtered" and "what you export" can never diverge.
+ */
+export type TransactionFilterConditions = Pick<
+  z.infer<typeof transactionFiltersSchema>,
+  | "dateFrom"
+  | "dateTo"
+  | "bankAccountId"
+  | "categoryId"
+  | "status"
+  | "search"
+  | "uncategorized"
+  | "needsReview"
+>;
+
+export function buildTransactionFilterConditions(filters: TransactionFilterConditions) {
   const {
     dateFrom,
     dateTo,
@@ -127,10 +145,7 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
     search,
     uncategorized,
     needsReview,
-    page,
-    pageSize,
   } = filters;
-  const offset = (page - 1) * pageSize;
 
   const conditions = [];
   if (dateFrom) conditions.push(gte(transactions.date, dateFrom));
@@ -147,7 +162,14 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
   if (status) conditions.push(eq(transactions.status, status));
   if (search) conditions.push(ilike(transactions.description, `%${search}%`));
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
+export async function getTransactions(filters: z.infer<typeof transactionFiltersSchema>) {
+  const { page, pageSize } = filters;
+  const offset = (page - 1) * pageSize;
+
+  const whereClause = buildTransactionFilterConditions(filters);
 
   const [rows, activeRecurring, totalResult] = await Promise.all([
     db.query.transactions.findMany({

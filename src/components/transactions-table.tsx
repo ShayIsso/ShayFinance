@@ -13,6 +13,7 @@ import {
   Bot,
   Check,
   X,
+  Download,
 } from "lucide-react";
 import { undoReconciliationAction } from "@/app/actions/reconciliation";
 import {
@@ -26,7 +27,7 @@ import {
   undoAiAssignmentAction,
 } from "@/app/actions/ai-review";
 import type { FannedOutRow } from "@/lib/merchant-memory";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -48,6 +49,7 @@ import {
 } from "@/components/grouped-category-select-items";
 import { Amount } from "@/components/ui/amount";
 import { pageRange } from "@/lib/transactions/pagination";
+import { cn } from "@/lib/utils";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -109,6 +111,29 @@ type TransactionsResponse = {
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/**
+ * The active filter conditions as query params — shared by the listing fetch
+ * and the CSV export link (issue #163 — WYSIWYG) so the two can never
+ * diverge on how a sentinel `categoryId` value maps to `uncategorized` /
+ * `needsReview`. Deliberately excludes `page`/`pageSize`: export always reads
+ * every matching row, listing appends its own paging on top of this.
+ */
+function buildFilterSearchParams(filters: Filters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters.dateTo) params.set("dateTo", filters.dateTo);
+  if (filters.categoryId === "__uncategorized__") {
+    params.set("uncategorized", "true");
+  } else if (filters.categoryId === "__needs_review__") {
+    params.set("needsReview", "true");
+  } else if (filters.categoryId) {
+    params.set("categoryId", filters.categoryId);
+  }
+  if (filters.status) params.set("status", filters.status);
+  if (filters.search) params.set("search", filters.search);
+  return params;
 }
 
 const CADENCE_LABELS: Record<RecurringInfo["cadence"], string> = {
@@ -439,18 +464,7 @@ export function TransactionsTable({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- removed during Phase 2 Server Actions migration (see PRD issue #35)
     setLoading(true);
 
-    const params = new URLSearchParams();
-    if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
-    if (filters.dateTo) params.set("dateTo", filters.dateTo);
-    if (filters.categoryId === "__uncategorized__") {
-      params.set("uncategorized", "true");
-    } else if (filters.categoryId === "__needs_review__") {
-      params.set("needsReview", "true");
-    } else if (filters.categoryId) {
-      params.set("categoryId", filters.categoryId);
-    }
-    if (filters.status) params.set("status", filters.status);
-    if (filters.search) params.set("search", filters.search);
+    const params = buildFilterSearchParams(filters);
     params.set("page", String(filters.page));
     params.set("pageSize", String(filters.pageSize));
 
@@ -738,6 +752,16 @@ export function TransactionsTable({
             נקה סינון
           </Button>
         )}
+        {/* WYSIWYG export (issue #163): same query params the listing fetch
+            just built above, minus paging — export always reads every row
+            matching the active filters, so clearing filters exports everything. */}
+        <a
+          href={`/api/transactions/export?${buildFilterSearchParams(filters).toString()}`}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 self-end")}
+        >
+          <Download className="size-3.5" strokeWidth={1.5} />
+          ייצוא ל-CSV
+        </a>
       </div>
 
       {/* Bulk action bar */}
