@@ -46,6 +46,7 @@ import type { Category, CategoryTreeNode } from "@/lib/categories";
 import {
   CategoryDot,
   GroupedCategorySelectItems,
+  FilterCategorySelectItems,
 } from "@/components/grouped-category-select-items";
 import { Amount } from "@/components/ui/amount";
 import { pageRange } from "@/lib/transactions/pagination";
@@ -705,11 +706,7 @@ export function TransactionsTable({
               <SelectItem value="__all__">הכל</SelectItem>
               <SelectItem value="__uncategorized__">ללא קטגוריה</SelectItem>
               <SelectItem value="__needs_review__">ממתין לסקירה</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
-              ))}
+              <FilterCategorySelectItems tree={tree} />
             </SelectContent>
           </Select>
         </div>
