@@ -6,6 +6,7 @@ import {
   type OverwritableTransaction,
   type RetroactiveStore,
 } from "../retroactive";
+import { NotAssignableCategoryError } from "../errors";
 import type { CategoryRule } from "../rules";
 
 const rule = (
@@ -26,10 +27,12 @@ const txn = (
 const makeStore = (
   foundRule: CategoryRule | null,
   txns: OverwritableTransaction[],
+  hasChildren: boolean = false,
 ): RetroactiveStore => ({
   getRuleById: vi.fn(async () => foundRule),
   getOverwritableTransactions: vi.fn(async () => txns),
   categorizeTransactions: vi.fn(async (ids: string[]) => ids.length),
+  categoryHasChildren: vi.fn(async () => hasChildren),
 });
 
 // ─── Pure function ────────────────────────────────────────────────────────────
@@ -173,5 +176,15 @@ describe("applyRetroactively", () => {
     const store = makeStore(r, txns);
     const result = await applyRetroactively("rule-1", store);
     expect(result).toEqual({ applied: 3 });
+  });
+
+  it("rejects and writes nothing when the rule targets a category with children (group, not leaf)", async () => {
+    const r = rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-group" });
+    const txns = [txn({ id: "t1", description: "שופרסל דיל" })];
+    const store = makeStore(r, txns, true);
+
+    await expect(applyRetroactively("rule-1", store)).rejects.toThrow(NotAssignableCategoryError);
+
+    expect(store.categorizeTransactions).not.toHaveBeenCalled();
   });
 });

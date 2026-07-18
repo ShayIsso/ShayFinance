@@ -4,6 +4,7 @@ import type { CategorizationProvider, GenerationOptions } from "../provider";
 import { extractMerchant } from "@/lib/transaction-matching";
 import type { RedactedString } from "@/lib/redaction";
 import type { MerchantMemoryStore, MemoryEntry, CategorySource } from "@/lib/merchant-memory";
+import { filterAssignable } from "@/lib/categories";
 
 // ── Combined in-memory store ────────────────────────────────────────────────
 // Implements BOTH the AiCategorizationStore and the MerchantMemoryStore over
@@ -25,7 +26,14 @@ type StoredSuggestion = {
   model: string;
   status: "pending_review" | "auto_applied" | "accepted" | "rejected" | "undone";
 };
-type StoredCategory = { id: string; name: string; description: string | null };
+// parentId is optional so existing seeds (flat category sets) need no change;
+// ADR-0011 hierarchy tests set it to exercise the assignable-only answer space.
+type StoredCategory = {
+  id: string;
+  name: string;
+  description: string | null;
+  parentId?: string | null;
+};
 
 function createFake(seed: {
   txns: StoredTxn[];
@@ -82,6 +90,9 @@ function createFake(seed: {
     async getCategoryName(id) {
       return nameById.get(id) ?? null;
     },
+    async categoryHasChildren(categoryId) {
+      return categories.some((c) => c.parentId === categoryId);
+    },
     async getOverwritableTransactions() {
       return txns
         .filter((t) => t.categorySource === null || t.categorySource === "ai")
@@ -122,7 +133,20 @@ function createFake(seed: {
       return served.map((t) => ({ id: t.id, description: t.description, bankType: t.bankType }));
     },
     async getPromptCategories() {
-      return categories.map((c) => ({ id: c.id, name: c.name, description: c.description }));
+      // Mirrors the real store's ADR-0011 §6 filtering: the prompt's answer
+      // space is assignable (childless) categories only.
+      const assignable = filterAssignable(
+        categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          type: "expense" as const,
+          parentId: c.parentId ?? null,
+        })),
+      );
+      const assignableIds = new Set(assignable.map((c) => c.id));
+      return categories
+        .filter((c) => assignableIds.has(c.id))
+        .map((c) => ({ id: c.id, name: c.name, description: c.description }));
     },
     async getFewShotExamples() {
       return (seed.fewShot ?? []).map((e) => ({ ...e }));
@@ -661,5 +685,81 @@ describe("runAiCategorization — full pipeline", () => {
     const seen = String(provider.prompts[0]);
     expect(seen).not.toContain("123456789");
     expect(seen).toContain("[REDACTED_DIGITS]");
+  });
+});
+
+// ── Assignable-only answer space (ADR-0011 §6) ───────────────────────────────
+// A group is never assignable, so its name must never reach the prompt's
+// category list; a model answer naming it anyway is rejected as unknown.
+
+describe("runAiCategorization — assignable-only answer space", () => {
+  it("excludes a group's name from the prompt category list and discards an answer naming it", async () => {
+    const fake = createFake({
+      categories: [
+        { id: "g-food", name: "אוכל", description: null, parentId: null },
+        { id: "c-food", name: "מזון וסופר", description: null, parentId: "g-food" },
+        { id: "c-rest", name: "מסעדות וקפה", description: null, parentId: "g-food" },
+      ],
+      txns: [
+        {
+          id: "t1",
+          description: "שופרסל דיל",
+          bankType: "max",
+          categoryId: null,
+          categorySource: null,
+        },
+      ],
+    });
+
+    // Answers with the GROUP's name, never one of its leaves.
+    const provider = scriptedProvider([{ match: "שופרסל", category: "אוכל", confidence: 7 }]);
+
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+    });
+
+    expect(String(provider.prompts[0])).not.toContain("אוכל");
+    expect(summary.failures).toContainEqual(
+      expect.objectContaining({ reason: "unknown_category" }),
+    );
+    expect(summary.autoApplied).toBe(0);
+    expect(summary.queuedForReview).toBe(0);
+    expect(fake.txns.find((t) => t.id === "t1")?.categoryId).toBeNull();
+  });
+
+  it("still offers the group's own leaves as valid answers", async () => {
+    const fake = createFake({
+      categories: [
+        { id: "g-food", name: "אוכל", description: null, parentId: null },
+        { id: "c-food", name: "מזון וסופר", description: null, parentId: "g-food" },
+        { id: "c-rest", name: "מסעדות וקפה", description: null, parentId: "g-food" },
+      ],
+      txns: [
+        {
+          id: "t1",
+          description: "שופרסל דיל",
+          bankType: "max",
+          categoryId: null,
+          categorySource: null,
+        },
+      ],
+    });
+
+    const provider = scriptedProvider([{ match: "שופרסל", category: "מזון וסופר", confidence: 7 }]);
+
+    const summary = await runAiCategorization({
+      aiStore: fake.aiStore,
+      memoryStore: fake.memoryStore,
+      provider,
+    });
+
+    expect(String(provider.prompts[0])).toContain("מזון וסופר");
+    expect(summary.autoApplied).toBe(1);
+    expect(fake.txns.find((t) => t.id === "t1")).toMatchObject({
+      categoryId: "c-food",
+      categorySource: "ai",
+    });
   });
 });

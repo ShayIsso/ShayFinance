@@ -9,11 +9,13 @@ import {
   undoCategoryFanOut,
   type FannedOutRow,
 } from "@/lib/merchant-memory";
+import { NotAssignableCategoryError } from "@/lib/categories";
 import {
   updateTransactionActionSchema,
   bulkCategorizeSchema,
   undoFanOutSchema,
 } from "@/lib/transactions/schemas";
+import { notAssignableResult } from "./not-assignable";
 
 /**
  * A transaction's custom description or category assignment renders on the
@@ -49,7 +51,12 @@ export async function updateTransactionAction(data: unknown): Promise<{
       // Category changes route through merchant memory: a first-time label is a
       // memory write, a change to an already-categorized row is a logged
       // correction — and either fans out to same-key siblings (ADR-0010 §4).
-      fanOut = await changeTransactionCategory(id, changes.categoryId);
+      try {
+        fanOut = await changeTransactionCategory(id, changes.categoryId);
+      } catch (err) {
+        if (err instanceof NotAssignableCategoryError) return notAssignableResult();
+        throw err;
+      }
     }
   }
   if ("customDescription" in changes) {
@@ -75,12 +82,17 @@ export async function bulkCategorizeAction(data: unknown): Promise<{
   }
 
   const { transactionIds, categoryId } = parsed.data;
-  const { fanOutCount, fannedOut } = await bulkChangeTransactionCategories(
-    transactionIds,
-    categoryId,
-  );
-  revalidateTransactionPages();
-  return { updated: transactionIds.length, fanOutCount, fannedOut };
+  try {
+    const { fanOutCount, fannedOut } = await bulkChangeTransactionCategories(
+      transactionIds,
+      categoryId,
+    );
+    revalidateTransactionPages();
+    return { updated: transactionIds.length, fanOutCount, fannedOut };
+  } catch (err) {
+    if (err instanceof NotAssignableCategoryError) return notAssignableResult();
+    throw err;
+  }
 }
 
 export async function undoFanOutAction(

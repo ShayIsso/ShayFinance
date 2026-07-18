@@ -9,6 +9,7 @@ import {
 } from "../review";
 import { applyCorrection } from "@/lib/merchant-memory";
 import type { MerchantMemoryStore, MemoryEntry, CategorySource } from "@/lib/merchant-memory";
+import { NotAssignableCategoryError } from "@/lib/categories/errors";
 
 // ── Combined in-memory store ────────────────────────────────────────────────
 // Implements both MerchantMemoryStore and ReviewStore over shared arrays, so
@@ -82,6 +83,9 @@ function createFake(seed: {
     },
     async getCategoryName(id) {
       return categoryNames[id] ?? null;
+    },
+    async categoryHasChildren() {
+      return false;
     },
     async getOverwritableTransactions() {
       return txns
@@ -260,6 +264,35 @@ describe("acceptSuggestion", () => {
     expect(mismatched.accepted).toBe(false);
     expect(txns[0]).toMatchObject({ categoryId: null, categorySource: null });
     expect(entries).toHaveLength(0);
+  });
+
+  it("rejects a suggestion whose category has children — a group is never assignable (ADR-0011 §3)", async () => {
+    const { memoryStore, reviewStore, txns, entries, suggestions } = createFake({
+      txns: [{ id: "target", description: "שופרסל דיל", categoryId: null, categorySource: null }],
+      suggestions: [
+        {
+          id: "sugg-1",
+          transactionId: "target",
+          categoryId: "cat-group",
+          categoryName: "קבוצה",
+          confidence: 4,
+          status: "pending_review",
+        },
+      ],
+    });
+    memoryStore.categoryHasChildren = async (id) => id === "cat-group";
+
+    await expect(
+      acceptSuggestion(
+        { transactionId: "target", suggestionId: "sugg-1" },
+        reviewStore,
+        memoryStore,
+      ),
+    ).rejects.toThrow(NotAssignableCategoryError);
+
+    expect(txns[0]).toMatchObject({ categoryId: null, categorySource: null });
+    expect(entries).toHaveLength(0);
+    expect(suggestions[0].status).toBe("pending_review");
   });
 });
 

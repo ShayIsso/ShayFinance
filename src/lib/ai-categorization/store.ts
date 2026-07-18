@@ -9,7 +9,7 @@ import {
   bankCredentials,
 } from "@/db/schema";
 import { eq, and, isNull, inArray, desc } from "drizzle-orm";
-import { matchesRule } from "@/lib/categories";
+import { matchesRule, filterAssignable } from "@/lib/categories";
 import type {
   AiCategorizationStore,
   UncategorizedTxn,
@@ -55,10 +55,22 @@ export function createAiCategorizationStore(client: DbClient = db): AiCategoriza
 
     async getPromptCategories(): Promise<PromptCategoryRow[]> {
       const rows = await client
-        .select({ id: categories.id, name: categories.name, description: categories.description })
+        .select({
+          id: categories.id,
+          name: categories.name,
+          description: categories.description,
+          type: categories.type,
+          parentId: categories.parentId,
+        })
         .from(categories)
         .orderBy(categories.name);
-      return rows.map((r) => ({ id: r.id, name: r.name, description: r.description ?? null }));
+      // ADR-0011 §6: the AI stays blind to hierarchy — the prompt's answer
+      // space is assignable (childless) categories only, so creating a group
+      // can never silently widen it.
+      const assignableIds = new Set(filterAssignable(rows).map((c) => c.id));
+      return rows
+        .filter((r) => assignableIds.has(r.id))
+        .map((r) => ({ id: r.id, name: r.name, description: r.description ?? null }));
     },
 
     async getFewShotExamples(): Promise<FewShotRow[]> {

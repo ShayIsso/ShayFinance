@@ -44,6 +44,9 @@ function makeStores(seed: { txns: StoredTxn[]; categories: StoredCategory[] }) {
     async getCategoryName() {
       return null;
     },
+    async categoryHasChildren() {
+      return false;
+    },
     async getOverwritableTransactions() {
       return [];
     },

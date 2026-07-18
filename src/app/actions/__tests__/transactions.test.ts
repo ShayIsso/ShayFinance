@@ -34,6 +34,7 @@ import {
   bulkCategorizeAction,
   undoFanOutAction,
 } from "@/app/actions/transactions";
+import { NotAssignableCategoryError } from "@/lib/categories/errors";
 
 const VALID_TXN_ID = "3f8a2b1c-4d5e-4f6a-8b7c-9d0e1f2a3b4c";
 const VALID_CATEGORY_ID = "7c6b5a4d-3e2f-4a1b-9c8d-0e1f2a3b4c5d";
@@ -134,6 +135,18 @@ describe("updateTransactionAction", () => {
       updateTransactionAction({ id: VALID_TXN_ID, categoryId: VALID_CATEGORY_ID }),
     ).rejects.toThrow("connection refused");
   });
+
+  it("maps a group categoryId (leaf-only guard, ADR-0011 §3) to a Hebrew field error", async () => {
+    vi.mocked(changeTransactionCategory).mockRejectedValueOnce(new NotAssignableCategoryError());
+
+    const result = await updateTransactionAction({
+      id: VALID_TXN_ID,
+      categoryId: VALID_CATEGORY_ID,
+    });
+
+    expect(result.error).toBe("לא ניתן לשייך לקטגוריית קבוצה — יש לבחור קטגוריית משנה");
+    expect(result.fieldErrors?.categoryId).toBe(result.error);
+  });
 });
 
 // ── bulkCategorizeAction ────────────────────────────────────────────────────────
@@ -211,6 +224,20 @@ describe("bulkCategorizeAction", () => {
     await expect(
       bulkCategorizeAction({ transactionIds: [VALID_TXN_ID], categoryId: VALID_CATEGORY_ID }),
     ).rejects.toThrow("connection refused");
+  });
+
+  it("maps a group categoryId (leaf-only guard, ADR-0011 §3) to a Hebrew field error", async () => {
+    vi.mocked(bulkChangeTransactionCategories).mockRejectedValueOnce(
+      new NotAssignableCategoryError(),
+    );
+
+    const result = await bulkCategorizeAction({
+      transactionIds: [VALID_TXN_ID],
+      categoryId: VALID_CATEGORY_ID,
+    });
+
+    expect(result.error).toBe("לא ניתן לשייך לקטגוריית קבוצה — יש לבחור קטגוריית משנה");
+    expect(result.fieldErrors?.categoryId).toBe(result.error);
   });
 });
 

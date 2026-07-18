@@ -133,6 +133,15 @@ export function createMerchantMemoryStore(client: DbClient = db): MerchantMemory
       return rows[0]?.name ?? null;
     },
 
+    async categoryHasChildren(categoryId) {
+      const rows = await client
+        .select({ id: categories.id })
+        .from(categories)
+        .where(eq(categories.parentId, categoryId))
+        .limit(1);
+      return rows.length > 0;
+    },
+
     async getOverwritableTransactions(merchantKey) {
       const rows = await client
         .select({

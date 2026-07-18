@@ -28,6 +28,13 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { Tags } from "lucide-react";
 import { createRuleSchema } from "@/lib/categories/schemas";
+// Value import from the pure hierarchy module (no DB dependency) — importing
+// this client component's other category bindings from "@/lib/categories"
+// itself would pull the Drizzle-backed index.ts (and postgres) into the
+// client bundle, per Next's module-not-found trace on Node builtins.
+import { firstAssignableCategoryId } from "@/lib/categories/hierarchy";
+import type { Category, CategoryTreeNode } from "@/lib/categories";
+import { GroupedCategorySelectItems } from "@/components/grouped-category-select-items";
 import {
   previewRetroactiveApplyAction,
   applyRetroactivelyAction,
@@ -46,11 +53,6 @@ type CategoryRule = {
   priority: number;
 };
 
-type Category = {
-  id: string;
-  name: string;
-};
-
 const MATCH_TYPE_LABELS: Record<MatchType, string> = {
   contains: "מכיל",
   starts_with: "מתחיל ב",
@@ -67,9 +69,9 @@ const MATCH_TYPE_CLASSES: Record<MatchType, string> = {
 
 type RuleFormValues = z.infer<typeof createRuleSchema>;
 
-function emptyForm(categories: Category[]): RuleFormValues {
+function emptyForm(tree: CategoryTreeNode<Category>[]): RuleFormValues {
   return {
-    categoryId: categories[0]?.id ?? "",
+    categoryId: firstAssignableCategoryId(tree),
     matchType: "contains",
     pattern: "",
     priority: 0,
@@ -79,9 +81,11 @@ function emptyForm(categories: Category[]): RuleFormValues {
 export function RulesSection({
   initialRules,
   categories,
+  tree,
 }: {
   initialRules: CategoryRule[];
   categories: Category[];
+  tree: CategoryTreeNode<Category>[];
 }) {
   const [rules, setRules] = React.useState<CategoryRule[]>(initialRules);
   const [formOpen, setFormOpen] = React.useState(false);
@@ -100,7 +104,7 @@ export function RulesSection({
 
   const form = useForm<RuleFormValues>({
     resolver: zodResolver(createRuleSchema),
-    defaultValues: emptyForm(categories),
+    defaultValues: emptyForm(tree),
   });
 
   const categoryMap = React.useMemo(
@@ -110,7 +114,7 @@ export function RulesSection({
 
   function openAdd() {
     setEditing(null);
-    form.reset(emptyForm(categories));
+    form.reset(emptyForm(tree));
     setFormOpen(true);
   }
 
@@ -289,11 +293,7 @@ export function RulesSection({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
+                          <GroupedCategorySelectItems tree={tree} />
                         </SelectContent>
                       </Select>
                       <FormMessage />

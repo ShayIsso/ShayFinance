@@ -26,6 +26,7 @@ import { revalidatePath } from "next/cache";
 import { createRule, updateRule, deleteRule } from "@/lib/categories/rules";
 import { createRuleAction, updateRuleAction, deleteRuleAction } from "@/app/actions/rules";
 import { createRuleSchema } from "@/lib/categories/schemas";
+import { NotAssignableCategoryError } from "@/lib/categories/errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 const VALID_CATEGORY_ID = "3f8a2b1c-4d5e-4f6a-8b7c-9d0e1f2a3b4c";
@@ -134,6 +135,16 @@ describe("createRuleAction", () => {
 
     await expect(createRuleAction(VALID_INPUT)).rejects.toThrow("connection refused");
   });
+
+  it("maps a group categoryId (leaf-only guard, ADR-0011 §3) to a Hebrew field error", async () => {
+    vi.mocked(createRule).mockRejectedValue(new NotAssignableCategoryError());
+
+    const result = await createRuleAction(VALID_INPUT);
+
+    expect(result.error).toBe("לא ניתן לשייך לקטגוריית קבוצה — יש לבחור קטגוריית משנה");
+    expect(result.fieldErrors?.categoryId).toBe(result.error);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
 });
 
 // ── updateRuleAction ──────────────────────────────────────────────────────────
@@ -187,6 +198,15 @@ describe("updateRuleAction", () => {
 
     expect(result).toEqual({ updated: true });
     expect(updateRule).toHaveBeenCalledWith(VALID_RULE_ID, { priority: 5 });
+  });
+
+  it("maps a group categoryId (leaf-only guard, ADR-0011 §3) to a Hebrew field error", async () => {
+    vi.mocked(updateRule).mockRejectedValueOnce(new NotAssignableCategoryError());
+
+    const result = await updateRuleAction({ id: VALID_RULE_ID, ...VALID_INPUT });
+
+    expect(result.error).toBe("לא ניתן לשייך לקטגוריית קבוצה — יש לבחור קטגוריית משנה");
+    expect(result.fieldErrors?.categoryId).toBe(result.error);
   });
 
   // pattern and matchType must travel together — otherwise a partial update
