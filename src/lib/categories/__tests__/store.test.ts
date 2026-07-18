@@ -18,22 +18,31 @@ import {
 } from "../errors";
 
 type Txn = { id: string; categoryId: string | null };
+type Rule = { id: string; categoryId: string };
+type MemoryEntry = { id: string; categoryId: string };
 
 /**
- * In-memory CategoryStore + a parallel transactions table, so a test can assert
- * that a category operation left transaction rows untouched. Population is
- * derived from the transactions table plus per-category overrides for the other
- * population sources (rules, memory, suggestions, budgets).
+ * In-memory CategoryStore + parallel transactions/rules/memory tables, so a
+ * test can assert that a category operation left those rows untouched.
+ * Population is derived from the transactions table plus per-category
+ * overrides for the other population sources (rules, memory, suggestions,
+ * budgets) — the overrides are counts only; `rules`/`memoryEntries` below are
+ * real rows a deletion test can assert against directly, matching the
+ * transactions table's role.
  */
 function makeStore(
   seed: StoredCategory[],
   opts: {
     transactions?: Txn[];
+    rules?: Rule[];
+    memoryEntries?: MemoryEntry[];
     populationOverrides?: Record<string, Partial<CategoryPopulation>>;
   } = {},
 ) {
   const categories = seed.map((c) => ({ ...c }));
   const transactions = (opts.transactions ?? []).map((t) => ({ ...t }));
+  const rules = (opts.rules ?? []).map((r) => ({ ...r }));
+  const memoryEntries = (opts.memoryEntries ?? []).map((m) => ({ ...m }));
   const overrides = opts.populationOverrides ?? {};
   let nextId = 1000;
 
@@ -47,7 +56,15 @@ function makeStore(
     },
     async getPopulation(id) {
       const txnCount = transactions.filter((t) => t.categoryId === id).length;
-      return { ...emptyPopulation(), ...overrides[id], transactions: txnCount };
+      const ruleCount = rules.filter((r) => r.categoryId === id).length;
+      const memoryCount = memoryEntries.filter((m) => m.categoryId === id).length;
+      return {
+        ...emptyPopulation(),
+        ...overrides[id],
+        transactions: txnCount,
+        rules: ruleCount,
+        memoryEntries: memoryCount,
+      };
     },
     async insert(data) {
       const id = `new-${nextId++}`;
@@ -67,7 +84,7 @@ function makeStore(
     },
   };
 
-  return { store, categories, transactions };
+  return { store, categories, transactions, rules, memoryEntries };
 }
 
 const cat = (
@@ -125,6 +142,25 @@ describe("deleteCategoryWithStore", () => {
     expect(categories.find((c) => c.id === "l1")!.parentId).toBeNull();
     expect(categories.find((c) => c.id === "l2")!.parentId).toBeNull();
     expect(transactions).toEqual(txns);
+  });
+
+  it("detaches a group's children and leaves their rules and merchant-memory entries untouched (issue #161)", async () => {
+    const rules: Rule[] = [{ id: "r1", categoryId: "l1" }];
+    const memoryEntries: MemoryEntry[] = [{ id: "m1", categoryId: "l2" }];
+    const {
+      store,
+      categories,
+      rules: storedRules,
+      memoryEntries: storedMemory,
+    } = makeStore(baseSeed(), { rules, memoryEntries });
+
+    await deleteCategoryWithStore("g1", store);
+
+    expect(categories.find((c) => c.id === "g1")).toBeUndefined();
+    expect(categories.find((c) => c.id === "l1")!.parentId).toBeNull();
+    expect(categories.find((c) => c.id === "l2")!.parentId).toBeNull();
+    expect(storedRules).toEqual(rules);
+    expect(storedMemory).toEqual(memoryEntries);
   });
 
   it("blocks deleting a default category", async () => {

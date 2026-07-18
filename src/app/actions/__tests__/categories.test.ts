@@ -22,7 +22,15 @@ import {
   deleteCategoryAction,
 } from "@/app/actions/categories";
 import { createCategorySchema } from "@/lib/categories/schemas";
-import { DefaultCategoryDeletionError, DuplicateCategoryNameError } from "@/lib/categories/errors";
+import {
+  DefaultCategoryDeletionError,
+  DuplicateCategoryNameError,
+  CategoryTypeMismatchError,
+  HierarchyDepthError,
+  LinkedTypeChangeError,
+  ParentNotFoundError,
+  PopulatedCategoryError,
+} from "@/lib/categories/errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 const VALID_INPUT = {
@@ -134,6 +142,53 @@ describe("createCategoryAction", () => {
 
     await expect(createCategoryAction(VALID_INPUT)).rejects.toThrow("connection refused");
   });
+
+  it("passes a chosen parentId through to the module", async () => {
+    vi.mocked(createCategory).mockResolvedValue("new-id");
+
+    await createCategoryAction({ ...VALID_INPUT, parentId: VALID_ID });
+
+    expect(createCategory).toHaveBeenCalledWith({ ...VALID_INPUT, parentId: VALID_ID });
+  });
+
+  // ── Hierarchy invariants (ADR-0011) surfaced as Hebrew form errors ──────────
+  // Every population source (transactions, rules, memory, pending suggestions,
+  // budgets) is validated inside the module and reaches this boundary as the
+  // same typed error — the guided-path copy is asserted once per error type.
+
+  it("surfaces PopulatedCategoryError as a guided-path field error on parentId, never a thrown 500", async () => {
+    vi.mocked(createCategory).mockRejectedValue(new PopulatedCategoryError());
+
+    const result = await createCategoryAction({ ...VALID_INPUT, parentId: VALID_ID });
+
+    expect(result.error).toContain("קבוצה חדשה");
+    expect(result.fieldErrors?.parentId).toContain("קבוצה חדשה");
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("surfaces CategoryTypeMismatchError as a field error on parentId", async () => {
+    vi.mocked(createCategory).mockRejectedValue(new CategoryTypeMismatchError());
+
+    const result = await createCategoryAction({ ...VALID_INPUT, parentId: VALID_ID });
+
+    expect(result.fieldErrors?.parentId).toBeTruthy();
+  });
+
+  it("surfaces HierarchyDepthError as a field error on parentId", async () => {
+    vi.mocked(createCategory).mockRejectedValue(new HierarchyDepthError());
+
+    const result = await createCategoryAction({ ...VALID_INPUT, parentId: VALID_ID });
+
+    expect(result.fieldErrors?.parentId).toBeTruthy();
+  });
+
+  it("surfaces ParentNotFoundError as a field error on parentId", async () => {
+    vi.mocked(createCategory).mockRejectedValue(new ParentNotFoundError());
+
+    const result = await createCategoryAction({ ...VALID_INPUT, parentId: VALID_ID });
+
+    expect(result.fieldErrors?.parentId).toBeTruthy();
+  });
 });
 
 // ── updateCategoryAction ──────────────────────────────────────────────────────
@@ -185,6 +240,43 @@ describe("updateCategoryAction", () => {
     const result = await updateCategoryAction({ id: VALID_ID, name: "כפול" });
 
     expect(result.fieldErrors?.name).toBe("קטגוריה בשם זה כבר קיימת");
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("moves a leaf under a group by delegating a parentId change", async () => {
+    vi.mocked(updateCategory).mockResolvedValue(undefined);
+
+    const result = await updateCategoryAction({ id: VALID_ID, parentId: VALID_ID });
+
+    expect(result).toEqual({ updated: true });
+    expect(updateCategory).toHaveBeenCalledWith(VALID_ID, { parentId: VALID_ID });
+  });
+
+  it("detaches a leaf back to root via an explicit null parentId", async () => {
+    vi.mocked(updateCategory).mockResolvedValue(undefined);
+
+    const result = await updateCategoryAction({ id: VALID_ID, parentId: null });
+
+    expect(result).toEqual({ updated: true });
+    expect(updateCategory).toHaveBeenCalledWith(VALID_ID, { parentId: null });
+  });
+
+  it("surfaces PopulatedCategoryError (move-under-populated-leaf) as a guided-path field error, never a thrown 500", async () => {
+    vi.mocked(updateCategory).mockRejectedValue(new PopulatedCategoryError());
+
+    const result = await updateCategoryAction({ id: VALID_ID, parentId: VALID_ID });
+
+    expect(result.error).toContain("קבוצה חדשה");
+    expect(result.fieldErrors?.parentId).toBeTruthy();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("surfaces LinkedTypeChangeError as a field error on type", async () => {
+    vi.mocked(updateCategory).mockRejectedValue(new LinkedTypeChangeError());
+
+    const result = await updateCategoryAction({ id: VALID_ID, type: "income" });
+
+    expect(result.fieldErrors?.type).toBeTruthy();
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

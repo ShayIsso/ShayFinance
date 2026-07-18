@@ -7,6 +7,12 @@ export const createCategorySchema = z.object({
   }),
   icon: z.string().min(1, "יש לבחור אייקון"),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "צבע חייב להיות בפורמט hex"),
+  // Group management (ADR-0011, BGR4): null/omitted creates a root category
+  // (a prospective group or a plain root leaf); a uuid links it under an
+  // existing root category of the same type. Server-side hierarchy invariants
+  // (depth cap, type match, populated-parent block) are enforced by the
+  // categories module, not here — this only shapes the wire value.
+  parentId: z.string().uuid("קבוצת אב לא תקינה").nullable().optional(),
 });
 
 export const updateCategorySchema = createCategorySchema.partial();
