@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { transactions, categoryRules } from "@/db/schema";
+import { transactions, categoryRules, categories } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { categorize, type CategoryRule } from "./rules";
 import { canOverwrite, overwriteLawSql, type CategorySource } from "@/lib/merchant-memory";
+import { NotAssignableCategoryError } from "./errors";
 
 export type OverwritableTransaction = {
   id: string;
@@ -10,11 +11,33 @@ export type OverwritableTransaction = {
   categorySource: CategorySource | null;
 };
 
+/**
+ * The one extra read a retroactive apply needs (ADR-0011 §3): whether the
+ * rule's target category has children. A legacy or out-of-band rule could
+ * still name a group — this is the same guard createRule/updateRule apply at
+ * write time, re-checked here because a rule row can outlive the category's
+ * shape.
+ */
 export type RetroactiveStore = {
   getRuleById(ruleId: string): Promise<CategoryRule | null>;
   getOverwritableTransactions(): Promise<OverwritableTransaction[]>;
   categorizeTransactions(ids: string[], categoryId: string): Promise<number>;
+  categoryHasChildren(categoryId: string): Promise<boolean>;
 };
+
+/**
+ * A group is never assignable (ADR-0011 §3) — guards a retroactive apply so a
+ * rule row targeting a group (e.g. authored before the category gained
+ * children) can never stamp that group onto transactions.
+ */
+async function assertAssignableCategory(
+  categoryId: string,
+  store: Pick<RetroactiveStore, "categoryHasChildren">,
+): Promise<void> {
+  if (await store.categoryHasChildren(categoryId)) {
+    throw new NotAssignableCategoryError();
+  }
+}
 
 /**
  * Transactions a new rule may claim: it matches the rule AND the row is
@@ -47,6 +70,7 @@ export async function applyRetroactively(
 ): Promise<{ applied: number }> {
   const rule = await store.getRuleById(ruleId);
   if (!rule) return { applied: 0 };
+  await assertAssignableCategory(rule.categoryId, store);
   const txns = await store.getOverwritableTransactions();
   const matches = findOverwritableMatches(rule, txns);
   if (matches.length === 0) return { applied: 0 };
@@ -79,6 +103,15 @@ export const drizzleRetroactiveStore: RetroactiveStore = {
       })
       .from(transactions)
       .where(overwriteLawSql());
+  },
+
+  async categoryHasChildren(categoryId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.parentId, categoryId))
+      .limit(1);
+    return row !== undefined;
   },
 
   async categorizeTransactions(ids: string[], categoryId: string): Promise<number> {

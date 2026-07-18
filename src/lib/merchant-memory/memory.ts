@@ -1,5 +1,9 @@
 import { extractMerchant } from "@/lib/transaction-matching";
 import { redactText, type RedactedString } from "@/lib/redaction";
+// Deep import, not the "@/lib/categories" module surface: that index.ts pulls
+// in "@/db", and this module is the pure computation layer — importing it
+// would drag Drizzle/postgres into every caller of merchant-memory's pure
+// functions.
 import { NotAssignableCategoryError } from "@/lib/categories/errors";
 
 // Trust tier of a category assignment on a transaction (ADR-0010 §2). NULL

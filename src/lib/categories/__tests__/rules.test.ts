@@ -4,7 +4,7 @@ import {
   matchesRule,
   createRule,
   updateRule,
-  assertCategoryAssignable,
+  assertAssignableCategory,
   type CategoryRule,
   type RuleCategoryStore,
 } from "../rules";
@@ -148,17 +148,17 @@ function fakeStore(hasChildrenById: Record<string, boolean>): RuleCategoryStore 
   };
 }
 
-describe("assertCategoryAssignable", () => {
+describe("assertAssignableCategory", () => {
   it("rejects a category with children (a group)", async () => {
     const store = fakeStore({ "group-1": true });
-    await expect(assertCategoryAssignable("group-1", store)).rejects.toThrow(
+    await expect(assertAssignableCategory("group-1", store)).rejects.toThrow(
       NotAssignableCategoryError,
     );
   });
 
   it("accepts a childless category (a leaf)", async () => {
     const store = fakeStore({ "leaf-1": false });
-    await expect(assertCategoryAssignable("leaf-1", store)).resolves.toBeUndefined();
+    await expect(assertAssignableCategory("leaf-1", store)).resolves.toBeUndefined();
   });
 });
 

@@ -9,22 +9,17 @@ import {
   drizzleRetroactiveStore,
 } from "@/lib/categories/retroactive";
 import { createRule, updateRule, deleteRule } from "@/lib/categories/rules";
-import { NotAssignableCategoryError } from "@/lib/categories/errors";
+import { NotAssignableCategoryError } from "@/lib/categories";
 import {
   createRuleSchema,
   updateRuleActionSchema,
   ruleIdSchema as ruleIdActionSchema,
 } from "@/lib/categories/schemas";
+import { notAssignableResult } from "./not-assignable";
 
 const ruleIdSchema = z.object({
   ruleId: z.string().uuid({ message: "מזהה כלל לא תקין" }),
 });
-
-const NOT_ASSIGNABLE_MESSAGE = "לא ניתן לשייך לקטגוריית קבוצה — יש לבחור קטגוריית משנה";
-
-function notAssignableResult() {
-  return { error: NOT_ASSIGNABLE_MESSAGE, fieldErrors: { categoryId: NOT_ASSIGNABLE_MESSAGE } };
-}
 
 export async function previewRetroactiveApplyAction(
   data: unknown,

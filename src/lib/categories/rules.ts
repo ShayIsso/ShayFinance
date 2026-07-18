@@ -29,7 +29,7 @@ export const drizzleRuleCategoryStore: RuleCategoryStore = {
  * A group is never assignable (ADR-0011 §3) — guards every rule write so a
  * request cannot smuggle a group's id past the picker UI.
  */
-export async function assertCategoryAssignable(
+export async function assertAssignableCategory(
   categoryId: string,
   store: RuleCategoryStore,
 ): Promise<void> {
@@ -103,7 +103,7 @@ export async function createRule(
   },
   store: RuleCategoryStore = drizzleRuleCategoryStore,
 ): Promise<string> {
-  await assertCategoryAssignable(data.categoryId, store);
+  await assertAssignableCategory(data.categoryId, store);
   const [row] = await db.insert(categoryRules).values(data).returning({ id: categoryRules.id });
   return row.id;
 }
@@ -119,7 +119,7 @@ export async function updateRule(
   store: RuleCategoryStore = drizzleRuleCategoryStore,
 ): Promise<void> {
   if (changes.categoryId !== undefined) {
-    await assertCategoryAssignable(changes.categoryId, store);
+    await assertAssignableCategory(changes.categoryId, store);
   }
   await db.update(categoryRules).set(changes).where(eq(categoryRules.id, id));
 }

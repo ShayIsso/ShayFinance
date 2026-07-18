@@ -9,18 +9,13 @@ import {
   undoCategoryFanOut,
   type FannedOutRow,
 } from "@/lib/merchant-memory";
-import { NotAssignableCategoryError } from "@/lib/categories/errors";
+import { NotAssignableCategoryError } from "@/lib/categories";
 import {
   updateTransactionActionSchema,
   bulkCategorizeSchema,
   undoFanOutSchema,
 } from "@/lib/transactions/schemas";
-
-const NOT_ASSIGNABLE_MESSAGE = "לא ניתן לשייך לקטגוריית קבוצה — יש לבחור קטגוריית משנה";
-
-function notAssignableResult() {
-  return { error: NOT_ASSIGNABLE_MESSAGE, fieldErrors: { categoryId: NOT_ASSIGNABLE_MESSAGE } };
-}
+import { notAssignableResult } from "./not-assignable";
 
 /**
  * A transaction's custom description or category assignment renders on the
