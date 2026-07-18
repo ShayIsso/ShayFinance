@@ -31,6 +31,7 @@ export type { StoredGoal, GoalWriteData, GoalChanges, GoalStore } from "./store"
 export {
   computeGoalProgress,
   computeDeadlinePace,
+  computeGoalPaceVerdict,
   cumulativeTargetFromMonthly,
   monthlyAmountFromCumulative,
   monthsBetween,
@@ -38,6 +39,7 @@ export {
   formatYearMonth,
   type YearMonth,
   type GoalProgress,
+  type GoalPaceVerdict,
   type MonthlyTransactions,
 } from "./progress";
 

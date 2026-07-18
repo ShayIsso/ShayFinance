@@ -27,13 +27,7 @@ import type {
 } from "@/lib/analytics";
 import { LastSyncStrip } from "@/components/last-sync-strip";
 import type { SyncRunSummary } from "@/lib/sync/runs";
-// PROTOTYPE — throwaway (BGR10, #167 reaction pass). Remove this import and
-// the section below once the owner picks a variant; see
-// goals-progress-prototype.tsx's module comment.
-import {
-  GoalsProgressPrototype,
-  GoalsProgressPrototypeSwitcher,
-} from "@/components/goals-progress-prototype";
+import { GoalsProgressCard, type GoalProgressCardData } from "@/components/goals-progress-card";
 
 const HEBREW_MONTHS = [
   "ינואר",
@@ -85,10 +79,11 @@ type DashboardData = {
   lastSyncRuns: SyncRunSummary[];
   upcomingCharges: UpcomingCharge[];
   upcomingTotal: number;
+  goals: GoalProgressCardData[];
 };
 
 async function fetchDashboardData(year: number, month: number): Promise<DashboardData> {
-  const [summaryRes, spendingRes, balancesRes, recentRes, syncRunsRes, upcomingRes] =
+  const [summaryRes, spendingRes, balancesRes, recentRes, syncRunsRes, upcomingRes, goalsRes] =
     await Promise.all([
       fetch(`/api/analytics/monthly?year=${year}&month=${month}`),
       fetch(`/api/analytics/spending-by-category?year=${year}&month=${month}`),
@@ -96,16 +91,19 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
       fetch(`/api/analytics/recent?limit=15`),
       fetch(`/api/sync-runs`),
       fetch(`/api/recurring-upcoming`),
+      fetch(`/api/goals`),
     ]);
 
-  const [summary, spending, balances, recent, lastSyncRuns, upcomingData] = await Promise.all([
-    summaryRes.ok ? summaryRes.json() : null,
-    spendingRes.ok ? spendingRes.json() : [],
-    balancesRes.ok ? balancesRes.json() : [],
-    recentRes.ok ? recentRes.json() : [],
-    syncRunsRes.ok ? syncRunsRes.json() : [],
-    upcomingRes.ok ? upcomingRes.json() : { upcoming: [], total: 0 },
-  ]);
+  const [summary, spending, balances, recent, lastSyncRuns, upcomingData, goals] =
+    await Promise.all([
+      summaryRes.ok ? summaryRes.json() : null,
+      spendingRes.ok ? spendingRes.json() : [],
+      balancesRes.ok ? balancesRes.json() : [],
+      recentRes.ok ? recentRes.json() : [],
+      syncRunsRes.ok ? syncRunsRes.json() : [],
+      upcomingRes.ok ? upcomingRes.json() : { upcoming: [], total: 0 },
+      goalsRes.ok ? goalsRes.json() : [],
+    ]);
 
   return {
     summary,
@@ -115,6 +113,7 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
     lastSyncRuns,
     upcomingCharges: upcomingData.upcoming ?? [],
     upcomingTotal: upcomingData.total ?? 0,
+    goals,
   };
 }
 
@@ -239,6 +238,7 @@ export function DashboardPanel({
     lastSyncRuns: [],
     upcomingCharges: [],
     upcomingTotal: 0,
+    goals: [],
   });
   const [loading, setLoading] = React.useState(true);
 
@@ -268,8 +268,16 @@ export function DashboardPanel({
     }
   }
 
-  const { summary, spending, balances, recent, lastSyncRuns, upcomingCharges, upcomingTotal } =
-    data;
+  const {
+    summary,
+    spending,
+    balances,
+    recent,
+    lastSyncRuns,
+    upcomingCharges,
+    upcomingTotal,
+    goals,
+  } = data;
 
   // A brand-new account returns a zeroed summary object (not null), so checking
   // `summary === null` alone never fires. Treat an all-zero summary as empty too;
@@ -319,9 +327,22 @@ export function DashboardPanel({
       {/* Last sync strip */}
       {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
 
-      {/* PROTOTYPE — BGR10 goals progress card reaction pass, fake data (#167) */}
-      <GoalsProgressPrototype />
-      <GoalsProgressPrototypeSwitcher />
+      {/* Goals progress — independent of the month strip below (always
+          today's real month, per CONTEXT.md "savings goal"), so it renders
+          on its own loading cycle rather than waiting on month-scoped data. */}
+      {loading ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <Skeleton className="h-4 w-24" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-2 w-full" />
+            <Skeleton className="h-2 w-full" />
+          </CardContent>
+        </Card>
+      ) : (
+        <GoalsProgressCard goals={goals} />
+      )}
 
       {loading ? (
         <div className="space-y-6">
