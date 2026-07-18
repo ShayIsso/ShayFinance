@@ -27,6 +27,13 @@ import type {
 } from "@/lib/analytics";
 import { LastSyncStrip } from "@/components/last-sync-strip";
 import type { SyncRunSummary } from "@/lib/sync/runs";
+// PROTOTYPE — throwaway (BGR10, #167 reaction pass). Remove this import and
+// the section below once the owner picks a variant; see
+// goals-progress-prototype.tsx's module comment.
+import {
+  GoalsProgressPrototype,
+  GoalsProgressPrototypeSwitcher,
+} from "@/components/goals-progress-prototype";
 
 const HEBREW_MONTHS = [
   "ינואר",
@@ -311,6 +318,10 @@ export function DashboardPanel({
 
       {/* Last sync strip */}
       {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
+
+      {/* PROTOTYPE — BGR10 goals progress card reaction pass, fake data (#167) */}
+      <GoalsProgressPrototype />
+      <GoalsProgressPrototypeSwitcher />
 
       {loading ? (
         <div className="space-y-6">
