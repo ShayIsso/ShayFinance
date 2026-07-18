@@ -42,6 +42,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Category } from "@/lib/categories";
+// PROTOTYPE — throwaway (BGR3, #160): prototype-branch-only imports.
+import {
+  GroupedPickerPrototypeItems,
+  type PickerPrototype,
+} from "@/components/category-picker-prototype";
 import { Amount } from "@/components/ui/amount";
 import { pageRange } from "@/lib/transactions/pagination";
 
@@ -288,6 +293,7 @@ function AiMarker({ onUndo }: { onUndo: () => Promise<void> }) {
 function CategoryCell({
   transaction,
   categories,
+  pickerPrototype,
   onAssign,
   onAcceptSuggestion,
   onRejectSuggestion,
@@ -295,6 +301,7 @@ function CategoryCell({
 }: {
   transaction: Transaction;
   categories: Category[];
+  pickerPrototype?: PickerPrototype;
   onAssign: (id: string, categoryId: string) => Promise<void>;
   onAcceptSuggestion: (transaction: Transaction) => Promise<void>;
   onRejectSuggestion: (transaction: Transaction) => Promise<void>;
@@ -325,14 +332,18 @@ function CategoryCell({
             <SelectItem value="__none__">
               <span className="text-muted-foreground">ללא קטגוריה</span>
             </SelectItem>
-            {categories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
-                <span className="flex items-center gap-1.5">
-                  <CategoryDot color={cat.color} />
-                  {cat.name}
-                </span>
-              </SelectItem>
-            ))}
+            {pickerPrototype ? (
+              <GroupedPickerPrototypeItems {...pickerPrototype} />
+            ) : (
+              categories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  <span className="flex items-center gap-1.5">
+                    <CategoryDot color={cat.color} />
+                    {cat.name}
+                  </span>
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
         {transaction.categorySource === "ai" && <AiMarker onUndo={() => onUndoAi(transaction)} />}
@@ -415,7 +426,13 @@ function UndoReconciliationButton({ txnId, onUndone }: { txnId: string; onUndone
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function TransactionsTable({ categories }: { categories: Category[] }) {
+export function TransactionsTable({
+  categories,
+  pickerPrototype,
+}: {
+  categories: Category[];
+  pickerPrototype?: PickerPrototype;
+}) {
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [totalPages, setTotalPages] = React.useState(1);
@@ -881,6 +898,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
                     <CategoryCell
                       transaction={tx}
                       categories={categories}
+                      pickerPrototype={pickerPrototype}
                       onAssign={handleCategoryAssign}
                       onAcceptSuggestion={handleAcceptSuggestion}
                       onRejectSuggestion={handleRejectSuggestion}
