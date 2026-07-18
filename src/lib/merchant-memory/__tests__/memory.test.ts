@@ -18,6 +18,7 @@ import {
   type CategorySource,
 } from "..";
 import { extractMerchant } from "@/lib/transaction-matching";
+import { NotAssignableCategoryError } from "@/lib/categories/errors";
 
 // ── In-memory store ───────────────────────────────────────────────────────────
 // Mirrors the DB store's contract without Drizzle. Tests observe behavior
@@ -36,11 +37,13 @@ function createStore(seed?: {
   txns?: StoredTxn[];
   entries?: StoredEntry[];
   categoryNames?: Record<string, string>;
+  groupCategoryIds?: string[];
 }) {
   const txns: StoredTxn[] = seed?.txns ? seed.txns.map((t) => ({ ...t })) : [];
   const entries: StoredEntry[] = seed?.entries ? seed.entries.map((e) => ({ ...e })) : [];
   const corrections: NewCorrection[] = [];
   const categoryNames = seed?.categoryNames ?? {};
+  const groupCategoryIds = new Set(seed?.groupCategoryIds ?? []);
 
   const store: MerchantMemoryStore = {
     async findEntriesByKeys(keys) {
@@ -87,6 +90,9 @@ function createStore(seed?: {
     },
     async getCategoryName(categoryId) {
       return categoryNames[categoryId] ?? null;
+    },
+    async categoryHasChildren(categoryId) {
+      return groupCategoryIds.has(categoryId);
     },
     async getOverwritableTransactions() {
       // The contract allows over-returning (the DB store prefilters by key);
@@ -344,6 +350,26 @@ describe("recordAssignment", () => {
       { id: "sib-ai", previousCategoryId: "old", previousCategorySource: "ai" },
     ]);
   });
+
+  it("rejects a group categoryId (ADR-0011 §3) before touching the transaction or memory", async () => {
+    const { store, txns, entries } = createStore({
+      txns: [{ id: "target", description: "שופרסל דיל", categoryId: null, categorySource: null }],
+      groupCategoryIds: ["group-food"],
+    });
+
+    await expect(
+      recordAssignment(
+        { transactionId: "target", toCategoryId: "group-food", tier: "user" },
+        store,
+      ),
+    ).rejects.toThrow(NotAssignableCategoryError);
+
+    expect(txns.find((t) => t.id === "target")).toMatchObject({
+      categoryId: null,
+      categorySource: null,
+    });
+    expect(entries).toHaveLength(0);
+  });
 });
 
 // ── undoFanOut ────────────────────────────────────────────────────────────────
@@ -518,6 +544,27 @@ describe("applyCorrection", () => {
     expect(txns.find((t) => t.id === "target")).toMatchObject({ categorySource: "rule" });
     expect(txns.find((t) => t.id === "sib")).toMatchObject({ categoryId: null });
   });
+
+  it("rejects a group categoryId (ADR-0011 §3) before touching the transaction or memory", async () => {
+    const { store, txns, corrections } = createStore({
+      txns: [
+        {
+          id: "target",
+          description: "שופרסל דיל",
+          categoryId: "cat-shopping",
+          categorySource: "rule",
+        },
+      ],
+      groupCategoryIds: ["group-food"],
+    });
+
+    await expect(
+      applyCorrection({ transactionId: "target", toCategoryId: "group-food" }, store),
+    ).rejects.toThrow(NotAssignableCategoryError);
+
+    expect(txns.find((t) => t.id === "target")).toMatchObject({ categoryId: "cat-shopping" });
+    expect(corrections).toHaveLength(0);
+  });
 });
 
 // ── applyBulkCategorization ───────────────────────────────────────────────────
@@ -596,5 +643,18 @@ describe("applyBulkCategorization", () => {
       store,
     );
     expect(result).toEqual({ fanOutCount: 0, fannedOut: [] });
+  });
+
+  it("rejects a group categoryId (ADR-0011 §3) before touching any selected transaction", async () => {
+    const { store, txns } = createStore({
+      txns: [{ id: "s1", description: "שופרסל דיל", categoryId: "cat-a", categorySource: "rule" }],
+      groupCategoryIds: ["group-food"],
+    });
+
+    await expect(
+      applyBulkCategorization({ transactionIds: ["s1"], toCategoryId: "group-food" }, store),
+    ).rejects.toThrow(NotAssignableCategoryError);
+
+    expect(txns.find((t) => t.id === "s1")).toMatchObject({ categoryId: "cat-a" });
   });
 });

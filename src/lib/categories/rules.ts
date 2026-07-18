@@ -1,8 +1,42 @@
 import { db } from "@/db";
-import { categoryRules } from "@/db/schema";
+import { categoryRules, categories } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { NotAssignableCategoryError } from "./errors";
 
 export type MatchType = "contains" | "starts_with" | "exact" | "regex";
+
+/**
+ * The one extra read a rule write needs (ADR-0011 §3): whether a category has
+ * children. Kept minimal rather than pulling in the full CategoryStore — rules
+ * only ever need this one fact about the target category.
+ */
+export type RuleCategoryStore = {
+  categoryHasChildren(categoryId: string): Promise<boolean>;
+};
+
+export const drizzleRuleCategoryStore: RuleCategoryStore = {
+  async categoryHasChildren(categoryId) {
+    const [row] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.parentId, categoryId))
+      .limit(1);
+    return row !== undefined;
+  },
+};
+
+/**
+ * A group is never assignable (ADR-0011 §3) — guards every rule write so a
+ * request cannot smuggle a group's id past the picker UI.
+ */
+export async function assertCategoryAssignable(
+  categoryId: string,
+  store: RuleCategoryStore,
+): Promise<void> {
+  if (await store.categoryHasChildren(categoryId)) {
+    throw new NotAssignableCategoryError();
+  }
+}
 
 export type CategoryRule = {
   id: string;
@@ -60,12 +94,16 @@ export async function getRules(): Promise<CategoryRule[]> {
   }));
 }
 
-export async function createRule(data: {
-  categoryId: string;
-  matchType: "contains" | "starts_with" | "exact" | "regex";
-  pattern: string;
-  priority: number;
-}): Promise<string> {
+export async function createRule(
+  data: {
+    categoryId: string;
+    matchType: "contains" | "starts_with" | "exact" | "regex";
+    pattern: string;
+    priority: number;
+  },
+  store: RuleCategoryStore = drizzleRuleCategoryStore,
+): Promise<string> {
+  await assertCategoryAssignable(data.categoryId, store);
   const [row] = await db.insert(categoryRules).values(data).returning({ id: categoryRules.id });
   return row.id;
 }
@@ -78,7 +116,11 @@ export async function updateRule(
     pattern: string;
     priority: number;
   }>,
+  store: RuleCategoryStore = drizzleRuleCategoryStore,
 ): Promise<void> {
+  if (changes.categoryId !== undefined) {
+    await assertCategoryAssignable(changes.categoryId, store);
+  }
   await db.update(categoryRules).set(changes).where(eq(categoryRules.id, id));
 }
 

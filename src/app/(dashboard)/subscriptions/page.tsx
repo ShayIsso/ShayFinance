@@ -18,7 +18,7 @@ import type {
   NewlyDetectedAlert,
   DormantAlert,
 } from "@/lib/recurring-detection";
-import { getCategories } from "@/lib/categories";
+import { getAssignableCategories } from "@/lib/categories";
 import type { Category } from "@/lib/categories";
 
 export type SubscriptionRow = {
@@ -99,8 +99,9 @@ export default async function SubscriptionsPage() {
 
   const alerts: AnomalyAlerts = { priceChanges, missedPayments, newlyDetected, dormant };
 
-  // Fetch categories for the naming dialog's optional category dropdown.
-  const categories: Category[] = await getCategories();
+  // Fetch categories for the naming dialog's optional category dropdown —
+  // assignable (leaf) only (ADR-0011 §3): a group is never a valid assignment.
+  const categories: Category[] = await getAssignableCategories();
 
   return (
     <div className="space-y-6" dir="rtl">

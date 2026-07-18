@@ -7,12 +7,14 @@ import {
   drizzleCategoryStore,
   type CategoryChanges,
 } from "./store";
+import { filterAssignable, firstAssignableCategoryId } from "./hierarchy";
 import type { CategoryTreeNode } from "./hierarchy";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
 
-export { DefaultCategoryDeletionError } from "./errors";
+export { DefaultCategoryDeletionError, NotAssignableCategoryError } from "./errors";
 export { matchesRule, type MatchType } from "./rules";
+export { filterAssignable, firstAssignableCategoryId };
 export type { CategoryTreeNode } from "./hierarchy";
 export type { StoredCategory } from "./store";
 

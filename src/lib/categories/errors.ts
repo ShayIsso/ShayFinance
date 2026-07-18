@@ -55,3 +55,16 @@ export class ParentNotFoundError extends Error {
     this.name = "ParentNotFoundError";
   }
 }
+
+/**
+ * Leaf-only assignment (ADR-0011 §3), enforced structurally at every write
+ * seam that assigns a category (rules, transaction assign/bulk-assign) — a
+ * category with children can never be the target, even if a request bypasses
+ * the picker UI and submits a group's id directly.
+ */
+export class NotAssignableCategoryError extends Error {
+  constructor() {
+    super("A category with children cannot be assigned — it is a group, not a leaf");
+    this.name = "NotAssignableCategoryError";
+  }
+}

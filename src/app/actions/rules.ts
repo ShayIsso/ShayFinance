@@ -9,6 +9,7 @@ import {
   drizzleRetroactiveStore,
 } from "@/lib/categories/retroactive";
 import { createRule, updateRule, deleteRule } from "@/lib/categories/rules";
+import { NotAssignableCategoryError } from "@/lib/categories/errors";
 import {
   createRuleSchema,
   updateRuleActionSchema,
@@ -18,6 +19,12 @@ import {
 const ruleIdSchema = z.object({
   ruleId: z.string().uuid({ message: "מזהה כלל לא תקין" }),
 });
+
+const NOT_ASSIGNABLE_MESSAGE = "לא ניתן לשייך לקטגוריית קבוצה — יש לבחור קטגוריית משנה";
+
+function notAssignableResult() {
+  return { error: NOT_ASSIGNABLE_MESSAGE, fieldErrors: { categoryId: NOT_ASSIGNABLE_MESSAGE } };
+}
 
 export async function previewRetroactiveApplyAction(
   data: unknown,
@@ -61,9 +68,14 @@ export async function createRuleAction(
     return { error: formatZodError(parsed.error), fieldErrors: formatZodFieldErrors(parsed.error) };
   }
 
-  const id = await createRule(parsed.data);
-  revalidateRulePages();
-  return { id };
+  try {
+    const id = await createRule(parsed.data);
+    revalidateRulePages();
+    return { id };
+  } catch (err) {
+    if (err instanceof NotAssignableCategoryError) return notAssignableResult();
+    throw err;
+  }
 }
 
 export async function updateRuleAction(
@@ -75,9 +87,14 @@ export async function updateRuleAction(
   }
 
   const { id, ...changes } = parsed.data;
-  await updateRule(id, changes);
-  revalidateRulePages();
-  return { updated: true };
+  try {
+    await updateRule(id, changes);
+    revalidateRulePages();
+    return { updated: true };
+  } catch (err) {
+    if (err instanceof NotAssignableCategoryError) return notAssignableResult();
+    throw err;
+  }
 }
 
 export async function deleteRuleAction(

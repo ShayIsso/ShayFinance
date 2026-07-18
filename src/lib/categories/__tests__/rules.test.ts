@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { categorize, matchesRule, type CategoryRule } from "../rules";
+import {
+  categorize,
+  matchesRule,
+  createRule,
+  updateRule,
+  assertCategoryAssignable,
+  type CategoryRule,
+  type RuleCategoryStore,
+} from "../rules";
+import { NotAssignableCategoryError } from "../errors";
 
 describe("matchesRule", () => {
   it("matches contains case-insensitively", () => {
@@ -124,5 +133,54 @@ describe("categorize", () => {
       rule({ matchType: "contains", pattern: "שופרסל", categoryId: "cat-6" }),
     ];
     expect(categorize("שופרסל דיל", rules)).toBe("cat-6");
+  });
+});
+
+// ── Leaf-only assignment guard (ADR-0011 §3) ─────────────────────────────────
+// A group is never assignable. createRule/updateRule read one extra fact from
+// the store — whether the target category has children — before writing.
+
+function fakeStore(hasChildrenById: Record<string, boolean>): RuleCategoryStore {
+  return {
+    async categoryHasChildren(categoryId) {
+      return hasChildrenById[categoryId] ?? false;
+    },
+  };
+}
+
+describe("assertCategoryAssignable", () => {
+  it("rejects a category with children (a group)", async () => {
+    const store = fakeStore({ "group-1": true });
+    await expect(assertCategoryAssignable("group-1", store)).rejects.toThrow(
+      NotAssignableCategoryError,
+    );
+  });
+
+  it("accepts a childless category (a leaf)", async () => {
+    const store = fakeStore({ "leaf-1": false });
+    await expect(assertCategoryAssignable("leaf-1", store)).resolves.toBeUndefined();
+  });
+});
+
+describe("createRule — leaf-only guard", () => {
+  it("rejects a group categoryId before any write", async () => {
+    const store = fakeStore({ "group-1": true });
+
+    await expect(
+      createRule(
+        { categoryId: "group-1", matchType: "contains", pattern: "שופרסל", priority: 0 },
+        store,
+      ),
+    ).rejects.toThrow(NotAssignableCategoryError);
+  });
+});
+
+describe("updateRule — leaf-only guard", () => {
+  it("rejects a group categoryId before any write", async () => {
+    const store = fakeStore({ "group-1": true });
+
+    await expect(updateRule("rule-1", { categoryId: "group-1" }, store)).rejects.toThrow(
+      NotAssignableCategoryError,
+    );
   });
 });

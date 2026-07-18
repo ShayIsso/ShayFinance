@@ -165,3 +165,16 @@ export function filterAssignable<T extends CategoryNode>(all: T[]): T[] {
   const parentIds = new Set(all.map((c) => c.parentId).filter((id): id is string => id !== null));
   return all.filter((c) => !parentIds.has(c.id));
 }
+
+/**
+ * A sane default for a fresh assignment form (rules authoring): the
+ * alphabetically-first leaf across the whole tree — root leaves and every
+ * group's children pooled together, a group itself never a candidate
+ * (ADR-0011 §3). Empty tree (no categories yet) yields "".
+ */
+export function firstAssignableCategoryId<T extends CategoryNode>(
+  tree: CategoryTreeNode<T>[],
+): string {
+  const leaves = tree.flatMap((node) => (node.children.length > 0 ? node.children : [node]));
+  return [...leaves].sort(byNameHe)[0]?.id ?? "";
+}

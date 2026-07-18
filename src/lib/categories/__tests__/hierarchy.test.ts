@@ -6,6 +6,7 @@ import {
   validateCategoryUpdate,
   buildCategoryTree,
   filterAssignable,
+  firstAssignableCategoryId,
   type CategoryNode,
   type CategoryPopulation,
 } from "../hierarchy";
@@ -265,5 +266,22 @@ describe("filterAssignable", () => {
 
   it("returns everything when no groups exist", () => {
     expect(filterAssignable([rootLeaf, incomeLeaf])).toHaveLength(2);
+  });
+});
+
+describe("firstAssignableCategoryId", () => {
+  it("picks the alphabetically-first leaf across root leaves and group children, never a group", () => {
+    const tree = buildCategoryTree(all);
+    // Hebrew order: אוכל(group, skipped) < מזון וסופר < מסעדות וקפה < משכורת < תחבורה
+    expect(firstAssignableCategoryId(tree)).toBe("l1");
+  });
+
+  it("returns an empty string for an empty tree", () => {
+    expect(firstAssignableCategoryId([])).toBe("");
+  });
+
+  it("falls back to the only leaf when no groups exist", () => {
+    const tree = buildCategoryTree([rootLeaf, incomeLeaf]);
+    expect(firstAssignableCategoryId(tree)).toBe("l4");
   });
 });

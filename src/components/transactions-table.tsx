@@ -41,7 +41,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Category } from "@/lib/categories";
+import type { Category, CategoryTreeNode } from "@/lib/categories";
+import {
+  CategoryDot,
+  GroupedCategorySelectItems,
+} from "@/components/grouped-category-select-items";
 import { Amount } from "@/components/ui/amount";
 import { pageRange } from "@/lib/transactions/pagination";
 
@@ -114,15 +118,6 @@ const CADENCE_LABELS: Record<RecurringInfo["cadence"], string> = {
 };
 
 // ── Sub-components ───────────────────────────────────────────────────────────
-
-function CategoryDot({ color }: { color: string }) {
-  return (
-    <span
-      className="inline-block size-2 shrink-0 rounded-full"
-      style={{ backgroundColor: color }}
-    />
-  );
-}
 
 function DescriptionCell({
   transaction,
@@ -288,6 +283,7 @@ function AiMarker({ onUndo }: { onUndo: () => Promise<void> }) {
 function CategoryCell({
   transaction,
   categories,
+  tree,
   onAssign,
   onAcceptSuggestion,
   onRejectSuggestion,
@@ -295,6 +291,7 @@ function CategoryCell({
 }: {
   transaction: Transaction;
   categories: Category[];
+  tree: CategoryTreeNode<Category>[];
   onAssign: (id: string, categoryId: string) => Promise<void>;
   onAcceptSuggestion: (transaction: Transaction) => Promise<void>;
   onRejectSuggestion: (transaction: Transaction) => Promise<void>;
@@ -325,14 +322,7 @@ function CategoryCell({
             <SelectItem value="__none__">
               <span className="text-muted-foreground">ללא קטגוריה</span>
             </SelectItem>
-            {categories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
-                <span className="flex items-center gap-1.5">
-                  <CategoryDot color={cat.color} />
-                  {cat.name}
-                </span>
-              </SelectItem>
-            ))}
+            <GroupedCategorySelectItems tree={tree} />
           </SelectContent>
         </Select>
         {transaction.categorySource === "ai" && <AiMarker onUndo={() => onUndoAi(transaction)} />}
@@ -415,7 +405,13 @@ function UndoReconciliationButton({ txnId, onUndone }: { txnId: string; onUndone
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function TransactionsTable({ categories }: { categories: Category[] }) {
+export function TransactionsTable({
+  categories,
+  tree,
+}: {
+  categories: Category[];
+  tree: CategoryTreeNode<Category>[];
+}) {
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [totalPages, setTotalPages] = React.useState(1);
@@ -757,11 +753,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
               </span>
             </SelectTrigger>
             <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
-              ))}
+              <GroupedCategorySelectItems tree={tree} />
             </SelectContent>
           </Select>
           <Button
@@ -881,6 +873,7 @@ export function TransactionsTable({ categories }: { categories: Category[] }) {
                     <CategoryCell
                       transaction={tx}
                       categories={categories}
+                      tree={tree}
                       onAssign={handleCategoryAssign}
                       onAcceptSuggestion={handleAcceptSuggestion}
                       onRejectSuggestion={handleRejectSuggestion}

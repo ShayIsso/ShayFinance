@@ -1,5 +1,6 @@
 import { extractMerchant } from "@/lib/transaction-matching";
 import { redactText, type RedactedString } from "@/lib/redaction";
+import { NotAssignableCategoryError } from "@/lib/categories/errors";
 
 // Trust tier of a category assignment on a transaction (ADR-0010 §2). NULL
 // (represented as `null`) means uncategorized.
@@ -73,6 +74,11 @@ export type MerchantMemoryStore = {
    * in selectFanOutTargets; it must never under-return for the given key.
    */
   getOverwritableTransactions(merchantKey: string): Promise<OverwritableTxn[]>;
+  /**
+   * Whether a category has children (ADR-0011 §3) — the one extra read every
+   * assignment write needs so merchant memory can never learn a group's id.
+   */
+  categoryHasChildren(categoryId: string): Promise<boolean>;
   setTransactionCategory(
     ids: string[],
     categoryId: string,
@@ -130,6 +136,19 @@ export function selectFanOutTargets(
     .filter((t) => !excludeTxnIds.includes(t.id))
     .filter((t) => canOverwrite(t.categorySource))
     .filter((t) => deriveMerchantKey(t.description) === merchantKey);
+}
+
+/**
+ * A group is never assignable (ADR-0011 §3) — guards every write that would
+ * otherwise let merchant memory learn a group's id.
+ */
+async function assertAssignableCategory(
+  categoryId: string,
+  store: Pick<MerchantMemoryStore, "categoryHasChildren">,
+): Promise<void> {
+  if (await store.categoryHasChildren(categoryId)) {
+    throw new NotAssignableCategoryError();
+  }
 }
 
 // ── Store-injected orchestration ──────────────────────────────────────────────
@@ -229,6 +248,7 @@ export async function recordAssignment(
   now: Date = new Date(),
 ): Promise<{ fanOutCount: number; fannedOut: FannedOutRow[] }> {
   const { transactionId, toCategoryId, tier } = input;
+  await assertAssignableCategory(toCategoryId, store);
   const txn = await store.getTransaction(transactionId);
   if (!txn) return { fanOutCount: 0, fannedOut: [] };
 
@@ -267,6 +287,7 @@ export async function applyCorrection(
   now: Date = new Date(),
 ): Promise<{ fanOutCount: number; fannedOut: FannedOutRow[] }> {
   const { transactionId, toCategoryId } = input;
+  await assertAssignableCategory(toCategoryId, store);
   const txn = await store.getTransaction(transactionId);
   if (!txn) return { fanOutCount: 0, fannedOut: [] };
   // Re-selecting the current category is not a correction: no from-X-to-X log
@@ -322,6 +343,7 @@ export async function applyBulkCategorization(
   now: Date = new Date(),
 ): Promise<{ fanOutCount: number; fannedOut: FannedOutRow[] }> {
   const { transactionIds, toCategoryId } = input;
+  await assertAssignableCategory(toCategoryId, store);
   const toCategoryName = (await store.getCategoryName(toCategoryId)) ?? "";
 
   const found: CorrectionTxn[] = [];

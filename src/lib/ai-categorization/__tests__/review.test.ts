@@ -83,6 +83,9 @@ function createFake(seed: {
     async getCategoryName(id) {
       return categoryNames[id] ?? null;
     },
+    async categoryHasChildren() {
+      return false;
+    },
     async getOverwritableTransactions() {
       return txns
         .filter((t) => t.categorySource === null || t.categorySource === "ai")
