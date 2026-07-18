@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { resolveCategoryFilter, buildPaginatedResult, type PaginatedResult } from "../index";
+import {
+  resolveCategoryFilter,
+  buildPaginatedResult,
+  expandCategoryFilter,
+  type PaginatedResult,
+} from "../index";
 import { transactionFiltersSchema } from "../schemas";
 
 describe("resolveCategoryFilter", () => {
@@ -99,5 +104,26 @@ describe("transactionFiltersSchema needsReview parsing", () => {
     if (!result.success) {
       expect(result.error.issues[0].message).toBe("needsReview חייב להיות true או false");
     }
+  });
+});
+
+describe("expandCategoryFilter", () => {
+  // Group g1 owns leaves l1, l2; l3 is a root leaf (absent from the index).
+  const groupLeafIds = new Map<string, string[]>([["g1", ["l1", "l2"]]]);
+
+  it("expands a group to its leaf ids (subtree filtering, #174)", () => {
+    expect(expandCategoryFilter("g1", groupLeafIds)).toEqual(["l1", "l2"]);
+  });
+
+  it("matches a leaf against itself when it is not a group", () => {
+    expect(expandCategoryFilter("l3", groupLeafIds)).toEqual(["l3"]);
+  });
+
+  it("matches an unknown id against itself", () => {
+    expect(expandCategoryFilter("missing", groupLeafIds)).toEqual(["missing"]);
+  });
+
+  it("falls back to self for a group with an empty leaf list", () => {
+    expect(expandCategoryFilter("g-empty", new Map([["g-empty", []]]))).toEqual(["g-empty"]);
   });
 });

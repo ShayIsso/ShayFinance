@@ -157,6 +157,28 @@ export function buildCategoryTree<T extends CategoryNode>(all: T[]): CategoryTre
 }
 
 /**
+ * Group → its leaves' ids (ADR-0011: one level, so a group's children are
+ * always leaves). Root leaves are absent — a caller expanding by id treats a
+ * missing entry as "matches itself only". Drives subtree filtering (#174): a
+ * group is never assigned to a transaction, so filtering by a group means
+ * filtering by its leaves — an aggregation-lens read that changes which rows
+ * list, never any total.
+ */
+export function buildGroupLeafIndex(
+  all: { id: string; parentId: string | null }[],
+): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const c of all) {
+    if (c.parentId !== null) {
+      const leaves = index.get(c.parentId) ?? [];
+      leaves.push(c.id);
+      index.set(c.parentId, leaves);
+    }
+  }
+  return index;
+}
+
+/**
  * Assignable read surface (ADR-0011 §3): childless categories only. Binds every
  * assignment surface — a category with children is not assignable, derived
  * purely from "has children", never a flag.

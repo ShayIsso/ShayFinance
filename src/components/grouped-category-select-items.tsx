@@ -56,3 +56,36 @@ export function GroupedCategorySelectItems({ tree }: { tree: CategoryTreeNode<Ca
     </>
   );
 }
+
+/**
+ * Filter variant of the grouped picker (#174). Unlike the assignment picker,
+ * the transactions filter is a display/query surface, so a group IS selectable
+ * here — picking it filters by its subtree (its leaves). The group renders as a
+ * bold selectable item above its indented leaves; root leaves sit at top level.
+ */
+export function FilterCategorySelectItems({ tree }: { tree: CategoryTreeNode<Category>[] }) {
+  const rootLeaves = tree.filter((n) => n.children.length === 0);
+  const groups = tree.filter((n) => n.children.length > 0);
+
+  return (
+    <>
+      {rootLeaves.map((leaf) => (
+        <LeafSelectItem key={leaf.id} leaf={leaf} />
+      ))}
+      {groups.map((group) => (
+        <SelectGroup key={group.id}>
+          <SelectSeparator />
+          <SelectItem value={group.id} className="font-medium">
+            <span className="flex items-center gap-1.5">
+              <CategoryDot color={group.color} />
+              {group.name}
+            </span>
+          </SelectItem>
+          {group.children.map((leaf) => (
+            <LeafSelectItem key={leaf.id} leaf={leaf} indent="ps-5" />
+          ))}
+        </SelectGroup>
+      ))}
+    </>
+  );
+}

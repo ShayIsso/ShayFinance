@@ -5,6 +5,7 @@ import {
   validateCategoryCreate,
   validateCategoryUpdate,
   buildCategoryTree,
+  buildGroupLeafIndex,
   filterAssignable,
   firstAssignableCategoryId,
   type CategoryNode,
@@ -283,5 +284,18 @@ describe("firstAssignableCategoryId", () => {
   it("falls back to the only leaf when no groups exist", () => {
     const tree = buildCategoryTree([rootLeaf, incomeLeaf]);
     expect(firstAssignableCategoryId(tree)).toBe("l4");
+  });
+});
+
+describe("buildGroupLeafIndex", () => {
+  it("maps each group to its leaf ids and omits root leaves", () => {
+    const index = buildGroupLeafIndex(all);
+    expect(index.get("g1")).toEqual(["l1", "l2"]);
+    expect(index.has("l3")).toBe(false);
+    expect(index.has("l4")).toBe(false);
+  });
+
+  it("returns an empty map when there are no groups", () => {
+    expect(buildGroupLeafIndex([rootLeaf, incomeLeaf]).size).toBe(0);
   });
 });

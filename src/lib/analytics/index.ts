@@ -30,6 +30,27 @@ export type CategorySpending = {
   icon: string;
 };
 
+/**
+ * A top-level entry in the group-first spending breakdown (ADR-0011 §4, the
+ * aggregation lens). Either a group — `children` holds its leaves' spending for
+ * drill-down and `amount` is defined as their sum — or a root leaf, where
+ * `children` is empty and `amount` is the leaf's own spend. The lens never
+ * changes a total: the sum of every node's `amount` equals the sum of the flat
+ * leaf breakdown it was rolled up from.
+ */
+export type CategorySpendingNode = CategorySpending & {
+  children: CategorySpending[];
+};
+
+/** Minimal category metadata the roll-up reads for structure and group display. */
+export type RollupCategory = {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  parentId: string | null;
+};
+
 export type AccountBalance = {
   id: string;
   accountNumber: string;
@@ -120,6 +141,52 @@ export function computeSpendingByCategory(
   }
 
   return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+}
+
+/**
+ * Rolls the flat leaf breakdown up into a group-first view (ADR-0011 §4). Every
+ * leaf in `spending` lands under its group (when its `parentId` names a known
+ * group) or stays at the top level as a root leaf, so the rolled-up total is
+ * byte-identical to the flat one — grouping is a lens, never a re-computation.
+ * A group appears only when at least one of its leaves has spending; its amount
+ * is the sum of those leaves. Top level and each group's children are sorted by
+ * amount, descending.
+ */
+export function rollUpSpendingByGroup(
+  spending: CategorySpending[],
+  categories: RollupCategory[],
+): CategorySpendingNode[] {
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const groups = new Map<string, { meta: RollupCategory; children: CategorySpending[] }>();
+  const rootLeaves: CategorySpending[] = [];
+
+  for (const leaf of spending) {
+    const category = categoryById.get(leaf.categoryId);
+    const parent = category?.parentId != null ? categoryById.get(category.parentId) : undefined;
+    if (parent) {
+      const entry = groups.get(parent.id) ?? { meta: parent, children: [] };
+      entry.children.push(leaf);
+      groups.set(parent.id, entry);
+    } else {
+      rootLeaves.push(leaf);
+    }
+  }
+
+  const nodes: CategorySpendingNode[] = rootLeaves.map((leaf) => ({ ...leaf, children: [] }));
+
+  for (const { meta, children } of groups.values()) {
+    const sortedChildren = [...children].sort((a, b) => b.amount - a.amount);
+    nodes.push({
+      categoryId: meta.id,
+      categoryName: meta.name,
+      amount: sortedChildren.reduce((sum, c) => sum + c.amount, 0),
+      color: meta.color,
+      icon: meta.icon,
+      children: sortedChildren,
+    });
+  }
+
+  return nodes.sort((a, b) => b.amount - a.amount);
 }
 
 const NEXT_DEBIT_WINDOW_DAYS = 31;
@@ -286,6 +353,32 @@ export async function getSpendingByCategory(
   }));
 
   return computeSpendingByCategory(withCategory);
+}
+
+/**
+ * Group-first spending breakdown for a month (ADR-0011 §4): the same leaf
+ * totals as {@link getSpendingByCategory}, rolled up under their groups with
+ * root leaves alongside. Type-driven totals are untouched — this is a lens over
+ * the existing expense breakdown, not a new financial computation.
+ */
+export async function getSpendingRollup(
+  year: number,
+  month: number,
+): Promise<CategorySpendingNode[]> {
+  const [spending, rollupCategories] = await Promise.all([
+    getSpendingByCategory(year, month),
+    db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        color: categories.color,
+        icon: categories.icon,
+        parentId: categories.parentId,
+      })
+      .from(categories),
+  ]);
+
+  return rollUpSpendingByGroup(spending, rollupCategories);
 }
 
 /** Bank types whose scraper doesn't reliably report account balance — display shows a derived estimate instead. */

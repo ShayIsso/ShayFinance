@@ -7,7 +7,7 @@ import {
   drizzleCategoryStore,
   type CategoryChanges,
 } from "./store";
-import { filterAssignable } from "./hierarchy";
+import { filterAssignable, buildGroupLeafIndex } from "./hierarchy";
 import type { CategoryTreeNode } from "./hierarchy";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
@@ -47,6 +47,18 @@ export async function getCategoryTree(): Promise<CategoryTreeNode<Category>[]> {
  */
 export async function getAssignableCategories(): Promise<Category[]> {
   return getAssignableCategoriesWithStore(drizzleCategoryStore);
+}
+
+/**
+ * Group → leaf-ids index for subtree filtering (#174, ADR-0011 aggregation
+ * lens). Consumed by the transactions filter/CSV export to expand a selected
+ * group into its assignable leaves.
+ */
+export async function getGroupLeafIndex(): Promise<Map<string, string[]>> {
+  const all = await db
+    .select({ id: categories.id, parentId: categories.parentId })
+    .from(categories);
+  return buildGroupLeafIndex(all);
 }
 
 export async function createCategory(data: {

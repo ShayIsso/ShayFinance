@@ -14,6 +14,7 @@ import {
   buildTransactionFilterConditions,
   type TransactionFilterConditions,
 } from "@/lib/transactions";
+import { getGroupLeafIndex } from "@/lib/categories";
 import type { ReportRow } from "./csv";
 
 export type ReportsStore = {
@@ -24,7 +25,10 @@ const parentCategories = alias(categories, "parent_categories");
 
 export const drizzleReportsStore: ReportsStore = {
   async getFilteredTransactions(filters) {
-    const whereClause = buildTransactionFilterConditions(filters);
+    // Same subtree expansion the listing uses (#174), so a group filter exports
+    // exactly the rows it lists — WYSIWYG holds through the CSV.
+    const groupLeafIds = filters.categoryId ? await getGroupLeafIndex() : undefined;
+    const whereClause = buildTransactionFilterConditions(filters, groupLeafIds);
 
     const rows = await db
       .select({

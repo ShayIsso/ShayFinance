@@ -1,7 +1,8 @@
 import { db } from "@/db";
 import { bankAccounts, transactions, recurringExpenses } from "@/db/schema";
-import { eq, and, gte, lte, ilike, isNull, count } from "drizzle-orm";
+import { eq, and, gte, lte, ilike, isNull, count, inArray } from "drizzle-orm";
 import { categorize, getRules } from "@/lib/categories/rules";
+import { getGroupLeafIndex } from "@/lib/categories";
 import type { ScrapedAccount } from "@/lib/scraper/types";
 import { importTransaction, type Categorization } from "./import";
 import { createDbStore } from "./store";
@@ -135,7 +136,30 @@ export type TransactionFilterConditions = Pick<
   | "needsReview"
 >;
 
-export function buildTransactionFilterConditions(filters: TransactionFilterConditions) {
+/**
+ * Subtree expansion for the category filter (#174, ADR-0011 aggregation lens):
+ * a group is never assigned to a transaction, so filtering by a group matches
+ * all of its leaves. A leaf (absent from `groupLeafIds`) matches itself. This
+ * changes WHICH rows list, never any total.
+ */
+export function expandCategoryFilter(
+  categoryId: string,
+  groupLeafIds: ReadonlyMap<string, readonly string[]>,
+): string[] {
+  const leaves = groupLeafIds.get(categoryId);
+  return leaves && leaves.length > 0 ? [...leaves] : [categoryId];
+}
+
+/**
+ * When `groupLeafIds` is supplied, a selected group is expanded to its leaves
+ * (subtree filtering, #174); without it, `categoryId` matches literally. Both
+ * the paginated listing and the CSV export pass the same index, so "what you
+ * filtered" and "what you export" share one subtree semantics.
+ */
+export function buildTransactionFilterConditions(
+  filters: TransactionFilterConditions,
+  groupLeafIds?: ReadonlyMap<string, readonly string[]>,
+) {
   const {
     dateFrom,
     dateTo,
@@ -157,7 +181,14 @@ export function buildTransactionFilterConditions(filters: TransactionFilterCondi
   } else if (categoryFilter.mode === "uncategorized") {
     conditions.push(isNull(transactions.categoryId));
   } else if (categoryFilter.mode === "category") {
-    conditions.push(eq(transactions.categoryId, categoryFilter.categoryId));
+    const ids = groupLeafIds
+      ? expandCategoryFilter(categoryFilter.categoryId, groupLeafIds)
+      : [categoryFilter.categoryId];
+    conditions.push(
+      ids.length === 1
+        ? eq(transactions.categoryId, ids[0])
+        : inArray(transactions.categoryId, ids),
+    );
   }
   if (status) conditions.push(eq(transactions.status, status));
   if (search) conditions.push(ilike(transactions.description, `%${search}%`));
@@ -169,7 +200,9 @@ export async function getTransactions(filters: z.infer<typeof transactionFilters
   const { page, pageSize } = filters;
   const offset = (page - 1) * pageSize;
 
-  const whereClause = buildTransactionFilterConditions(filters);
+  // Only a concrete category filter can name a group; skip the lookup otherwise.
+  const groupLeafIds = filters.categoryId ? await getGroupLeafIndex() : undefined;
+  const whereClause = buildTransactionFilterConditions(filters, groupLeafIds);
 
   const [rows, activeRecurring, totalResult] = await Promise.all([
     db.query.transactions.findMany({
