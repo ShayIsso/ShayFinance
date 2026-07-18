@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeGoalProgress,
   computeDeadlinePace,
+  computeGoalPaceVerdict,
   cumulativeTargetFromMonthly,
   monthlyAmountFromCumulative,
   monthsBetween,
@@ -126,6 +127,27 @@ describe("computeDeadlinePace", () => {
   it("returns the full target when the span is one month (start == target)", () => {
     const m = ym(2026, 4);
     expect(computeDeadlinePace(0, 5000, m, m, m)).toBe(5000);
+  });
+});
+
+describe("computeGoalPaceVerdict", () => {
+  it("is no-deadline whenever expected is null, regardless of current", () => {
+    expect(computeGoalPaceVerdict(0, null)).toBe("no-deadline");
+    expect(computeGoalPaceVerdict(-5000, null)).toBe("no-deadline");
+  });
+
+  it("is ahead-or-on-pace when current is at or above the expected line", () => {
+    expect(computeGoalPaceVerdict(1000, 1000)).toBe("ahead-or-on-pace");
+    expect(computeGoalPaceVerdict(1500, 1000)).toBe("ahead-or-on-pace");
+  });
+
+  it("is behind-pace when current falls short of the expected line", () => {
+    expect(computeGoalPaceVerdict(500, 1000)).toBe("behind-pace");
+  });
+
+  it("tolerates float noise around the boundary without flipping verdicts", () => {
+    expect(computeGoalPaceVerdict(999.995, 1000)).toBe("ahead-or-on-pace");
+    expect(computeGoalPaceVerdict(989, 1000)).toBe("behind-pace");
   });
 });
 

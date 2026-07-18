@@ -106,6 +106,26 @@ export function computeDeadlinePace(
   return opening + (target - opening) * (elapsed / total);
 }
 
+/** Distinguishes goal pace verdicts (Dashboard progress card chip). */
+export type GoalPaceVerdict = "ahead-or-on-pace" | "behind-pace" | "no-deadline";
+
+/**
+ * Float noise guard for the pace comparison below — `current` and `expected`
+ * are both sums of many small transaction amounts, so an on-pace goal can
+ * land a fraction of a shekel either side of the line.
+ */
+const PACE_EPSILON = 0.01;
+
+/**
+ * Verdict for the pace chip: `null` `expected` (no target month) is always
+ * `"no-deadline"`; otherwise `current` at or above the linear expected line
+ * is `"ahead-or-on-pace"`, below it is `"behind-pace"`.
+ */
+export function computeGoalPaceVerdict(current: number, expected: number | null): GoalPaceVerdict {
+  if (expected === null) return "no-deadline";
+  return current >= expected - PACE_EPSILON ? "ahead-or-on-pace" : "behind-pace";
+}
+
 /**
  * Per-month phrasing sugar → cumulative target: "save `monthlyAmount` each month
  * until `targetMonth`" resolves to the same cumulative goal the rest of the
