@@ -17,11 +17,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Amount } from "@/components/ui/amount";
-import { SpendingChart } from "@/components/spending-chart";
+import { SpendingBreakdown } from "@/components/spending-breakdown";
 import type { Category } from "@/lib/categories";
 import type {
   MonthlySummary,
-  CategorySpending,
+  CategorySpendingNode,
   AccountBalance,
   RecentTransaction,
 } from "@/lib/analytics";
@@ -72,7 +72,7 @@ type UpcomingCharge = {
 
 type DashboardData = {
   summary: MonthlySummary | null;
-  spending: CategorySpending[];
+  spending: CategorySpendingNode[];
   balances: AccountBalance[];
   recent: RecentTransaction[];
   lastSyncRuns: SyncRunSummary[];
@@ -84,7 +84,7 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
   const [summaryRes, spendingRes, balancesRes, recentRes, syncRunsRes, upcomingRes] =
     await Promise.all([
       fetch(`/api/analytics/monthly?year=${year}&month=${month}`),
-      fetch(`/api/analytics/spending-by-category?year=${year}&month=${month}`),
+      fetch(`/api/analytics/spending-rollup?year=${year}&month=${month}`),
       fetch(`/api/analytics/balances`),
       fetch(`/api/analytics/recent?limit=15`),
       fetch(`/api/sync-runs`),
@@ -498,13 +498,13 @@ export function DashboardPanel({
             </div>
           )}
 
-          {/* Spending by category chart */}
+          {/* Spending breakdown — group-first with drill-down (BGR5 #162) */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-semibold">הוצאות לפי קטגוריה</CardTitle>
             </CardHeader>
             <CardContent>
-              <SpendingChart spending={spending} />
+              <SpendingBreakdown nodes={spending} />
             </CardContent>
           </Card>
 
