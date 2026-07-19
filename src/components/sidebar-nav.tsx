@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, List, RefreshCw, Settings, Inbox, Repeat } from "lucide-react";
+import {
+  LayoutDashboard,
+  List,
+  RefreshCw,
+  Settings,
+  Inbox,
+  Repeat,
+  FileBarChart,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -15,6 +23,7 @@ type NavItem = {
 const baseNavItems: Omit<NavItem, "badge">[] = [
   { href: "/", label: "לוח בקרה", icon: LayoutDashboard },
   { href: "/transactions", label: "תנועות", icon: List },
+  { href: "/reports", label: "דוחות", icon: FileBarChart },
   { href: "/reconciliation", label: "התאמות", icon: Inbox },
   { href: "/subscriptions", label: "מנויים", icon: Repeat },
   { href: "/sync", label: "סנכרון", icon: RefreshCw },

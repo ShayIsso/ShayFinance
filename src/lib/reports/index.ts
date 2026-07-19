@@ -5,12 +5,23 @@
  * filters cleared). No schema changes; no new tables.
  */
 import type { TransactionFilterConditions } from "@/lib/transactions";
-import { drizzleReportsStore, type ReportsStore } from "./store";
+import { drizzleReportsStore, type ReportsStore, type ReportMonth } from "./store";
 import { buildCsvWithBom, resolveExportDateRange, buildExportFilename } from "./csv";
+import { buildMonthlyReport, type MonthlyReport } from "./monthly";
 
 export type { ReportRow, BankType, CategoryType, CategorySource, TransactionStatus } from "./csv";
 export { CSV_HEADERS, buildCsv, buildCsvWithBom } from "./csv";
-export type { ReportsStore } from "./store";
+export type { ReportsStore, ReportMonth } from "./store";
+export { buildMonthlyReport } from "./monthly";
+export type {
+  MonthlyReport,
+  MonthlyReportSummary,
+  MonthlyReportNode,
+  MonthlyReportLeaf,
+  YoyValue,
+} from "./monthly";
+export { computeYoyDelta } from "./yoy";
+export type { YoyDelta } from "./yoy";
 
 export type TransactionsCsvExport = {
   text: string;
@@ -32,4 +43,32 @@ export async function exportTransactionsCsv(
   const { from, to } = resolveExportDateRange(filters, rows, todayIso);
   const filename = buildExportFilename(from, to);
   return { text, filename };
+}
+
+/**
+ * Monthly report for a past month (BGR11 #168): summary + group-first breakdown
+ * with a same-month-last-year (YoY) column. Composes the pure core over rows the
+ * store fetches for the month and the same month one year earlier — the latter
+ * passed as null when it has no data, so YoY reads honestly.
+ */
+export async function getMonthlyReport(
+  year: number,
+  month: number,
+  store: ReportsStore = drizzleReportsStore,
+): Promise<MonthlyReport> {
+  const [current, lastYearTransactions, categories] = await Promise.all([
+    store.getMonthTransactions(year, month),
+    store.getMonthTransactions(year - 1, month),
+    store.getRollupCategories(),
+  ]);
+
+  const lastYear = lastYearTransactions.length > 0 ? { transactions: lastYearTransactions } : null;
+  return buildMonthlyReport({ transactions: current }, lastYear, categories);
+}
+
+/** Every calendar month with data, newest first — the report month picker's options. */
+export async function getReportMonths(
+  store: ReportsStore = drizzleReportsStore,
+): Promise<ReportMonth[]> {
+  return store.getAvailableMonths();
 }
