@@ -254,6 +254,20 @@ describe("updateCategoryWithStore", () => {
     );
   });
 
+  // #177: the CREATE-path test above ("rejects a child under a budgeted
+  // leaf") only exercises a brand-new category gaining a budgeted parent —
+  // this pins the same block on the MOVE path, re-parenting an *existing*
+  // leaf onto a budgeted leaf.
+  it("rejects moving an existing leaf under a budgeted leaf", async () => {
+    const { store, categories } = makeStore(baseSeed(), {
+      populationOverrides: { l3: { budgets: 1 } },
+    });
+    await expect(updateCategoryWithStore("l1", { parentId: "l3" }, store)).rejects.toBeInstanceOf(
+      PopulatedCategoryError,
+    );
+    expect(categories.find((c) => c.id === "l1")!.parentId).toBe("g1");
+  });
+
   // BGR8/#177: moving a leaf into an existing budgeted group must still
   // succeed — the group's own budget is not a fresh "populated leaf" case.
   it("moves a leaf under an existing group that carries its own budget", async () => {

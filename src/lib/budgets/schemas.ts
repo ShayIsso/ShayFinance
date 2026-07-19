@@ -13,9 +13,7 @@ export const createBudgetSchema = z.object({
   monthlyLimit: monthlyLimitSchema,
 });
 
-export const updateBudgetSchema = z
-  .object({ monthlyLimit: monthlyLimitSchema })
-  .extend(budgetIdSchema.shape);
+export const updateBudgetSchema = budgetIdSchema.extend({ monthlyLimit: monthlyLimitSchema });
 
 export type CreateBudgetFormValues = z.infer<typeof createBudgetSchema>;
 export type UpdateBudgetFormValues = z.infer<typeof updateBudgetSchema>;

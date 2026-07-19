@@ -206,7 +206,12 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
   const [isPending, startTransition] = React.useTransition();
   const [isDeletePending, startDeleteTransition] = React.useTransition();
   const [isDetachPending, startDetachTransition] = React.useTransition();
-  const [, startBudgetCheckTransition] = React.useTransition();
+  const [isBudgetCheckPending, startBudgetCheckTransition] = React.useTransition();
+  // Tracks which category id the in-flight budget check was requested for, so
+  // a late response from a since-replaced dialog target (rapid
+  // open -> close -> open on a different category) is dropped instead of
+  // mislabeling the new target as budgeted (or not).
+  const budgetCheckIdRef = React.useRef<string | null>(null);
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(createCategorySchema),
@@ -264,13 +269,21 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
     setDeleteError(null);
     setDeletingHasBudget(false);
     setDeleteOpen(true);
+    budgetCheckIdRef.current = cat.id;
     // Schema `ON DELETE CASCADE` (ADR-0011 §8): deleting this category also
     // drops its budget, if any — checked on open so the confirm copy can name
-    // that consequence before the user commits.
+    // that consequence before the user commits. The destructive confirm below
+    // is disabled until this resolves (never delete-before-disclose).
     startBudgetCheckTransition(async () => {
       const result = await getCategoryBudgetAction({ id: cat.id });
+      if (budgetCheckIdRef.current !== cat.id) return; // stale — dialog moved to a different category
       setDeletingHasBudget(result.hasBudget);
     });
+  }
+
+  function closeDeleteDialog(open: boolean) {
+    setDeleteOpen(open);
+    if (!open) budgetCheckIdRef.current = null;
   }
 
   function onSubmit(values: CategoryFormValues) {
@@ -317,7 +330,7 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
           .filter((c) => c.id !== deleting.id)
           .map((c) => (detachedIds.includes(c.id) ? { ...c, parentId: null } : c)),
       );
-      setDeleteOpen(false);
+      closeDeleteDialog(false);
     });
   }
 
@@ -605,7 +618,7 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
       </Dialog>
 
       {/* Delete confirmation dialog */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog open={deleteOpen} onOpenChange={closeDeleteDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -626,19 +639,25 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
                 {deletingHasBudget && <> לקטגוריה זו יש תקציב חודשי — הוא יימחק יחד איתה.</>}
               </>
             )}
+            {isBudgetCheckPending && (
+              <>
+                {" "}
+                <span className="italic">בודק אם יש תקציב מקושר...</span>
+              </>
+            )}
           </p>
           {deleteError && <p className="text-destructive text-sm">{deleteError}</p>}
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setDeleteOpen(false)}
+              onClick={() => closeDeleteDialog(false)}
               disabled={isDeletePending}
             >
               ביטול
             </Button>
             <Button
               onClick={handleDelete}
-              disabled={isDeletePending}
+              disabled={isDeletePending || isBudgetCheckPending}
               className="bg-red-600 text-white hover:bg-red-700"
             >
               {isDeletePending ? "מוחק..." : "מחק"}
