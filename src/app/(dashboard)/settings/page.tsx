@@ -3,21 +3,26 @@ export const dynamic = "force-dynamic";
 import { getCategories, getCategoryTree } from "@/lib/categories";
 import { getRules } from "@/lib/categories/rules";
 import { listGoals } from "@/lib/goals";
+import { listBudgets, getMonthlyTargets } from "@/lib/budgets";
 import { getSchedulerConfigAction } from "@/app/actions/scheduler";
 import { CategoriesSection } from "@/components/categories-section";
 import { CredentialsSection } from "@/components/credentials-section";
 import { RulesSection } from "@/components/rules-section";
 import { SchedulerSection } from "@/components/scheduler-section";
 import { GoalsSection } from "@/components/goals-section";
+import { BudgetsSection } from "@/components/budgets-section";
 
 export default async function SettingsPage() {
-  const [categories, categoryTree, rules, schedulerConfig, goals] = await Promise.all([
-    getCategories(),
-    getCategoryTree(),
-    getRules(),
-    getSchedulerConfigAction(),
-    listGoals(),
-  ]);
+  const [categories, categoryTree, rules, schedulerConfig, goals, budgets, monthlyTargets] =
+    await Promise.all([
+      getCategories(),
+      getCategoryTree(),
+      getRules(),
+      getSchedulerConfigAction(),
+      listGoals(),
+      listBudgets(),
+      getMonthlyTargets(),
+    ]);
 
   return (
     <div className="space-y-8">
@@ -33,6 +38,12 @@ export default async function SettingsPage() {
       <RulesSection initialRules={rules} categories={categories} tree={categoryTree} />
 
       <GoalsSection initialGoals={goals} />
+
+      <BudgetsSection
+        initialBudgets={budgets}
+        categories={categories}
+        initialTargets={monthlyTargets}
+      />
 
       <SchedulerSection initialConfig={schedulerConfig} />
     </div>

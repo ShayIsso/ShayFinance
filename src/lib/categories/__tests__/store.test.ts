@@ -202,6 +202,32 @@ describe("createCategoryWithStore", () => {
       ),
     ).rejects.toBeInstanceOf(PopulatedCategoryError);
   });
+
+  // #177: getPopulation now counts real budget rows — a budgeted leaf must
+  // block a child the same way a leaf with transactions/rules already does.
+  it("rejects a child under a budgeted leaf", async () => {
+    const { store } = makeStore(baseSeed(), { populationOverrides: { l3: { budgets: 1 } } });
+    await expect(
+      createCategoryWithStore(
+        { name: "דלק", type: "expense", icon: "Car", color: "#6366f1", parentId: "l3" },
+        store,
+      ),
+    ).rejects.toBeInstanceOf(PopulatedCategoryError);
+  });
+
+  // BGR8: a budget may also attach to a group. Once a category already has
+  // children it is an established group, and its own budget must not block
+  // further leaves from moving in underneath it.
+  it("accepts a new leaf under an existing group that carries its own budget", async () => {
+    const { store, categories } = makeStore(baseSeed(), {
+      populationOverrides: { g1: { budgets: 1 } },
+    });
+    const id = await createCategoryWithStore(
+      { name: "חטיפים", type: "expense", icon: "ShoppingCart", color: "#6366f1", parentId: "g1" },
+      store,
+    );
+    expect(categories.find((c) => c.id === id)).toMatchObject({ parentId: "g1" });
+  });
 });
 
 describe("updateCategoryWithStore", () => {
@@ -226,6 +252,16 @@ describe("updateCategoryWithStore", () => {
     await expect(updateCategoryWithStore("l3", { parentId: "l1" }, store)).rejects.toBeInstanceOf(
       HierarchyDepthError,
     );
+  });
+
+  // BGR8/#177: moving a leaf into an existing budgeted group must still
+  // succeed — the group's own budget is not a fresh "populated leaf" case.
+  it("moves a leaf under an existing group that carries its own budget", async () => {
+    const { store, categories } = makeStore(baseSeed(), {
+      populationOverrides: { g1: { budgets: 1 } },
+    });
+    await updateCategoryWithStore("l3", { parentId: "g1" }, store);
+    expect(categories.find((c) => c.id === "l3")!.parentId).toBe("g1");
   });
 
   it("passes icon/color changes through to the store", async () => {

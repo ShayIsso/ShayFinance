@@ -71,6 +71,7 @@ import {
   updateCategoryAction,
   deleteCategoryAction,
 } from "@/app/actions/categories";
+import { getCategoryBudgetAction } from "@/app/actions/budgets";
 
 type CategoryType = "income" | "expense" | "investment" | "transfer" | "ignore";
 
@@ -200,10 +201,12 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
   const [editing, setEditing] = React.useState<Category | null>(null);
   const [deleting, setDeleting] = React.useState<Category | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [deletingHasBudget, setDeletingHasBudget] = React.useState(false);
   const [detachError, setDetachError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [isDeletePending, startDeleteTransition] = React.useTransition();
   const [isDetachPending, startDetachTransition] = React.useTransition();
+  const [, startBudgetCheckTransition] = React.useTransition();
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(createCategorySchema),
@@ -259,7 +262,15 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
   function openDelete(cat: Category) {
     setDeleting(cat);
     setDeleteError(null);
+    setDeletingHasBudget(false);
     setDeleteOpen(true);
+    // Schema `ON DELETE CASCADE` (ADR-0011 §8): deleting this category also
+    // drops its budget, if any — checked on open so the confirm copy can name
+    // that consequence before the user commits.
+    startBudgetCheckTransition(async () => {
+      const result = await getCategoryBudgetAction({ id: cat.id });
+      setDeletingHasBudget(result.hasBudget);
+    });
   }
 
   function onSubmit(values: CategoryFormValues) {
@@ -606,11 +617,13 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
               <>
                 מחיקת הקבוצה &quot;{deleting.name}&quot; תנתק את תתי-הקטגוריות שבתוכה בחזרה
                 לקטגוריות שורש. שום עסקה, כלל סיווג או זיכרון ספק המשויכים אליהן לא ייפגעו.
+                {deletingHasBudget && <> לקבוצה זו יש תקציב חודשי — הוא יימחק יחד איתה.</>}
               </>
             ) : (
               <>
                 האם למחוק את הקטגוריה &quot;{deleting?.name}&quot;? עסקאות משויכות יאבדו את הסיווג
                 שלהן.
+                {deletingHasBudget && <> לקטגוריה זו יש תקציב חודשי — הוא יימחק יחד איתה.</>}
               </>
             )}
           </p>

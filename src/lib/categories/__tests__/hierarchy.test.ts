@@ -221,6 +221,33 @@ describe("validateCategoryUpdate", () => {
       ),
     ).toThrow(PopulatedCategoryError);
   });
+
+  // BGR8/#177: a budget may attach to a group (subtree spend cap), so a
+  // group's own population is no longer always zero once budgets are wired.
+  // The populated-parent guard exists to stop a leaf-with-data from being
+  // promoted into a group for the first time — it must not re-fire against a
+  // category that is already an established group (has children).
+  it("accepts a leaf moving under an existing group that itself carries a budget", () => {
+    const otherRootLeaf = node({ id: "l5", name: "קניות וביגוד" });
+    expect(() =>
+      validateCategoryUpdate(
+        otherRootLeaf,
+        { parentId: "g1" },
+        [...all, otherRootLeaf],
+        populated({ budgets: 1 }),
+      ),
+    ).not.toThrow();
+  });
+
+  it("accepts creating a new leaf under an existing group that itself carries a budget", () => {
+    expect(() =>
+      validateCategoryCreate(
+        { name: "חדש", type: "expense", parentId: "g1" },
+        all,
+        populated({ budgets: 1 }),
+      ),
+    ).not.toThrow();
+  });
 });
 
 describe("buildCategoryTree", () => {

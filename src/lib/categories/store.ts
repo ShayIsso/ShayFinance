@@ -12,6 +12,7 @@ import {
   merchantMemory,
   aiSuggestions,
   categories,
+  budgets,
 } from "@/db/schema";
 import { and, eq, count } from "drizzle-orm";
 import { DefaultCategoryDeletionError } from "./errors";
@@ -126,11 +127,12 @@ export async function getAssignableCategoriesWithStore(
 }
 
 async function countWhere(
-  table: typeof transactions | typeof categoryRules | typeof merchantMemory,
+  table: typeof transactions | typeof categoryRules | typeof merchantMemory | typeof budgets,
   column:
     | typeof transactions.categoryId
     | typeof categoryRules.categoryId
-    | typeof merchantMemory.categoryId,
+    | typeof merchantMemory.categoryId
+    | typeof budgets.categoryId,
   categoryId: string,
 ): Promise<number> {
   const [row] = await db.select({ n: count() }).from(table).where(eq(column, categoryId));
@@ -158,10 +160,11 @@ export const drizzleCategoryStore: CategoryStore = {
   },
 
   async getPopulation(id) {
-    const [txnCount, ruleCount, memoryCount, pendingRow] = await Promise.all([
+    const [txnCount, ruleCount, memoryCount, budgetCount, pendingRow] = await Promise.all([
       countWhere(transactions, transactions.categoryId, id),
       countWhere(categoryRules, categoryRules.categoryId, id),
       countWhere(merchantMemory, merchantMemory.categoryId, id),
+      countWhere(budgets, budgets.categoryId, id),
       db
         .select({ n: count() })
         .from(aiSuggestions)
@@ -173,8 +176,7 @@ export const drizzleCategoryStore: CategoryStore = {
       rules: ruleCount,
       memoryEntries: memoryCount,
       pendingSuggestions: pendingRow[0]?.n ?? 0,
-      // budgets: the budgets table lands in BGR2; 0 until it exists, then this
-      // wiring extends to count budgets on the category.
+      budgets: budgetCount,
     };
   },
 
