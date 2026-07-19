@@ -271,6 +271,20 @@ describe("updateCategoryAction", () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
+  // #177: PopulatedCategoryError carries no payload identifying which
+  // population source triggered it — the module throws the identical error
+  // whether the leaf is populated by transactions, rules, memory, pending
+  // suggestions, or (BGR8) a budget. This pins that a budget-sourced block
+  // reaches this boundary as the same guided-path copy, not a bespoke one.
+  it("surfaces PopulatedCategoryError as the same guided-path field error when the population source is a budget", async () => {
+    vi.mocked(updateCategory).mockRejectedValue(new PopulatedCategoryError());
+
+    const result = await updateCategoryAction({ id: VALID_ID, parentId: VALID_ID });
+
+    expect(result.error).toContain("קבוצה חדשה");
+    expect(result.fieldErrors?.parentId).toContain("קבוצה חדשה");
+  });
+
   it("surfaces LinkedTypeChangeError as a field error on type", async () => {
     vi.mocked(updateCategory).mockRejectedValue(new LinkedTypeChangeError());
 

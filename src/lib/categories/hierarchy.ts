@@ -29,9 +29,9 @@ export type CategoryTreeNode<T extends CategoryNode = CategoryNode> = T & {
 
 /**
  * Everything that makes a category "populated" (ADR-0011 §5). A populated
- * category cannot gain a child. `budgets` is counted even though the budgets
- * table lands in a later slice — the store reports 0 until then; the rule
- * already honors it.
+ * category cannot gain a child; `budgets` counts rows on `budgets.category_id`
+ * (BGR8 wired the store count — a group's own budget is exempted from this
+ * guard once it already has children, see `assertValidParentLink`).
  */
 export type CategoryPopulation = {
   transactions: number;
@@ -71,7 +71,12 @@ function assertNameAvailable(name: string, all: CategoryNode[], exceptId?: strin
  * yet); `childHasChildren` is whether that category already owns children (a
  * group can never gain a parent — depth cap from the child side).
  * `parentPopulation` is the population of the target parent: a populated leaf
- * cannot gain a child.
+ * cannot gain a child (ADR-0011 §5) — this is a one-time promotion guard, not
+ * a standing cap. A parent that already has children is already an
+ * established group; a budget attached to the group itself (BGR8: group
+ * budgets measure subtree spend) must not re-trigger the guard and block
+ * ordinary membership changes, so the population check only fires the first
+ * time a childless category is about to gain a child.
  */
 function assertValidParentLink(
   parentId: string,
@@ -88,7 +93,8 @@ function assertValidParentLink(
   if (parent.parentId !== null) throw new HierarchyDepthError();
   if (opts.childHasChildren) throw new HierarchyDepthError();
   if (parent.type !== childType) throw new CategoryTypeMismatchError();
-  if (parentPopulation !== null && isPopulated(parentPopulation)) {
+  const parentAlreadyHasChildren = all.some((c) => c.parentId === parentId);
+  if (!parentAlreadyHasChildren && parentPopulation !== null && isPopulated(parentPopulation)) {
     throw new PopulatedCategoryError();
   }
 }
