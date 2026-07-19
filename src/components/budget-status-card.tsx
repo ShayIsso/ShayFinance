@@ -82,12 +82,20 @@ export const VERDICT_LABEL: Record<BudgetVerdict, string> = {
   "comfortably-under": "מתחת ליעד בנוחות",
 };
 
+/**
+ * The shared positive/negative chip fill — reused by both the per-verdict
+ * palette below and the savings met/missed chip, so the two "good/bad" chip
+ * treatments on this card can't drift apart.
+ */
+const POSITIVE_CHIP_CLASS = "border-emerald-200 bg-emerald-50 text-emerald-700";
+const NEGATIVE_CHIP_CLASS = "border-red-200 bg-red-50 text-red-700";
+
 /** Light-theme, low-saturation chip fills — the status palette. Never applied to a dot. */
 export const VERDICT_CHIP_CLASS: Record<BudgetVerdict, string> = {
-  over: "border-red-200 bg-red-50 text-red-700",
+  over: NEGATIVE_CHIP_CLASS,
   "at-risk": "border-amber-200 bg-amber-50 text-amber-700",
   "on-pace": "border-muted text-muted-foreground",
-  "comfortably-under": "border-emerald-200 bg-emerald-50 text-emerald-700",
+  "comfortably-under": POSITIVE_CHIP_CLASS,
 };
 
 const VERDICT_SEVERITY_ORDER: BudgetVerdict[] = ["over", "at-risk", "on-pace", "comfortably-under"];
@@ -135,9 +143,7 @@ function TargetsHeadline({ headline }: { headline: TargetsHeadlineViewModel }) {
           {headline.savings.verdict && (
             <span
               className={`mr-1.5 rounded-full border px-1.5 py-0.5 text-[10px] ${
-                headline.savings.verdict === "met"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-red-200 bg-red-50 text-red-700"
+                headline.savings.verdict === "met" ? POSITIVE_CHIP_CLASS : NEGATIVE_CHIP_CLASS
               }`}
             >
               {headline.savings.verdict === "met" ? "הושג" : "לא הושג"}
