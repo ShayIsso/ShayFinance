@@ -159,17 +159,27 @@ Running categorization against local Ollama behind the same adapter boundary —
 
 ## Budgets and goals vocabulary (Phase 3)
 
-Locked in decision record #105 (budgets-goals-reports epic). Use these exact terms.
+Locked in decision record #105 (budgets-goals-reports epic), goals accumulation amended by #183. Use these exact terms.
 
 ### `goals accumulate, budgets reset monthly` — load-bearing
 
-The one law separating the two tracking primitives. A **goal** carries a running balance forward across months and measures progress toward a target. A **budget** (and the monthly savings target) evaluates one calendar month in isolation and resets — it never accumulates. When a feature is unsure which primitive it belongs to, this law decides.
+The one law separating the two tracking primitives. A **goal** carries a running balance forward across months and measures progress toward a target — and since #183, all goals accumulate **one shared stream, distributed by priority** (see `goal ladder`): no shekel advances two goals. A **budget** (and the monthly savings target) evaluates one calendar month in isolation and resets — it never accumulates. When a feature is unsure which primitive it belongs to, this law decides.
 
 ### `savings goal` — load-bearing
 
-A named cumulative target with a start month, an optional opening amount, and an optional target month. **Progress = opening amount + cumulative Net Savings since the start month**, computed live from analytics — no contribution ledger, no linked categories. Negative months honestly drag progress down; progress is **never clamped**. `investment` spend does not reduce progress (the standing deployment-of-savings rule).
+A named cumulative target holding a rung on the `goal ladder`, with an optional **opening amount** (a head start counted toward this goal alone — it reduces the goal's claim on the pool), a start month, and an optional target month. **Progress = opening + the goal's slice of the `savings pool`, capped at the target** — a goal never shows past 100%; overflow belongs to the next rung. Negative months still show honestly: a shrinking pool retreats from the bottom rung up.
 
-A target month turns on **deadline pace**: a linear expected line, `expected = opening + (target − opening) × elapsed ∕ total`, measured on the remaining span. **Month counts are inclusive** — the start month is month 1, so a Jan→Dec goal is 12 months and an on-rate saver reaches exactly 100% at the deadline with no overshoot. Per-month phrasing ("₪X לחודש עד תאריך") is form-entry **sugar** that derives the same cumulative target over that inclusive span; it is one goal kind in storage, not a separate shape. Manual contributions and linked-category progress were rejected.
+> Supersedes (#183, 2026-07-19) the original #105 §5 semantics, where each goal independently accumulated the full Net Savings stream since its own start month — valid per-goal in isolation, but the same shekel advanced every goal at once. The start month survives as **pace anchor only**; it no longer bounds any accumulation window. Unclamped progress display is likewise superseded by waterfall fill.
+
+A target month turns on **deadline pace**: a linear expected line, `expected = opening + (target − opening) × elapsed ∕ total`, anchored at the start month and compared against the goal's ladder fill. **Month counts are inclusive** — the start month is month 1, so a Jan→Dec goal is 12 months and an on-rate saver reaches exactly 100% at the deadline with no overshoot. Per-month phrasing ("₪X לחודש עד תאריך") is form-entry **sugar** that derives the same cumulative target over that inclusive span; it is one goal kind in storage, not a separate shape. Manual contributions and linked-category progress were rejected.
+
+### `savings pool` — load-bearing
+
+The single stream every goal draws from: cumulative **Net Savings** — the analytics definition, deployment-of-savings rule included (`investment` contributions remain pool money; liquid-vs-deployed is a presentation concern, never a pool redefinition) — since the **tracking-since month**: one global month, set explicitly by the user in Settings, never inferred. Editing it recomputes all goal progress (the ladder is judged against current values), and the UI must state that consequence.
+
+### `goal ladder` — load-bearing
+
+Active goals in user-set priority order, filled by a **stateless fold**: at any moment the current `savings pool` total is distributed top-down — each rung claims up to its need (target − opening), overflow spills to the next rung. There is no attribution ledger and no drain rule: a shrinking pool retreats bottom-first by construction, so the top priority is the most protected. A completed goal **holds its claim at 100% until archived**; archiving releases the claim — the gesture that pairs with actually spending the saved money. Archived goals leave the ladder but remain viewable history. Pool beyond all active needs is **unallocated surplus** (עודף ללא יעד) — shown, never hidden. A one-goal ladder behaves exactly as a single primary goal.
 
 ### `budget` — load-bearing
 
