@@ -50,6 +50,13 @@
       "when": 1784365672365,
       "tag": "0006_tiny_winter_soldier",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784473899532,
+      "tag": "0007_lovely_lionheart",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { formatZodError, formatZodFieldErrors, type FieldErrors } from "@/lib/api-utils";
-import { createGoal, updateGoal, deleteGoal } from "@/lib/goals";
+import {
+  createGoal,
+  updateGoal,
+  deleteGoal,
+  reorderGoal,
+  archiveGoal,
+  setTrackingSinceMonth,
+} from "@/lib/goals";
 // Pure derivation and the typed error are imported from their dedicated
 // (non-DB) submodules rather than the barrel, so action-seam tests can mock
 // "@/lib/goals" (the DB-backed CRUD) while still exercising the real
@@ -14,6 +21,8 @@ import {
   createGoalFormSchema,
   updateGoalFormSchema,
   goalIdSchema,
+  reorderGoalSchema,
+  trackingSinceSchema,
   type GoalFormValues,
 } from "@/lib/goals/schemas";
 
@@ -120,4 +129,43 @@ export async function deleteGoalAction(
   await deleteGoal(parsed.data.id);
   revalidateGoalPages();
   return { deleted: true };
+}
+
+export async function reorderGoalAction(
+  data: unknown,
+): Promise<{ reordered?: boolean; error?: string }> {
+  const parsed = reorderGoalSchema.safeParse(data);
+  if (!parsed.success) {
+    return { error: formatZodError(parsed.error) };
+  }
+
+  await reorderGoal(parsed.data.id, parsed.data.direction);
+  revalidateGoalPages();
+  return { reordered: true };
+}
+
+export async function archiveGoalAction(
+  data: unknown,
+): Promise<{ archived?: boolean; error?: string }> {
+  const parsed = goalIdSchema.safeParse(data);
+  if (!parsed.success) {
+    return { error: formatZodError(parsed.error) };
+  }
+
+  await archiveGoal(parsed.data.id);
+  revalidateGoalPages();
+  return { archived: true };
+}
+
+export async function setTrackingSinceAction(
+  data: unknown,
+): Promise<{ updated?: boolean; error?: string; fieldErrors?: FieldErrors }> {
+  const parsed = trackingSinceSchema.safeParse(data);
+  if (!parsed.success) {
+    return { error: formatZodError(parsed.error), fieldErrors: formatZodFieldErrors(parsed.error) };
+  }
+
+  await setTrackingSinceMonth(parsed.data.month);
+  revalidateGoalPages();
+  return { updated: true };
 }

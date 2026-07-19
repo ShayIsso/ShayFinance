@@ -46,6 +46,20 @@ export const goalIdSchema = z.object({
   id: z.string().uuid("מזהה יעד לא תקין"),
 });
 
+export const reorderGoalSchema = z.object({
+  id: z.string().uuid("מזהה יעד לא תקין"),
+  direction: z.enum(["up", "down"]),
+});
+
+export type ReorderGoalValues = z.infer<typeof reorderGoalSchema>;
+
+/** Tracking-since month for the shared savings pool; null clears the baseline. */
+export const trackingSinceSchema = z.object({
+  month: yearMonthSchema.nullable(),
+});
+
+export type TrackingSinceValues = z.infer<typeof trackingSinceSchema>;
+
 export const updateGoalFormSchema = z.discriminatedUnion("mode", [
   createGoalFormSchema.options[0].extend(goalIdSchema.shape),
   createGoalFormSchema.options[1].extend(goalIdSchema.shape),

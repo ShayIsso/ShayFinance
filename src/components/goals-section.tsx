@@ -4,7 +4,7 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Target } from "lucide-react";
+import { Target, ArrowUp, ArrowDown, Archive, History, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,7 +27,14 @@ import {
 } from "@/components/ui/form";
 import { Amount } from "@/components/ui/amount";
 import { createGoalFormSchema } from "@/lib/goals/schemas";
-import { createGoalAction, updateGoalAction, deleteGoalAction } from "@/app/actions/goals";
+import {
+  createGoalAction,
+  updateGoalAction,
+  deleteGoalAction,
+  reorderGoalAction,
+  archiveGoalAction,
+  setTrackingSinceAction,
+} from "@/app/actions/goals";
 
 type StoredGoal = {
   id: string;
@@ -36,6 +43,15 @@ type StoredGoal = {
   startMonth: string;
   openingAmount: number;
   targetMonth: string | null;
+  priority: number;
+  archivedAt: string | null;
+};
+
+type LadderStatus = {
+  id: string;
+  current: number;
+  target: number;
+  paceVerdict: "ahead-or-on-pace" | "behind-pace" | "no-deadline";
 };
 
 type GoalFormValues = z.infer<typeof createGoalFormSchema>;
@@ -101,15 +117,105 @@ function NumberField({
   );
 }
 
-export function GoalsSection({ initialGoals }: { initialGoals: StoredGoal[] }) {
+/** The pool's tracking-since editor (CONTEXT.md "savings pool"). Editing it
+ * recomputes every goal's ladder progress, so the consequence is stated inline. */
+function TrackingSinceEditor({ initial }: { initial: string | null }) {
+  const [month, setMonth] = React.useState(initial ?? "");
+  // Re-sync the field to the server value after a save revalidates (adjust
+  // state during render — the pattern React recommends over an effect).
+  const [prevInitial, setPrevInitial] = React.useState(initial);
+  const [isPending, startTransition] = React.useTransition();
+  const [error, setError] = React.useState<string | null>(null);
+
+  if (initial !== prevInitial) {
+    setPrevInitial(initial);
+    setMonth(initial ?? "");
+  }
+
+  const dirty = month !== (initial ?? "");
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await setTrackingSinceAction({ month: month === "" ? null : month });
+      if (result.error) setError(result.error);
+    });
+  }
+
+  return (
+    <div className="bg-muted/30 rounded-lg border px-4 py-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-1">
+          <label className="text-sm font-medium" htmlFor="tracking-since">
+            מעקב מאז
+          </label>
+          <p className="text-muted-foreground flex items-start gap-1.5 text-xs">
+            <Info className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.5} />
+            עריכה מחשבת מחדש את ההתקדמות של כל היעדים.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            id="tracking-since"
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="w-44"
+          />
+          <Button size="sm" onClick={save} disabled={!dirty || isPending}>
+            {isPending ? "שומר..." : "שמור"}
+          </Button>
+        </div>
+      </div>
+      {error && <p className="text-destructive mt-2 text-sm">{error}</p>}
+    </div>
+  );
+}
+
+export function GoalsSection({
+  initialGoals,
+  ladderStatus,
+  initialTrackingSince,
+}: {
+  initialGoals: StoredGoal[];
+  ladderStatus: LadderStatus[];
+  initialTrackingSince: string | null;
+}) {
   const [goals, setGoals] = React.useState<StoredGoal[]>(initialGoals);
+  const [prevInitialGoals, setPrevInitialGoals] = React.useState(initialGoals);
   const [formOpen, setFormOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [archiveOpen, setArchiveOpen] = React.useState(false);
+  const [showArchived, setShowArchived] = React.useState(false);
   const [editing, setEditing] = React.useState<StoredGoal | null>(null);
   const [deleting, setDeleting] = React.useState<StoredGoal | null>(null);
+  const [archiving, setArchiving] = React.useState<StoredGoal | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [archiveError, setArchiveError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [isDeletePending, startDeleteTransition] = React.useTransition();
+  const [isArchivePending, startArchiveTransition] = React.useTransition();
+  const [isReorderPending, startReorderTransition] = React.useTransition();
+
+  // Reorder / archive / tracking-since edits recompute the ladder server-side;
+  // the revalidated page hands back fresh props, which we reconcile into local
+  // state here (create/edit/delete update optimistically first). Adjusting state
+  // during render is the pattern React recommends over a syncing effect.
+  if (initialGoals !== prevInitialGoals) {
+    setPrevInitialGoals(initialGoals);
+    setGoals(initialGoals);
+  }
+
+  const statusById = React.useMemo(
+    () => new Map(ladderStatus.map((s) => [s.id, s])),
+    [ladderStatus],
+  );
+
+  const activeGoals = React.useMemo(
+    () => goals.filter((g) => g.archivedAt == null).sort((a, b) => a.priority - b.priority),
+    [goals],
+  );
+  const archivedGoals = React.useMemo(() => goals.filter((g) => g.archivedAt != null), [goals]);
 
   const form = useForm<GoalFormValues>({
     resolver: zodResolver(createGoalFormSchema),
@@ -136,6 +242,17 @@ export function GoalsSection({ initialGoals }: { initialGoals: StoredGoal[] }) {
     setDeleteOpen(true);
   }
 
+  function openArchive(goal: StoredGoal) {
+    setArchiving(goal);
+    setArchiveError(null);
+    setArchiveOpen(true);
+  }
+
+  function isComplete(goal: StoredGoal): boolean {
+    const status = statusById.get(goal.id);
+    return status != null && status.current >= status.target;
+  }
+
   function onSubmit(values: GoalFormValues) {
     startTransition(async () => {
       const result = editing
@@ -147,9 +264,6 @@ export function GoalsSection({ initialGoals }: { initialGoals: StoredGoal[] }) {
         return;
       }
 
-      // The action returns the derived stored targetAmount (monthly-mode
-      // phrasing resolves server-side) so the optimistic row never has to
-      // re-derive it — result.targetAmount is always set on a non-error result.
       const targetAmount = result.targetAmount ?? 0;
       if (editing) {
         setGoals((prev) =>
@@ -168,6 +282,7 @@ export function GoalsSection({ initialGoals }: { initialGoals: StoredGoal[] }) {
         );
       } else if ("id" in result && result.id) {
         const id = result.id;
+        const nextPriority = goals.reduce((max, g) => Math.max(max, g.priority), 0) + 1;
         setGoals((prev) => [
           ...prev,
           {
@@ -177,10 +292,35 @@ export function GoalsSection({ initialGoals }: { initialGoals: StoredGoal[] }) {
             openingAmount: values.openingAmount,
             targetMonth: values.targetMonth,
             targetAmount,
+            priority: nextPriority,
+            archivedAt: null,
           },
         ]);
       }
       setFormOpen(false);
+    });
+  }
+
+  function handleReorder(goal: StoredGoal, direction: "up" | "down") {
+    // Optimistic swap of adjacent priorities; the render-time prevInitialGoals
+    // adjustment reconciles with server truth once the action revalidates.
+    setGoals((prev) => {
+      const active = prev
+        .filter((g) => g.archivedAt == null)
+        .sort((a, b) => a.priority - b.priority);
+      const index = active.findIndex((g) => g.id === goal.id);
+      const swapIndex = direction === "up" ? index - 1 : index + 1;
+      if (swapIndex < 0 || swapIndex >= active.length) return prev;
+      const a = active[index];
+      const b = active[swapIndex];
+      return prev.map((g) => {
+        if (g.id === a.id) return { ...g, priority: b.priority };
+        if (g.id === b.id) return { ...g, priority: a.priority };
+        return g;
+      });
+    });
+    startReorderTransition(async () => {
+      await reorderGoalAction({ id: goal.id, direction });
     });
   }
 
@@ -197,14 +337,31 @@ export function GoalsSection({ initialGoals }: { initialGoals: StoredGoal[] }) {
     });
   }
 
+  function handleArchive() {
+    if (!archiving) return;
+    startArchiveTransition(async () => {
+      const result = await archiveGoalAction({ id: archiving.id });
+      if (result.error) {
+        setArchiveError(result.error);
+        return;
+      }
+      setGoals((prev) =>
+        prev.map((g) =>
+          g.id === archiving.id ? { ...g, archivedAt: new Date().toISOString() } : g,
+        ),
+      );
+      setArchiveOpen(false);
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">יעדי חיסכון</h3>
           <p className="text-muted-foreground text-sm">
-            התקדמות = סכום פתיחה + חיסכון נטו מצטבר מאז חודש ההתחלה. חודש עם חיסכון שלילי מוריד את
-            ההתקדמות בפועל — ללא חסימה בתחתית.
+            היעדים הפעילים מסודרים כסולם עדיפויות: החיסכון נטו המצטבר (מאגר משותף) מחולק מלמעלה
+            למטה, כל יעד עד לתקרת היעד שלו. שינוי הסדר מחשב מחדש את ההתקדמות.
           </p>
         </div>
         <Button size="sm" onClick={openAdd}>
@@ -212,43 +369,126 @@ export function GoalsSection({ initialGoals }: { initialGoals: StoredGoal[] }) {
         </Button>
       </div>
 
-      {goals.length === 0 ? (
+      <TrackingSinceEditor initial={initialTrackingSince} />
+
+      {activeGoals.length === 0 ? (
         <div className="text-muted-foreground flex items-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm">
           <Target className="size-4" />
           עדיין לא הוגדרו יעדי חיסכון.
         </div>
       ) : (
         <div className="divide-y rounded-lg border">
-          {goals.map((goal) => (
-            <div key={goal.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-md">
-                  <Target className="size-4" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium">{goal.name}</div>
-                  <div className="text-muted-foreground text-xs">
-                    <Amount amount={goal.targetAmount} colorize={false} /> · מתחיל{" "}
-                    {formatMonthLabel(goal.startMonth)}
-                    {goal.targetMonth && <> · עד {formatMonthLabel(goal.targetMonth)}</>}
+          {activeGoals.map((goal, index) => {
+            const status = statusById.get(goal.id);
+            const complete = isComplete(goal);
+            return (
+              <div key={goal.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex flex-col">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      aria-label="העבר למעלה"
+                      disabled={index === 0 || isReorderPending}
+                      onClick={() => handleReorder(goal, "up")}
+                    >
+                      <ArrowUp className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      aria-label="העבר למטה"
+                      disabled={index === activeGoals.length - 1 || isReorderPending}
+                      onClick={() => handleReorder(goal, "down")}
+                    >
+                      <ArrowDown className="size-3.5" />
+                    </Button>
+                  </div>
+                  <div className="text-muted-foreground w-5 text-center text-sm tabular-nums">
+                    {index + 1}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{goal.name}</span>
+                      {complete && (
+                        <span className="rounded-full border border-emerald-200 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          הושלם
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-muted-foreground text-xs">
+                      {status ? (
+                        <>
+                          <Amount amount={status.current} colorize={false} fractionDigits={0} />{" "}
+                          מתוך{" "}
+                          <Amount amount={goal.targetAmount} colorize={false} fractionDigits={0} />
+                        </>
+                      ) : (
+                        <Amount amount={goal.targetAmount} colorize={false} />
+                      )}{" "}
+                      · מתחיל {formatMonthLabel(goal.startMonth)}
+                      {goal.targetMonth && <> · עד {formatMonthLabel(goal.targetMonth)}</>}
+                    </div>
                   </div>
                 </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(goal)}>
+                    ערוך
+                  </Button>
+                  {/* Archive is the completion gesture (#183): only a goal that
+                      has held at 100% can be archived to release its claim. */}
+                  {complete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openArchive(goal)}
+                      className="gap-1"
+                    >
+                      <Archive className="size-3.5" />
+                      ארכיון
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openDelete(goal)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    מחק
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => openEdit(goal)}>
-                  ערוך
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openDelete(goal)}
-                  className="text-red-600 hover:text-red-700"
+            );
+          })}
+        </div>
+      )}
+
+      {archivedGoals.length > 0 && (
+        <div className="rounded-lg border">
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            aria-expanded={showArchived}
+            className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 px-4 py-3 text-sm"
+          >
+            <History className="size-4" strokeWidth={1.5} />
+            יעדים בארכיון ({archivedGoals.length})
+          </button>
+          {showArchived && (
+            <div className="divide-y border-t">
+              {archivedGoals.map((goal) => (
+                <div
+                  key={goal.id}
+                  className="text-muted-foreground flex items-center justify-between gap-3 px-4 py-3 text-sm"
                 >
-                  מחק
-                </Button>
-              </div>
+                  <span className="truncate">{goal.name}</span>
+                  <Amount amount={goal.targetAmount} colorize={false} fractionDigits={0} />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -441,6 +681,32 @@ export function GoalsSection({ initialGoals }: { initialGoals: StoredGoal[] }) {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Archive confirmation dialog */}
+      <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>העברת יעד לארכיון</DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground py-2 text-sm">
+            להעביר את היעד &quot;{archiving?.name}&quot; לארכיון? היעד ישוחרר מסולם העדיפויות והמאגר
+            המשותף יזרום מחדש ליעדים שמתחתיו. היעד יישאר לצפייה בהיסטוריה בלבד.
+          </p>
+          {archiveError && <p className="text-destructive text-sm">{archiveError}</p>}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setArchiveOpen(false)}
+              disabled={isArchivePending}
+            >
+              ביטול
+            </Button>
+            <Button onClick={handleArchive} disabled={isArchivePending}>
+              {isArchivePending ? "מעביר..." : "העבר לארכיון"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
