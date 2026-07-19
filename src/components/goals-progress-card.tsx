@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * Dashboard goals progress card (BGR10, #167) — the owner-picked Variant A
- * (compact multi-goal list) from the prototype reaction pass, rebuilt against
- * live `/api/goals` data. Progress numbers and the pace verdict are computed
- * entirely server-side (CONTEXT.md "savings goal": opening + cumulative Net
- * Savings, unclamped; CONTEXT.md "budget pace" sibling — linear deadline
- * pace); this component only formats and labels what it's handed.
+ * Dashboard goals progress card (BGR10 #167, ladder amendment #186) — the
+ * owner-picked Variant A (compact multi-goal list), rebuilt against live
+ * `/api/goals` ladder data. Each goal's `current` is its capped ladder fill
+ * (opening + its slice of the shared savings pool, never past the target) and
+ * the pace verdict is computed server-side (CONTEXT.md "goal ladder"); this
+ * component only formats and labels what it's handed. Pool beyond all needs
+ * shows as the unallocated-surplus line (עודף ללא יעד).
  */
 
 import * as React from "react";
-import { Target } from "lucide-react";
+import { Target, PiggyBank } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { Amount } from "@/components/ui/amount";
@@ -37,18 +38,18 @@ const PACE_CHIP_CLASSES: Record<GoalPaceVerdict, string> = {
   "no-deadline": "border-muted text-muted-foreground",
 };
 
-function percentOf(current: number, target: number): number {
+/**
+ * Ladder fill as a percentage, clamped to [0, 100] — a goal never shows past
+ * 100% (CONTEXT.md "goal ladder"; overflow belongs to the next rung). `current`
+ * is already capped server-side; the clamp here is a display backstop.
+ */
+function fillPercent(current: number, target: number): number {
   if (target === 0) return 0;
-  return (current / target) * 100;
-}
-
-/** Bar fill only, clamped to [0, 100] for layout — the printed percentage never is. */
-function clampedFill(current: number, target: number): number {
-  return Math.max(0, Math.min(100, percentOf(current, target)));
+  return Math.max(0, Math.min(100, (current / target) * 100));
 }
 
 function GoalRow({ goal }: { goal: GoalProgressCardData }) {
-  const percent = percentOf(goal.current, goal.target);
+  const percent = fillPercent(goal.current, goal.target);
 
   return (
     <div className="space-y-1.5">
@@ -57,10 +58,7 @@ function GoalRow({ goal }: { goal: GoalProgressCardData }) {
         <span className="text-muted-foreground tabular-nums">{Math.round(percent)}%</span>
       </div>
       <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
-        <div
-          className={`h-full rounded-full ${goal.current < 0 ? "bg-red-500" : "bg-emerald-500"}`}
-          style={{ width: `${clampedFill(goal.current, goal.target)}%` }}
-        />
+        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${percent}%` }} />
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">
@@ -77,7 +75,13 @@ function GoalRow({ goal }: { goal: GoalProgressCardData }) {
   );
 }
 
-export function GoalsProgressCard({ goals }: { goals: GoalProgressCardData[] }) {
+export function GoalsProgressCard({
+  goals,
+  surplus = 0,
+}: {
+  goals: GoalProgressCardData[];
+  surplus?: number;
+}) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -99,6 +103,15 @@ export function GoalsProgressCard({ goals }: { goals: GoalProgressCardData[] }) 
             {goals.map((goal) => (
               <GoalRow key={goal.id} goal={goal} />
             ))}
+            {surplus > 0 && (
+              <div className="flex items-center justify-between border-t pt-3 text-sm">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <PiggyBank className="size-4" strokeWidth={1.5} />
+                  עודף ללא יעד
+                </span>
+                <Amount amount={surplus} colorize={false} fractionDigits={0} />
+              </div>
+            )}
           </div>
         )}
       </CardContent>

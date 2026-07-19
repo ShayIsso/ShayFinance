@@ -94,8 +94,16 @@ type DashboardData = {
   upcomingCharges: UpcomingCharge[];
   upcomingTotal: number;
   goals: GoalProgressCardData[];
+  goalsSurplus: number;
   budgetsSummary: BudgetsSummaryResponse;
 };
+
+type GoalsResponse = {
+  goals: GoalProgressCardData[];
+  surplus: number;
+};
+
+const EMPTY_GOALS_RESPONSE: GoalsResponse = { goals: [], surplus: 0 };
 
 async function fetchDashboardData(year: number, month: number): Promise<DashboardData> {
   const [
@@ -118,17 +126,25 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
     fetch(`/api/budgets-summary?year=${year}&month=${month}`),
   ]);
 
-  const [summary, spending, balances, recent, lastSyncRuns, upcomingData, goals, budgetsSummary] =
-    await Promise.all([
-      summaryRes.ok ? summaryRes.json() : null,
-      spendingRes.ok ? spendingRes.json() : [],
-      balancesRes.ok ? balancesRes.json() : [],
-      recentRes.ok ? recentRes.json() : [],
-      syncRunsRes.ok ? syncRunsRes.json() : [],
-      upcomingRes.ok ? upcomingRes.json() : { upcoming: [], total: 0 },
-      goalsRes.ok ? goalsRes.json() : [],
-      budgetsSummaryRes.ok ? budgetsSummaryRes.json() : EMPTY_BUDGETS_SUMMARY,
-    ]);
+  const [
+    summary,
+    spending,
+    balances,
+    recent,
+    lastSyncRuns,
+    upcomingData,
+    goalsData,
+    budgetsSummary,
+  ] = await Promise.all([
+    summaryRes.ok ? summaryRes.json() : null,
+    spendingRes.ok ? spendingRes.json() : [],
+    balancesRes.ok ? balancesRes.json() : [],
+    recentRes.ok ? recentRes.json() : [],
+    syncRunsRes.ok ? syncRunsRes.json() : [],
+    upcomingRes.ok ? upcomingRes.json() : { upcoming: [], total: 0 },
+    goalsRes.ok ? (goalsRes.json() as Promise<GoalsResponse>) : EMPTY_GOALS_RESPONSE,
+    budgetsSummaryRes.ok ? budgetsSummaryRes.json() : EMPTY_BUDGETS_SUMMARY,
+  ]);
 
   return {
     summary,
@@ -138,7 +154,8 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
     lastSyncRuns,
     upcomingCharges: upcomingData.upcoming ?? [],
     upcomingTotal: upcomingData.total ?? 0,
-    goals,
+    goals: goalsData.goals ?? [],
+    goalsSurplus: goalsData.surplus ?? 0,
     budgetsSummary,
   };
 }
@@ -265,6 +282,7 @@ export function DashboardPanel({
     upcomingCharges: [],
     upcomingTotal: 0,
     goals: [],
+    goalsSurplus: 0,
     budgetsSummary: EMPTY_BUDGETS_SUMMARY,
   });
   const [loading, setLoading] = React.useState(true);
@@ -304,6 +322,7 @@ export function DashboardPanel({
     upcomingCharges,
     upcomingTotal,
     goals,
+    goalsSurplus,
     budgetsSummary,
   } = data;
 
@@ -392,7 +411,7 @@ export function DashboardPanel({
           </CardContent>
         </Card>
       ) : (
-        <GoalsProgressCard goals={goals} />
+        <GoalsProgressCard goals={goals} surplus={goalsSurplus} />
       )}
 
       {loading ? (

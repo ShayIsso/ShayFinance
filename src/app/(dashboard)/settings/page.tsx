@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { getCategories, getCategoryTree } from "@/lib/categories";
 import { getRules } from "@/lib/categories/rules";
-import { listGoals } from "@/lib/goals";
+import { listGoals, getGoalLadder } from "@/lib/goals";
 import { listBudgets, getMonthlyTargets } from "@/lib/budgets";
 import { getSchedulerConfigAction } from "@/app/actions/scheduler";
 import { CategoriesSection } from "@/components/categories-section";
@@ -13,16 +13,24 @@ import { GoalsSection } from "@/components/goals-section";
 import { BudgetsSection } from "@/components/budgets-section";
 
 export default async function SettingsPage() {
-  const [categories, categoryTree, rules, schedulerConfig, goals, budgets, monthlyTargets] =
+  const [categories, categoryTree, rules, schedulerConfig, goals, ladder, budgets, monthlyTargets] =
     await Promise.all([
       getCategories(),
       getCategoryTree(),
       getRules(),
       getSchedulerConfigAction(),
       listGoals(),
+      getGoalLadder(),
       listBudgets(),
       getMonthlyTargets(),
     ]);
+
+  const ladderStatus = ladder.rungs.map((rung) => ({
+    id: rung.goal.id,
+    current: rung.current,
+    target: rung.target,
+    paceVerdict: rung.paceVerdict,
+  }));
 
   return (
     <div className="space-y-8">
@@ -37,7 +45,11 @@ export default async function SettingsPage() {
 
       <RulesSection initialRules={rules} categories={categories} tree={categoryTree} />
 
-      <GoalsSection initialGoals={goals} />
+      <GoalsSection
+        initialGoals={goals}
+        ladderStatus={ladderStatus}
+        initialTrackingSince={ladder.trackingSinceMonth}
+      />
 
       <BudgetsSection
         initialBudgets={budgets}

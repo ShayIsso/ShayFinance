@@ -1,8 +1,9 @@
 /**
- * Public interface of the goals module (CONTEXT.md "savings goal"). The
- * DB-backed wrappers compose the pure progress core with the same calendar-month
- * transaction window analytics uses, so goal numbers always agree with the
- * Dashboard.
+ * Public interface of the goals module (CONTEXT.md "savings goal", "goal
+ * ladder"). The DB-backed wrappers compose the pure ladder core with the same
+ * calendar-month transaction window analytics uses, so goal numbers always agree
+ * with the Dashboard. Since #183 active goals share one `savings pool`
+ * distributed top-down by priority — there is no per-goal accumulation window.
  */
 import { db } from "@/db";
 import { transactions, categories } from "@/db/schema";
@@ -12,22 +13,25 @@ import {
   createGoalWithStore,
   updateGoalWithStore,
   deleteGoalWithStore,
+  reorderGoalWithStore,
+  archiveGoalWithStore,
   drizzleGoalStore,
   type GoalChanges,
   type GoalWriteData,
   type StoredGoal,
 } from "./store";
 import {
-  computeGoalProgress,
-  computeDeadlinePace,
   formatYearMonth,
   parseYearMonth,
   type MonthlyTransactions,
   type YearMonth,
 } from "./progress";
+import { computeSavingsPool, distributeLadder, type LadderGoal, type LadderRung } from "./ladder";
 
 export { InvalidGoalTargetMonthError } from "./errors";
 export type { StoredGoal, GoalWriteData, GoalChanges, GoalStore } from "./store";
+export type { LadderGoal, LadderRung, LadderDistribution } from "./ladder";
+export { computeSavingsPool, distributeLadder } from "./ladder";
 export {
   computeGoalProgress,
   computeDeadlinePace,
@@ -43,17 +47,6 @@ export {
   type MonthlyTransactions,
 } from "./progress";
 
-export type GoalStatus = {
-  goal: StoredGoal;
-  opening: number;
-  cumulativeNetSavings: number;
-  current: number;
-  target: number;
-  remaining: number;
-  /** Linear deadline pace expected at the current month; null for open-ended goals. */
-  expected: number | null;
-};
-
 export async function createGoal(data: GoalWriteData): Promise<string> {
   return createGoalWithStore(data, drizzleGoalStore);
 }
@@ -66,8 +59,24 @@ export async function deleteGoal(id: string): Promise<void> {
   await deleteGoalWithStore(id, drizzleGoalStore);
 }
 
+export async function reorderGoal(id: string, direction: "up" | "down"): Promise<void> {
+  await reorderGoalWithStore(id, direction, drizzleGoalStore);
+}
+
+export async function archiveGoal(id: string): Promise<void> {
+  await archiveGoalWithStore(id, drizzleGoalStore);
+}
+
 export async function listGoals(): Promise<StoredGoal[]> {
   return drizzleGoalStore.listGoals();
+}
+
+export async function getTrackingSinceMonth(): Promise<string | null> {
+  return drizzleGoalStore.getTrackingSinceMonth();
+}
+
+export async function setTrackingSinceMonth(month: string | null): Promise<void> {
+  await drizzleGoalStore.setTrackingSinceMonth(month);
 }
 
 function endOfMonthIso(ym: YearMonth): string {
@@ -106,56 +115,58 @@ async function loadMonthlyTransactions(
   }));
 }
 
-function toStatus(
-  goal: StoredGoal,
-  monthly: MonthlyTransactions[],
-  currentMonth: YearMonth,
-): GoalStatus {
-  const startMonth = parseYearMonth(goal.startMonth);
-  const targetMonth = goal.targetMonth ? parseYearMonth(goal.targetMonth) : null;
-
-  const progress = computeGoalProgress(goal.openingAmount, startMonth, currentMonth, monthly);
-  const expected = computeDeadlinePace(
-    goal.openingAmount,
-    goal.targetAmount,
-    startMonth,
-    targetMonth,
-    currentMonth,
-  );
-
-  return {
-    goal,
-    opening: progress.opening,
-    cumulativeNetSavings: progress.cumulativeNetSavings,
-    current: progress.current,
-    target: goal.targetAmount,
-    remaining: goal.targetAmount - progress.current,
-    expected,
-  };
-}
-
 function currentMonthFrom(today: Date): YearMonth {
   return { year: today.getFullYear(), month: today.getMonth() + 1 };
 }
 
-export async function getGoalStatus(id: string): Promise<GoalStatus | null> {
-  const goal = await drizzleGoalStore.getById(id);
-  if (!goal) return null;
+/** A ladder rung joined back to its stored goal, for display. */
+export type GoalLadderRung = LadderRung & { goal: StoredGoal };
 
+export type GoalLadder = {
+  trackingSinceMonth: string | null;
+  pool: number;
+  surplus: number;
+  rungs: GoalLadderRung[];
+};
+
+/**
+ * The live goal ladder: active goals in priority order, each with its capped
+ * fill and pace verdict, plus the shared pool total and any unallocated surplus
+ * (עודף ללא יעד). Archived goals are excluded. When no tracking-since month is
+ * set the pool is 0 — the baseline is never inferred at runtime.
+ */
+export async function getGoalLadder(): Promise<GoalLadder> {
+  const all = await drizzleGoalStore.listGoals();
+  const active = all.filter((g) => g.archivedAt == null).sort((a, b) => a.priority - b.priority);
+  const trackingSinceMonth = await drizzleGoalStore.getTrackingSinceMonth();
   const currentMonth = currentMonthFrom(new Date());
-  const monthly = await loadMonthlyTransactions(parseYearMonth(goal.startMonth), currentMonth);
-  return toStatus(goal, monthly, currentMonth);
-}
 
-export async function getGoalStatuses(): Promise<GoalStatus[]> {
-  const goals = await drizzleGoalStore.listGoals();
-  if (goals.length === 0) return [];
+  if (active.length === 0) {
+    return { trackingSinceMonth, pool: 0, surplus: 0, rungs: [] };
+  }
 
-  const currentMonth = currentMonthFrom(new Date());
-  const earliestStart = goals
-    .map((g) => parseYearMonth(g.startMonth))
-    .reduce((min, ym) => (ym.year * 12 + ym.month < min.year * 12 + min.month ? ym : min));
+  let pool = 0;
+  if (trackingSinceMonth) {
+    const trackingSince = parseYearMonth(trackingSinceMonth);
+    const monthly = await loadMonthlyTransactions(trackingSince, currentMonth);
+    pool = computeSavingsPool(trackingSince, currentMonth, monthly);
+  }
 
-  const monthly = await loadMonthlyTransactions(earliestStart, currentMonth);
-  return goals.map((goal) => toStatus(goal, monthly, currentMonth));
+  const ladderGoals: LadderGoal[] = active.map((g) => ({
+    id: g.id,
+    opening: g.openingAmount,
+    target: g.targetAmount,
+    startMonth: parseYearMonth(g.startMonth),
+    targetMonth: g.targetMonth ? parseYearMonth(g.targetMonth) : null,
+  }));
+
+  const distribution = distributeLadder(pool, ladderGoals, currentMonth);
+  const byId = new Map(active.map((g) => [g.id, g]));
+
+  return {
+    trackingSinceMonth,
+    pool: distribution.pool,
+    surplus: distribution.surplus,
+    rungs: distribution.rungs.map((rung) => ({ ...rung, goal: byId.get(rung.id)! })),
+  };
 }
