@@ -8,17 +8,32 @@
  */
 import { db } from "@/db";
 import { transactions, bankAccounts, bankCredentials, categories } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   buildTransactionFilterConditions,
   type TransactionFilterConditions,
 } from "@/lib/transactions";
 import { getGroupLeafIndex } from "@/lib/categories";
+import {
+  getMonthTransactions,
+  getRollupCategories,
+  type TransactionWithCategory,
+  type RollupCategory,
+} from "@/lib/analytics";
 import type { ReportRow } from "./csv";
+
+/** A calendar month with at least one transaction, for the report month picker. */
+export type ReportMonth = { year: number; month: number };
 
 export type ReportsStore = {
   getFilteredTransactions(filters: TransactionFilterConditions): Promise<ReportRow[]>;
+  /** Typed rows for one calendar month (on `transactions.date`), for the monthly report. */
+  getMonthTransactions(year: number, month: number): Promise<TransactionWithCategory[]>;
+  /** The category roll-up structure both report months read (ADR-0011 shape). */
+  getRollupCategories(): Promise<RollupCategory[]>;
+  /** Every calendar month that has any transaction, newest first. */
+  getAvailableMonths(): Promise<ReportMonth[]>;
 };
 
 const parentCategories = alias(categories, "parent_categories");
@@ -66,5 +81,29 @@ export const drizzleReportsStore: ReportsStore = {
       chargedAmount: Number(r.chargedAmount),
       originalAmount: Number(r.originalAmount),
     }));
+  },
+
+  // Month read + roll-up structure are owned by analytics (issue #168) so the
+  // report window can never diverge from the Dashboard's; the store just routes
+  // through them behind the Store seam for test injection.
+  getMonthTransactions,
+  getRollupCategories,
+
+  async getAvailableMonths() {
+    const rows = await db
+      .select({
+        year: sql<number>`extract(year from ${transactions.date})::int`,
+        month: sql<number>`extract(month from ${transactions.date})::int`,
+      })
+      .from(transactions)
+      .groupBy(
+        sql`extract(year from ${transactions.date})`,
+        sql`extract(month from ${transactions.date})`,
+      )
+      .orderBy(
+        sql`extract(year from ${transactions.date}) desc`,
+        sql`extract(month from ${transactions.date}) desc`,
+      );
+    return rows.map((r) => ({ year: Number(r.year), month: Number(r.month) }));
   },
 };

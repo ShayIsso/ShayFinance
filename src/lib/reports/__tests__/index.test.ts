@@ -25,12 +25,28 @@ const row = (override: Partial<ReportRow> = {}): ReportRow => ({
   ...override,
 });
 
+// Stubs for the report methods this suite (CSV export) never exercises — the
+// Store pattern needs the full interface, but exportTransactionsCsv only ever
+// calls getFilteredTransactions.
+const monthlyStubs = {
+  async getMonthTransactions() {
+    return [];
+  },
+  async getRollupCategories() {
+    return [];
+  },
+  async getAvailableMonths() {
+    return [];
+  },
+} satisfies Omit<ReportsStore, "getFilteredTransactions">;
+
 /** In-memory ReportsStore fake — never mocks Drizzle (Store pattern). */
 function makeStore(rows: ReportRow[]): { store: ReportsStore } {
   const store: ReportsStore = {
     async getFilteredTransactions() {
       return rows;
     },
+    ...monthlyStubs,
   };
   return { store };
 }
@@ -41,7 +57,7 @@ describe("exportTransactionsCsv", () => {
   it("reads every matching row through the store in a single unpaginated call", async () => {
     const rows = [row({ date: "2026-05-01" }), row({ date: "2026-05-20" })];
     const spy = vi.fn().mockResolvedValue(rows);
-    const store: ReportsStore = { getFilteredTransactions: spy };
+    const store: ReportsStore = { getFilteredTransactions: spy, ...monthlyStubs };
     const filters = { ...noFilter, page: 1, pageSize: 50 };
 
     await exportTransactionsCsv(filters, store);

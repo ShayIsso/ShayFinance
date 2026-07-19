@@ -1,6 +1,9 @@
 import { db } from "@/db";
 import { transactions, categories, bankAccounts, bankCredentials } from "@/db/schema";
 import { eq, and, gte, lte, gt, inArray, desc } from "drizzle-orm";
+import { monthDateRange } from "./month-window";
+
+export { monthDateRange } from "./month-window";
 
 export type AnalyticsTransaction = {
   chargedAmount: number;
@@ -297,37 +300,18 @@ export function computeNextDebitEstimate(
 // DB-backed wrapper functions
 // ---------------------------------------------------------------------------
 
-function monthDateRange(year: number, month: number): { from: string; to: string } {
-  const from = `${year}-${String(month).padStart(2, "0")}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const to = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-  return { from, to };
-}
-
-export async function getMonthlySummary(year: number, month: number): Promise<MonthlySummary> {
-  const { from, to } = monthDateRange(year, month);
-
-  const rows = await db
-    .select({
-      chargedAmount: transactions.chargedAmount,
-      categoryType: categories.type,
-    })
-    .from(transactions)
-    .leftJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(and(gte(transactions.date, from), lte(transactions.date, to)));
-
-  const analyticsRows: AnalyticsTransaction[] = rows.map((r) => ({
-    chargedAmount: Number(r.chargedAmount),
-    categoryType: r.categoryType ?? null,
-  }));
-
-  return computeMonthlySummary(analyticsRows);
-}
-
-export async function getSpendingByCategory(
+/**
+ * The normalized month read every month-scoped analytics/report calculation
+ * shares (issue #168): all transactions on `transactions.date` within the
+ * calendar month, joined to category metadata and coalesced to the
+ * `TransactionWithCategory` shape. Single owner of the select/join + null
+ * coalescing — {@link getMonthlySummary}, {@link getSpendingByCategory}, and
+ * the reports store all consume it, so their windows can never diverge.
+ */
+export async function getMonthTransactions(
   year: number,
   month: number,
-): Promise<CategorySpending[]> {
+): Promise<TransactionWithCategory[]> {
   const { from, to } = monthDateRange(year, month);
 
   const rows = await db
@@ -343,7 +327,7 @@ export async function getSpendingByCategory(
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .where(and(gte(transactions.date, from), lte(transactions.date, to)));
 
-  const withCategory: TransactionWithCategory[] = rows.map((r) => ({
+  return rows.map((r) => ({
     chargedAmount: Number(r.chargedAmount),
     categoryType: r.categoryType ?? null,
     categoryId: r.categoryId ?? null,
@@ -351,8 +335,30 @@ export async function getSpendingByCategory(
     categoryColor: r.categoryColor ?? "#888888",
     categoryIcon: r.categoryIcon ?? "MoreHorizontal",
   }));
+}
 
-  return computeSpendingByCategory(withCategory);
+/** The category roll-up structure (ADR-0011 shape) — single owner for group-first breakdowns. */
+export async function getRollupCategories(): Promise<RollupCategory[]> {
+  return db
+    .select({
+      id: categories.id,
+      name: categories.name,
+      color: categories.color,
+      icon: categories.icon,
+      parentId: categories.parentId,
+    })
+    .from(categories);
+}
+
+export async function getMonthlySummary(year: number, month: number): Promise<MonthlySummary> {
+  return computeMonthlySummary(await getMonthTransactions(year, month));
+}
+
+export async function getSpendingByCategory(
+  year: number,
+  month: number,
+): Promise<CategorySpending[]> {
+  return computeSpendingByCategory(await getMonthTransactions(year, month));
 }
 
 /**
@@ -367,15 +373,7 @@ export async function getSpendingRollup(
 ): Promise<CategorySpendingNode[]> {
   const [spending, rollupCategories] = await Promise.all([
     getSpendingByCategory(year, month),
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        color: categories.color,
-        icon: categories.icon,
-        parentId: categories.parentId,
-      })
-      .from(categories),
+    getRollupCategories(),
   ]);
 
   return rollUpSpendingByGroup(spending, rollupCategories);
