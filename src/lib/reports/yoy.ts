@@ -14,8 +14,8 @@ export type YoyDelta = {
 
 /**
  * Relative YoY change. A null OR zero base yields `pct: null` — never a
- * fabricated ∞%/100% against a zero denominator (owner decision, prototype
- * gate). Callers render "—" for a null `pct`.
+ * fabricated ∞%/100% against a zero denominator (issue #168 / PR #185).
+ * Callers render "—" for a null `pct`.
  */
 export function computeYoyDelta(current: number, lastYear: number | null): YoyDelta {
   if (lastYear === null || lastYear === 0) {

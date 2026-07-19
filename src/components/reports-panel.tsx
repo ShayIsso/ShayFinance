@@ -18,10 +18,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-// Runtime helper comes from the DB-free leaf module; the report shapes are
-// type-only imports (erased at build) so no DB code reaches the client bundle.
+// Runtime helpers come from DB-free leaf modules; the report shapes are
+// type-only imports (build-erased) so no DB code reaches the client bundle
+// (issue #168 / PR #185 — a deliberate exception to the index-only import rule).
 import { computeYoyDelta } from "@/lib/reports/yoy";
-import type { MonthlyReport, MonthlyReportNode } from "@/lib/reports/monthly";
+import { monthDateRange } from "@/lib/analytics/month-window";
+import type { ReportMonth } from "@/lib/reports";
+import type { MonthlyReport, MonthlyReportNode, YoyValue } from "@/lib/reports/monthly";
 
 const HEBREW_MONTHS = [
   "ינואר",
@@ -37,8 +40,6 @@ const HEBREW_MONTHS = [
   "נובמבר",
   "דצמבר",
 ];
-
-type ReportMonth = { year: number; month: number };
 
 // Currency/date formatting stays client-side only (hydration rule, CLAUDE.md).
 function formatILS(amount: number): string {
@@ -62,14 +63,22 @@ function monthLabel(m: ReportMonth): string {
   return `${HEBREW_MONTHS[m.month - 1]} ${m.year}`;
 }
 
-function monthRange(m: ReportMonth): { from: string; to: string } {
-  const from = `${m.year}-${String(m.month).padStart(2, "0")}-01`;
-  const lastDay = new Date(m.year, m.month, 0).getDate();
-  const to = `${m.year}-${String(m.month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-  return { from, to };
+/**
+ * Default selection = the most recent CLOSED month. דוחות studies past months
+ * (issue #168), so it must not open on the current in-progress month and mirror
+ * the Dashboard's live view. The current month stays selectable in the dropdown;
+ * only the default skips it. `months` is newest-first.
+ */
+function defaultMonth(months: ReportMonth[]): ReportMonth | null {
+  if (months.length === 0) return null;
+  const now = new Date();
+  const isCurrent = (m: ReportMonth) =>
+    m.year === now.getFullYear() && m.month === now.getMonth() + 1;
+  if (isCurrent(months[0]) && months[1]) return months[1];
+  return months[0];
 }
 
-// ── delta chip (semantic coloring; owner change 1 at the prototype gate) ───────
+// ── delta chip (semantic coloring; issue #168 / PR #185) ──────────────────────
 // Trend deltas on the reports page ARE colored (unlike the neutral category-
 // identity rule): direction is judged against what "good" means per metric.
 type GoodDirection = "up" | "down" | "neutral";
@@ -130,7 +139,7 @@ function amountOrDash(v: number | null): string {
   return v === null || v === 0 ? "—" : formatILS(v);
 }
 
-// ── breakdown bar cell (owner change 2: ghost bar folded into the table) ───────
+// ── breakdown bar cell (last-year ghost bar folded into the table; issue #168) ─
 function BarCell({
   amount,
   lastYear,
@@ -257,8 +266,54 @@ function BreakdownRows({
   );
 }
 
+type SummaryMetric = {
+  key: string;
+  label: string;
+  value: YoyValue;
+  good: GoodDirection;
+  format: (n: number) => string;
+  asPercentagePoints?: boolean;
+  /** Net savings is emphasized (bold row) and colored by sign. */
+  strong?: boolean;
+  /** Optional color for the current-value cell (net savings by sign; investment blue). */
+  currentClass?: (v: number) => string;
+};
+
+// Investment good="neutral": more/less deployment of savings has no inherent
+// good/bad direction (issue #168 / PR #185).
+function summaryMetrics(s: MonthlyReport["summary"]): SummaryMetric[] {
+  return [
+    { key: "income", label: "הכנסות", value: s.income, good: "up", format: formatILS },
+    { key: "expenses", label: "הוצאות", value: s.expenses, good: "down", format: formatILS },
+    {
+      key: "netSavings",
+      label: "חיסכון נטו",
+      value: s.netSavings,
+      good: "up",
+      format: formatILS,
+      strong: true,
+      currentClass: (v) => (v >= 0 ? "text-emerald-600" : "text-red-600"),
+    },
+    {
+      key: "savingsRate",
+      label: "אחוז חיסכון",
+      value: s.savingsRate,
+      good: "up",
+      format: formatPercentValue,
+      asPercentagePoints: true,
+    },
+    {
+      key: "investment",
+      label: "הושקע",
+      value: s.investment,
+      good: "neutral",
+      format: formatILS,
+      currentClass: () => "text-blue-600",
+    },
+  ];
+}
+
 function SummaryTable({ report, label }: { report: MonthlyReport; label: string }) {
-  const s = report.summary;
   return (
     <Table>
       <TableHeader>
@@ -270,78 +325,25 @@ function SummaryTable({ report, label }: { report: MonthlyReport; label: string 
         </TableRow>
       </TableHeader>
       <TableBody>
-        <TableRow>
-          <TableCell className="font-medium">הכנסות</TableCell>
-          <TableCell className="text-left tabular-nums">{formatILS(s.income.current)}</TableCell>
-          <TableCell className="text-muted-foreground text-left tabular-nums">
-            {s.income.lastYear === null ? "—" : formatILS(s.income.lastYear)}
-          </TableCell>
-          <TableCell className="text-left">
-            <DeltaChip current={s.income.current} lastYear={s.income.lastYear} good="up" />
-          </TableCell>
-        </TableRow>
-        <TableRow>
-          <TableCell className="font-medium">הוצאות</TableCell>
-          <TableCell className="text-left tabular-nums">{formatILS(s.expenses.current)}</TableCell>
-          <TableCell className="text-muted-foreground text-left tabular-nums">
-            {s.expenses.lastYear === null ? "—" : formatILS(s.expenses.lastYear)}
-          </TableCell>
-          <TableCell className="text-left">
-            <DeltaChip current={s.expenses.current} lastYear={s.expenses.lastYear} good="down" />
-          </TableCell>
-        </TableRow>
-        <TableRow className="font-semibold">
-          <TableCell className="font-semibold">חיסכון נטו</TableCell>
-          <TableCell
-            className={cn(
-              "text-left tabular-nums",
-              s.netSavings.current >= 0 ? "text-emerald-600" : "text-red-600",
-            )}
-          >
-            {formatILS(s.netSavings.current)}
-          </TableCell>
-          <TableCell className="text-muted-foreground text-left tabular-nums">
-            {s.netSavings.lastYear === null ? "—" : formatILS(s.netSavings.lastYear)}
-          </TableCell>
-          <TableCell className="text-left">
-            <DeltaChip current={s.netSavings.current} lastYear={s.netSavings.lastYear} good="up" />
-          </TableCell>
-        </TableRow>
-        <TableRow>
-          <TableCell className="font-medium">אחוז חיסכון</TableCell>
-          <TableCell className="text-left tabular-nums">
-            {formatPercentValue(s.savingsRate.current)}
-          </TableCell>
-          <TableCell className="text-muted-foreground text-left tabular-nums">
-            {s.savingsRate.lastYear === null ? "—" : formatPercentValue(s.savingsRate.lastYear)}
-          </TableCell>
-          <TableCell className="text-left">
-            <DeltaChip
-              current={s.savingsRate.current}
-              lastYear={s.savingsRate.lastYear}
-              good="up"
-              asPercentagePoints
-            />
-          </TableCell>
-        </TableRow>
-        <TableRow>
-          {/* Investment delta stays neutral: more/less deployment of savings has
-              no inherent good/bad direction (owner decision, prototype gate). */}
-          <TableCell className="font-medium">הושקע</TableCell>
-          <TableCell className="text-left text-blue-600 tabular-nums">
-            {formatILS(s.investment.current)}
-          </TableCell>
-          <TableCell className="text-muted-foreground text-left tabular-nums">
-            {s.investment.lastYear === null ? "—" : formatILS(s.investment.lastYear)}
-          </TableCell>
-          <TableCell className="text-left">
-            <DeltaChip
-              current={s.investment.current}
-              lastYear={s.investment.lastYear}
-              good="neutral"
-            />
-          </TableCell>
-        </TableRow>
+        {summaryMetrics(report.summary).map((m) => (
+          <TableRow key={m.key} className={m.strong ? "font-semibold" : undefined}>
+            <TableCell className={m.strong ? "font-semibold" : "font-medium"}>{m.label}</TableCell>
+            <TableCell className={cn("text-left tabular-nums", m.currentClass?.(m.value.current))}>
+              {m.format(m.value.current)}
+            </TableCell>
+            <TableCell className="text-muted-foreground text-left tabular-nums">
+              {m.value.lastYear === null ? "—" : m.format(m.value.lastYear)}
+            </TableCell>
+            <TableCell className="text-left">
+              <DeltaChip
+                current={m.value.current}
+                lastYear={m.value.lastYear}
+                good={m.good}
+                asPercentagePoints={m.asPercentagePoints}
+              />
+            </TableCell>
+          </TableRow>
+        ))}
       </TableBody>
     </Table>
   );
@@ -386,7 +388,8 @@ export function ReportsPanel() {
       .then((r) => (r.ok ? r.json() : []))
       .then((data: ReportMonth[]) => {
         setMonths(data);
-        if (data.length > 0) setSelectedKey(monthKey(data[0]));
+        const def = defaultMonth(data);
+        if (def) setSelectedKey(monthKey(def));
         else setLoading(false);
       })
       .catch(() => {
@@ -424,7 +427,7 @@ export function ReportsPanel() {
 
   const csvHref = selectedMonth
     ? (() => {
-        const { from, to } = monthRange(selectedMonth);
+        const { from, to } = monthDateRange(selectedMonth.year, selectedMonth.month);
         return `/api/transactions/export?dateFrom=${from}&dateTo=${to}`;
       })()
     : null;
