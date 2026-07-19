@@ -202,6 +202,12 @@ The bands are deliberately **asymmetric** (warn eagerly, reassure reluctantly). 
 
 Two optional overall (non-per-category) monthly numbers, stored as a single row (id=1, mirrors `scheduler_config`): the **monthly expense target** and the **monthly savings target**. The savings target is gauged against the month's Net Savings and, like every budget, **resets monthly** — but in V1 it is **evaluated at month close only** (`met`/`missed` once the month's last day has passed); intra-month savings pacing is deliberately deferred.
 
+### `month-close verdict` — load-bearing
+
+The דוחות monthly report's per-category-budget and savings-target results for a **CLOSED** month (issue #169, `src/lib/reports/month-close.ts`), composing the same `budget pace` core the Dashboard's live chips use — a past month naturally has `monthElapsed` fraction 1, so `at-risk` never occurs there and every budget resolves to `over` / `on-pace` / `comfortably-under`. Renders only once `isMonthClosed` is true; an in-progress month shows nothing here (the Dashboard's live pace chips already cover it).
+
+**Judged against CURRENT values, not historical ones** — an acknowledged trend-reading simplification: neither a budget's `monthly_limit` nor the savings target is versioned, so re-opening a report for a month whose budget has since changed shows that month's actual spend against **today's** limit/target, not what was configured back then. The UI states this plainly next to the section.
+
 ---
 
 ## Architectural vocabulary

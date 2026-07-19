@@ -21,10 +21,14 @@ import {
   type TransactionWithCategory,
   type RollupCategory,
 } from "@/lib/analytics";
+import { listBudgets, getMonthlyTargets } from "@/lib/budgets";
 import type { ReportRow } from "./csv";
 
 /** A calendar month with at least one transaction, for the report month picker. */
 export type ReportMonth = { year: number; month: number };
+
+/** A budget's raw configuration (no display fields — the wrapper joins those from `getRollupCategories`). */
+export type BudgetConfigRow = { id: string; categoryId: string; monthlyLimit: number };
 
 export type ReportsStore = {
   getFilteredTransactions(filters: TransactionFilterConditions): Promise<ReportRow[]>;
@@ -34,6 +38,10 @@ export type ReportsStore = {
   getRollupCategories(): Promise<RollupCategory[]>;
   /** Every calendar month that has any transaction, newest first. */
   getAvailableMonths(): Promise<ReportMonth[]>;
+  /** Every budget's current configuration (issue #169 — month-close verdicts are judged against current values). */
+  getBudgetConfigs(): Promise<BudgetConfigRow[]>;
+  /** The current monthly savings target, or null when unset. */
+  getSavingsTarget(): Promise<number | null>;
 };
 
 const parentCategories = alias(categories, "parent_categories");
@@ -105,5 +113,17 @@ export const drizzleReportsStore: ReportsStore = {
         sql`extract(month from ${transactions.date}) desc`,
       );
     return rows.map((r) => ({ year: Number(r.year), month: Number(r.month) }));
+  },
+
+  // Both routed through the budgets module's own index.ts (its public
+  // interface) rather than querying `budgets`/`monthlyTargets` tables here
+  // directly — reports composes budgets' reads, it doesn't duplicate them.
+  async getBudgetConfigs() {
+    return listBudgets();
+  },
+
+  async getSavingsTarget() {
+    const { savingsTarget } = await getMonthlyTargets();
+    return savingsTarget;
   },
 };

@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { exportTransactionsCsv } from "../index";
 import type { ReportsStore } from "../store";
 import type { ReportRow } from "../csv";
+import { transactionFiltersSchema } from "@/lib/transactions/schemas";
+import { buildFilterSearchParams } from "@/lib/transactions/filter-params";
+import { monthDateRange } from "@/lib/analytics/month-window";
 
 const row = (override: Partial<ReportRow> = {}): ReportRow => ({
   date: "2026-05-10",
@@ -37,6 +40,12 @@ const monthlyStubs = {
   },
   async getAvailableMonths() {
     return [];
+  },
+  async getBudgetConfigs() {
+    return [];
+  },
+  async getSavingsTarget() {
+    return null;
   },
 } satisfies Omit<ReportsStore, "getFilteredTransactions">;
 
@@ -115,5 +124,75 @@ describe("exportTransactionsCsv", () => {
     expect(bytes[1]).toBe(0xbb);
     expect(bytes[2]).toBe(0xbf);
     expect(result.text).toContain("תאריך,תאריך חיוב");
+  });
+});
+
+// (issue #169 — BGR12) The דוחות monthly report's "הורד שורות החודש" link
+// builds its query string through the same `buildFilterSearchParams`
+// (`@/lib/transactions/filter-params`) the transactions page's own CSV export
+// button uses, and hits the same `/api/transactions/export` endpoint — no
+// second export mechanism. Byte-identity between the two call sites is
+// therefore guaranteed structurally (one shared builder, one endpoint); what
+// actually needs pinning is that the preset the report page passes in
+// resolves to exactly the month window and nothing else.
+describe("month-scoped export preset (issue #169)", () => {
+  it("parses the reports page's month-download preset to exactly the month window, with every other filter absent", () => {
+    const { from, to } = monthDateRange(2026, 5);
+    const params = buildFilterSearchParams({
+      dateFrom: from,
+      dateTo: to,
+      categoryId: "",
+      status: "",
+      search: "",
+    });
+
+    const filters = transactionFiltersSchema.parse(Object.fromEntries(params));
+
+    expect(filters.dateFrom).toBe("2026-05-01");
+    expect(filters.dateTo).toBe("2026-05-31");
+    expect(filters.categoryId).toBeUndefined();
+    expect(filters.status).toBeUndefined();
+    expect(filters.search).toBeUndefined();
+    expect(filters.uncategorized).toBe(false);
+    expect(filters.needsReview).toBe(false);
+  });
+
+  it("excludes rows outside the preset month bounds — the download can only ever contain that month's rows", async () => {
+    const { from, to } = monthDateRange(2026, 5);
+    const allRows = [
+      row({ date: "2026-04-30", description: "APRIL" }),
+      row({ date: "2026-05-01", description: "MAY-FIRST" }),
+      row({ date: "2026-05-31", description: "MAY-LAST" }),
+      row({ date: "2026-06-01", description: "JUNE" }),
+    ];
+    // A minimal date-bound filter, close enough to the real drizzleReportsStore's
+    // WHERE clause to prove the preset only ever reaches May's rows — not a
+    // duplicate-call comparison of the same builder against itself.
+    const store: ReportsStore = {
+      async getFilteredTransactions(filters) {
+        return allRows.filter(
+          (r) =>
+            r.date >= (filters.dateFrom ?? "0000-01-01") &&
+            r.date <= (filters.dateTo ?? "9999-12-31"),
+        );
+      },
+      ...monthlyStubs,
+    };
+
+    const params = buildFilterSearchParams({
+      dateFrom: from,
+      dateTo: to,
+      categoryId: "",
+      status: "",
+      search: "",
+    });
+    const filters = transactionFiltersSchema.parse(Object.fromEntries(params));
+
+    const result = await exportTransactionsCsv(filters, store);
+
+    expect(result.text).toContain("MAY-FIRST");
+    expect(result.text).toContain("MAY-LAST");
+    expect(result.text).not.toContain("APRIL");
+    expect(result.text).not.toContain("JUNE");
   });
 });

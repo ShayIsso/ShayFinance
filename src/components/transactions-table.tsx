@@ -50,6 +50,7 @@ import {
 } from "@/components/grouped-category-select-items";
 import { Amount } from "@/components/ui/amount";
 import { pageRange } from "@/lib/transactions/pagination";
+import { buildFilterSearchParams } from "@/lib/transactions/filter-params";
 import { cn } from "@/lib/utils";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -112,29 +113,6 @@ type TransactionsResponse = {
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-/**
- * The active filter conditions as query params — shared by the listing fetch
- * and the CSV export link (issue #163 — WYSIWYG) so the two can never
- * diverge on how a sentinel `categoryId` value maps to `uncategorized` /
- * `needsReview`. Deliberately excludes `page`/`pageSize`: export always reads
- * every matching row, listing appends its own paging on top of this.
- */
-function buildFilterSearchParams(filters: Filters): URLSearchParams {
-  const params = new URLSearchParams();
-  if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
-  if (filters.dateTo) params.set("dateTo", filters.dateTo);
-  if (filters.categoryId === "__uncategorized__") {
-    params.set("uncategorized", "true");
-  } else if (filters.categoryId === "__needs_review__") {
-    params.set("needsReview", "true");
-  } else if (filters.categoryId) {
-    params.set("categoryId", filters.categoryId);
-  }
-  if (filters.status) params.set("status", filters.status);
-  if (filters.search) params.set("search", filters.search);
-  return params;
 }
 
 const CADENCE_LABELS: Record<RecurringInfo["cadence"], string> = {
