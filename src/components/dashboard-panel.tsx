@@ -28,6 +28,8 @@ import type {
 import { LastSyncStrip } from "@/components/last-sync-strip";
 import type { SyncRunSummary } from "@/lib/sync/runs";
 import { GoalsProgressCard, type GoalProgressCardData } from "@/components/goals-progress-card";
+import { BudgetStatusCard, type BudgetChipData } from "@/components/budget-status-card";
+import type { BudgetStatus, MonthlyTargetsData, SavingsTargetStatus } from "@/lib/budgets";
 
 const HEBREW_MONTHS = [
   "ינואר",
@@ -71,6 +73,18 @@ type UpcomingCharge = {
   nextExpectedDate: string;
 };
 
+type BudgetsSummaryResponse = {
+  budgets: BudgetStatus[];
+  monthlyTargets: MonthlyTargetsData;
+  savingsTarget: SavingsTargetStatus | null;
+};
+
+const EMPTY_BUDGETS_SUMMARY: BudgetsSummaryResponse = {
+  budgets: [],
+  monthlyTargets: { expenseTarget: null, savingsTarget: null },
+  savingsTarget: null,
+};
+
 type DashboardData = {
   summary: MonthlySummary | null;
   spending: CategorySpendingNode[];
@@ -80,21 +94,31 @@ type DashboardData = {
   upcomingCharges: UpcomingCharge[];
   upcomingTotal: number;
   goals: GoalProgressCardData[];
+  budgetsSummary: BudgetsSummaryResponse;
 };
 
 async function fetchDashboardData(year: number, month: number): Promise<DashboardData> {
-  const [summaryRes, spendingRes, balancesRes, recentRes, syncRunsRes, upcomingRes, goalsRes] =
-    await Promise.all([
-      fetch(`/api/analytics/monthly?year=${year}&month=${month}`),
-      fetch(`/api/analytics/spending-rollup?year=${year}&month=${month}`),
-      fetch(`/api/analytics/balances`),
-      fetch(`/api/analytics/recent?limit=15`),
-      fetch(`/api/sync-runs`),
-      fetch(`/api/recurring-upcoming`),
-      fetch(`/api/goals`),
-    ]);
+  const [
+    summaryRes,
+    spendingRes,
+    balancesRes,
+    recentRes,
+    syncRunsRes,
+    upcomingRes,
+    goalsRes,
+    budgetsSummaryRes,
+  ] = await Promise.all([
+    fetch(`/api/analytics/monthly?year=${year}&month=${month}`),
+    fetch(`/api/analytics/spending-rollup?year=${year}&month=${month}`),
+    fetch(`/api/analytics/balances`),
+    fetch(`/api/analytics/recent?limit=15`),
+    fetch(`/api/sync-runs`),
+    fetch(`/api/recurring-upcoming`),
+    fetch(`/api/goals`),
+    fetch(`/api/budgets-summary?year=${year}&month=${month}`),
+  ]);
 
-  const [summary, spending, balances, recent, lastSyncRuns, upcomingData, goals] =
+  const [summary, spending, balances, recent, lastSyncRuns, upcomingData, goals, budgetsSummary] =
     await Promise.all([
       summaryRes.ok ? summaryRes.json() : null,
       spendingRes.ok ? spendingRes.json() : [],
@@ -103,6 +127,7 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
       syncRunsRes.ok ? syncRunsRes.json() : [],
       upcomingRes.ok ? upcomingRes.json() : { upcoming: [], total: 0 },
       goalsRes.ok ? goalsRes.json() : [],
+      budgetsSummaryRes.ok ? budgetsSummaryRes.json() : EMPTY_BUDGETS_SUMMARY,
     ]);
 
   return {
@@ -114,6 +139,7 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
     upcomingCharges: upcomingData.upcoming ?? [],
     upcomingTotal: upcomingData.total ?? 0,
     goals,
+    budgetsSummary,
   };
 }
 
@@ -221,7 +247,7 @@ function UpcomingChargesCard({ charges, total }: { charges: UpcomingCharge[]; to
 }
 
 export function DashboardPanel({
-  categories: _categories,
+  categories,
   pendingReconCount = 0,
 }: {
   categories: Category[];
@@ -239,6 +265,7 @@ export function DashboardPanel({
     upcomingCharges: [],
     upcomingTotal: 0,
     goals: [],
+    budgetsSummary: EMPTY_BUDGETS_SUMMARY,
   });
   const [loading, setLoading] = React.useState(true);
 
@@ -277,7 +304,31 @@ export function DashboardPanel({
     upcomingCharges,
     upcomingTotal,
     goals,
+    budgetsSummary,
   } = data;
+
+  // Budgets only ever attach to expense-type categories (src/lib/budgets
+  // enforces this at write time), so this lookup only ever needs to resolve
+  // an expense category's display name/color for the chip row.
+  const categoriesById = React.useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories],
+  );
+  const budgetChips: BudgetChipData[] = React.useMemo(
+    () =>
+      budgetsSummary.budgets.map(({ budget, pace }) => {
+        const category = categoriesById.get(budget.categoryId);
+        return {
+          id: budget.id,
+          categoryName: category?.name ?? "—",
+          categoryColor: category?.color ?? "#9ca3af",
+          verdict: pace.verdict,
+          spent: pace.spent,
+          limit: pace.limit,
+        };
+      }),
+    [budgetsSummary.budgets, categoriesById],
+  );
 
   // A brand-new account returns a zeroed summary object (not null), so checking
   // `summary === null` alone never fires. Treat an all-zero summary as empty too;
@@ -484,6 +535,16 @@ export function DashboardPanel({
               </CardContent>
             </Card>
           </div>
+
+          {/* Budgets — pace chips + targets headline (BGR9 #166) */}
+          <BudgetStatusCard
+            budgets={budgetChips}
+            targetsHeadline={{
+              expenseTarget: budgetsSummary.monthlyTargets.expenseTarget,
+              expenseActual: summary?.expenses ?? 0,
+              savingsTarget: budgetsSummary.savingsTarget,
+            }}
+          />
 
           {/* Upcoming charges */}
           <UpcomingChargesCard charges={upcomingCharges} total={upcomingTotal} />
