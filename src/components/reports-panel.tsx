@@ -18,13 +18,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { BudgetRow, SavingsVerdictChip } from "@/components/budget-status-card";
 // Runtime helpers come from DB-free leaf modules; the report shapes are
 // type-only imports (build-erased) so no DB code reaches the client bundle
 // (issue #168 / PR #185 — a deliberate exception to the index-only import rule).
 import { computeYoyDelta } from "@/lib/reports/yoy";
 import { monthDateRange } from "@/lib/analytics/month-window";
-import type { ReportMonth } from "@/lib/reports";
+// Same searchParams builder the transactions page's own CSV export link uses
+// (issue #169 — BGR12), so the two links can never diverge on filter shape.
+import { buildFilterSearchParams } from "@/lib/transactions/filter-params";
+// Type-only import from the index barrel is safe even though the barrel also
+// exports DB-backed runtime code (`drizzleReportsStore`, `getMonthlyReport`):
+// `import type` is build-erased, so nothing from it reaches the client bundle
+// (same reasoning as the leaf-file exception above, applied to the one type
+// that only the barrel — not `monthly.ts` — actually defines).
+import type { ReportMonth, MonthlyReportWithVerdicts } from "@/lib/reports";
 import type { MonthlyReport, MonthlyReportNode, YoyValue } from "@/lib/reports/monthly";
+import type { MonthCloseVerdicts } from "@/lib/reports/month-close";
 
 const HEBREW_MONTHS = [
   "ינואר",
@@ -349,6 +359,48 @@ function SummaryTable({ report, label }: { report: MonthlyReport; label: string 
   );
 }
 
+// ── month-close verdict section (issue #169 — BGR12) ──────────────────────
+// Renders for closed months only, and only when there's something to show —
+// `monthClose.monthClosed` is false for an in-progress month (no verdict yet;
+// the Dashboard's live pace chips cover that case), and an all-empty closed
+// result (no budgets, no savings target) hides the same way. Chip vocabulary
+// and styling come straight from the Dashboard's budget card (BGR9) via
+// `BudgetRow` / `SavingsVerdictChip` — no parallel chip implementation here.
+function MonthCloseSection({ monthClose }: { monthClose: MonthCloseVerdicts }) {
+  if (!monthClose.monthClosed) return null;
+  if (monthClose.budgets.length === 0 && !monthClose.savingsTarget) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold">תוצאות מול תקציבים ויעדים</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {monthClose.savingsTarget && (
+          <div className="flex items-center justify-between border-b pb-3 text-sm">
+            <span className="text-muted-foreground">יעד חיסכון נטו</span>
+            <span className="flex items-center gap-2 tabular-nums">
+              {formatILS(monthClose.savingsTarget.netSavings)} מתוך{" "}
+              {formatILS(monthClose.savingsTarget.target)}
+              <SavingsVerdictChip verdict={monthClose.savingsTarget.verdict} />
+            </span>
+          </div>
+        )}
+        {monthClose.budgets.length > 0 && (
+          <div className="space-y-2">
+            {monthClose.budgets.map((b) => (
+              <BudgetRow key={b.id} budget={b} />
+            ))}
+          </div>
+        )}
+        <p className="text-muted-foreground text-xs">
+          התוצאות מוצגות מול הגדרות התקציב והיעד הנוכחיות, גם אם השתנו מאז אותו חודש.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ReportSkeleton() {
   return (
     <div className="space-y-6">
@@ -379,7 +431,7 @@ function ReportSkeleton() {
 export function ReportsPanel() {
   const [months, setMonths] = React.useState<ReportMonth[] | null>(null);
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
-  const [report, setReport] = React.useState<MonthlyReport | null>(null);
+  const [report, setReport] = React.useState<MonthlyReportWithVerdicts | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [showGhost, setShowGhost] = React.useState(false);
 
@@ -409,7 +461,7 @@ export function ReportsPanel() {
     setLoading(true);
     fetch(`/api/reports/monthly?year=${selectedMonth.year}&month=${selectedMonth.month}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then(setReport)
+      .then((data: MonthlyReportWithVerdicts | null) => setReport(data))
       .finally(() => setLoading(false));
   }, [selectedMonth]);
 
@@ -428,7 +480,14 @@ export function ReportsPanel() {
   const csvHref = selectedMonth
     ? (() => {
         const { from, to } = monthDateRange(selectedMonth.year, selectedMonth.month);
-        return `/api/transactions/export?dateFrom=${from}&dateTo=${to}`;
+        const params = buildFilterSearchParams({
+          dateFrom: from,
+          dateTo: to,
+          categoryId: "",
+          status: "",
+          search: "",
+        });
+        return `/api/transactions/export?${params.toString()}`;
       })()
     : null;
 
@@ -464,6 +523,11 @@ export function ReportsPanel() {
           )}
         </div>
       </div>
+
+      {/* Independent of hasData: a closed month can have a meaningful budget/target
+          result (e.g. a ₪0-spend month still resolves comfortably-under) even with
+          no transactions to show in the summary/breakdown below. */}
+      {!loading && report && <MonthCloseSection monthClose={report.monthClose} />}
 
       {loading ? (
         <ReportSkeleton />

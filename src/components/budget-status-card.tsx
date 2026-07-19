@@ -20,7 +20,7 @@ import { Wallet, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { Amount } from "@/components/ui/amount";
-import type { BudgetVerdict, SavingsTargetStatus } from "@/lib/budgets";
+import type { BudgetVerdict, SavingsTargetStatus, SavingsTargetVerdict } from "@/lib/budgets";
 
 export type BudgetChipData = {
   id: string;
@@ -98,6 +98,29 @@ export const VERDICT_CHIP_CLASS: Record<BudgetVerdict, string> = {
   "comfortably-under": POSITIVE_CHIP_CLASS,
 };
 
+/**
+ * The savings-target met/missed pill — same bordered-pill status system as
+ * `VERDICT_CHIP_CLASS`, reused here and by the דוחות monthly report's
+ * month-close section (issue #169) so the two can't drift on label or fill.
+ */
+export function SavingsVerdictChip({
+  verdict,
+  className = "",
+}: {
+  verdict: SavingsTargetVerdict;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`rounded-full border px-1.5 py-0.5 text-[10px] ${
+        verdict === "met" ? POSITIVE_CHIP_CLASS : NEGATIVE_CHIP_CLASS
+      } ${className}`}
+    >
+      {verdict === "met" ? "הושג" : "לא הושג"}
+    </span>
+  );
+}
+
 const VERDICT_SEVERITY_ORDER: BudgetVerdict[] = ["over", "at-risk", "on-pace", "comfortably-under"];
 
 export type VerdictCount = { verdict: BudgetVerdict; count: number };
@@ -141,13 +164,7 @@ function TargetsHeadline({ headline }: { headline: TargetsHeadlineViewModel }) {
             <Amount amount={headline.savings.target} colorize={false} fractionDigits={0} />
           </span>
           {headline.savings.verdict && (
-            <span
-              className={`mr-1.5 rounded-full border px-1.5 py-0.5 text-[10px] ${
-                headline.savings.verdict === "met" ? POSITIVE_CHIP_CLASS : NEGATIVE_CHIP_CLASS
-              }`}
-            >
-              {headline.savings.verdict === "met" ? "הושג" : "לא הושג"}
-            </span>
+            <SavingsVerdictChip verdict={headline.savings.verdict} className="mr-1.5" />
           )}
         </span>
       )}
@@ -170,7 +187,13 @@ function CountChips({ counts }: { counts: VerdictCount[] }) {
   );
 }
 
-function BudgetRow({ budget }: { budget: BudgetChipData }) {
+/**
+ * Category dot + spent/limit + pace-verdict pill for one budget. Exported so
+ * the דוחות monthly report's month-close section (issue #169) reuses the
+ * exact same row rendering as the Dashboard card, rather than a copy that
+ * could drift in styling or verdict labeling.
+ */
+export function BudgetRow({ budget }: { budget: BudgetChipData }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
       <div className="flex min-w-0 items-center gap-2">
