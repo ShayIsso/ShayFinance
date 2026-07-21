@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { exportTransactionsCsv } from "../index";
-import type { ReportsStore } from "../store";
+import { exportTransactionsCsv, getTrendsReport } from "../index";
+import type { ReportsStore, RangeTransactionRow } from "../store";
 import type { ReportRow } from "../csv";
+import type { RollupCategory } from "@/lib/analytics";
 import { transactionFiltersSchema } from "@/lib/transactions/schemas";
 import { buildFilterSearchParams } from "@/lib/transactions/filter-params";
 import { monthDateRange } from "@/lib/analytics/month-window";
@@ -39,6 +40,9 @@ const monthlyStubs = {
     return [];
   },
   async getAvailableMonths() {
+    return [];
+  },
+  async getRangeTransactions() {
     return [];
   },
   async getBudgetConfigs() {
@@ -194,5 +198,85 @@ describe("month-scoped export preset (issue #169)", () => {
     expect(result.text).toContain("MAY-LAST");
     expect(result.text).not.toContain("APRIL");
     expect(result.text).not.toContain("JUNE");
+  });
+});
+
+// (issue #170 — BGR13) The trends wrapper enumerates the calendar-month range
+// from `today`, issues ONE range read, and buckets the rows per month before
+// handing them to the pure core. A Store fake pins that threading (never mocks
+// Drizzle); the series math itself is covered by trends.test.ts.
+describe("getTrendsReport (wrapper)", () => {
+  const rangeCategories: RollupCategory[] = [
+    { id: "salary", name: "משכורת", color: "#10b981", icon: "Wallet", parentId: null },
+    { id: "transport", name: "תחבורה", color: "#14b8a6", icon: "Bus", parentId: null },
+  ];
+  const rangeRow = (over: Partial<RangeTransactionRow>): RangeTransactionRow => ({
+    year: 2026,
+    month: 5,
+    chargedAmount: 0,
+    categoryType: null,
+    categoryId: null,
+    categoryName: "",
+    categoryColor: "#888888",
+    categoryIcon: "MoreHorizontal",
+    ...over,
+  });
+
+  function makeTrendsStore(rows: RangeTransactionRow[]): {
+    store: ReportsStore;
+    rangeSpy: ReturnType<typeof vi.fn>;
+  } {
+    const rangeSpy = vi.fn().mockResolvedValue(rows);
+    const store: ReportsStore = {
+      async getFilteredTransactions() {
+        return [];
+      },
+      ...monthlyStubs,
+      getRangeTransactions: rangeSpy,
+      async getRollupCategories() {
+        return rangeCategories;
+      },
+    };
+    return { store, rangeSpy };
+  }
+
+  it("reads the whole range in one call spanning the enumerated month window", async () => {
+    const { store, rangeSpy } = makeTrendsStore([]);
+    const report = await getTrendsReport(12, store, "2026-07-15");
+
+    expect(rangeSpy).toHaveBeenCalledTimes(1);
+    expect(rangeSpy).toHaveBeenCalledWith("2025-08-01", "2026-07-31");
+    expect(report.months).toHaveLength(12);
+    expect(report.months[0]).toMatchObject({ year: 2025, month: 8 });
+    expect(report.months[11]).toMatchObject({ year: 2026, month: 7 });
+    expect(report.hasData).toBe(false);
+  });
+
+  it("buckets range rows into their calendar month by the year/month tag", async () => {
+    const rows: RangeTransactionRow[] = [
+      rangeRow({
+        year: 2026,
+        month: 6,
+        chargedAmount: 20000,
+        categoryType: "income",
+        categoryId: "salary",
+      }),
+      rangeRow({
+        year: 2026,
+        month: 7,
+        chargedAmount: -1500,
+        categoryType: "expense",
+        categoryId: "transport",
+        categoryName: "תחבורה",
+      }),
+    ];
+    const { store } = makeTrendsStore(rows);
+    const report = await getTrendsReport(3, store, "2026-07-15");
+
+    const june = report.months.find((m) => m.month === 6)!;
+    const july = report.months.find((m) => m.month === 7)!;
+    expect(june.income).toBe(20000);
+    expect(july.expenses).toBe(1500);
+    expect(report.hasData).toBe(true);
   });
 });
