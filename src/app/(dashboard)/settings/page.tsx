@@ -11,6 +11,7 @@ import { RulesSection } from "@/components/rules-section";
 import { SchedulerSection } from "@/components/scheduler-section";
 import { GoalsSection } from "@/components/goals-section";
 import { BudgetsSection } from "@/components/budgets-section";
+import { Separator } from "@/components/ui/separator";
 
 export default async function SettingsPage() {
   const [categories, categoryTree, rules, schedulerConfig, goals, ladder, budgets, monthlyTargets] =
@@ -41,9 +42,15 @@ export default async function SettingsPage() {
 
       <CredentialsSection />
 
+      <Separator />
+
       <CategoriesSection initialCategories={categories} />
 
+      <Separator />
+
       <RulesSection initialRules={rules} categories={categories} tree={categoryTree} />
+
+      <Separator />
 
       <GoalsSection
         initialGoals={goals}
@@ -51,11 +58,15 @@ export default async function SettingsPage() {
         initialTrackingSince={ladder.trackingSinceMonth}
       />
 
+      <Separator />
+
       <BudgetsSection
         initialBudgets={budgets}
         categories={categories}
         initialTargets={monthlyTargets}
       />
+
+      <Separator />
 
       <SchedulerSection initialConfig={schedulerConfig} />
     </div>
