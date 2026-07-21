@@ -25,8 +25,10 @@ import {
   FormSubmit,
   applyActionErrors,
 } from "@/components/ui/form";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { EmptyState } from "@/components/empty-state";
-import { Tags } from "lucide-react";
+import { Tags, ChevronDown, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { createRuleSchema } from "@/lib/categories/schemas";
 // Value import from the pure hierarchy module (no DB dependency) — importing
 // this client component's other category bindings from "@/lib/categories"
@@ -67,6 +69,11 @@ const MATCH_TYPE_CLASSES: Record<MatchType, string> = {
   regex: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
+// ADR-0010: rules are a deliberately-authored, occasionally-touched artifact
+// (merchant memory is the default learning path) — a list past this size no
+// longer earns permanently-expanded vertical space on Settings (#181).
+const SEARCH_THRESHOLD = 8;
+
 type RuleFormValues = z.infer<typeof createRuleSchema>;
 
 function emptyForm(tree: CategoryTreeNode<Category>[]): RuleFormValues {
@@ -88,6 +95,10 @@ export function RulesSection({
   tree: CategoryTreeNode<Category>[];
 }) {
   const [rules, setRules] = React.useState<CategoryRule[]>(initialRules);
+  // Empty section starts open (nothing to hide, and a first-time user needs
+  // the create-rule empty state visible); a populated list starts collapsed.
+  const [expanded, setExpanded] = React.useState(initialRules.length === 0);
+  const [search, setSearch] = React.useState("");
   const [formOpen, setFormOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [applyOpen, setApplyOpen] = React.useState(false);
@@ -111,6 +122,18 @@ export function RulesSection({
     () => Object.fromEntries(categories.map((c) => [c.id, c.name])),
     [categories],
   );
+
+  const hasRules = rules.length > 0;
+
+  const filteredRules = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rules;
+    return rules.filter(
+      (r) =>
+        r.pattern.toLowerCase().includes(q) ||
+        (categoryMap[r.categoryId] ?? "").toLowerCase().includes(q),
+    );
+  }, [rules, search, categoryMap]);
 
   function openAdd() {
     setEditing(null);
@@ -171,6 +194,7 @@ export function RulesSection({
       } else if ("id" in result && result.id) {
         const id = result.id;
         setRules((prev) => [...prev, { id, ...values }].sort((a, b) => b.priority - a.priority));
+        setExpanded(true);
       }
       setFormOpen(false);
     });
@@ -212,59 +236,98 @@ export function RulesSection({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">כללי סיווג</h3>
-        <Button size="sm" onClick={openAdd}>
-          הוסף כלל
-        </Button>
-      </div>
+      <Collapsible open={expanded} onOpenChange={setExpanded} className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold">כללי סיווג</h3>
+            {hasRules && (
+              <span className="text-muted-foreground text-sm">{rules.length} כללים</span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button size="sm" onClick={openAdd}>
+              הוסף כלל
+            </Button>
+            {hasRules && (
+              <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
+                {expanded ? "הסתר כללים" : "הצג כללים"}
+                <ChevronDown
+                  className={cn("size-4 transition-transform", expanded && "rotate-180")}
+                />
+              </CollapsibleTrigger>
+            )}
+          </div>
+        </div>
 
-      <div className="divide-y rounded-lg border">
-        {rules.length === 0 && (
-          <EmptyState
-            icon={Tags}
-            heading="לא נוצרו כללי קטגוריה"
-            explainer="צור כלל כדי לקטלג עסקאות באופן אוטומטי לפי תיאור."
-            cta={{ label: "הוסף כלל", onClick: openAdd }}
-          />
-        )}
-        {rules.map((rule) => (
-          <div key={rule.id} className="flex items-center justify-between gap-3 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <span
-                className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium ${MATCH_TYPE_CLASSES[rule.matchType]}`}
-              >
-                {MATCH_TYPE_LABELS[rule.matchType]}
-              </span>
-              <span className="truncate text-sm font-medium" title={rule.pattern}>
-                {rule.pattern}
-              </span>
-              <span className="text-muted-foreground shrink-0 text-xs">
-                {categoryMap[rule.categoryId] ?? rule.categoryId}
-              </span>
-              <span className="text-muted-foreground shrink-0 text-xs">
-                עדיפות: {rule.priority}
-              </span>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => openApply(rule)}>
-                יישום על קיימים
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => openEdit(rule)}>
-                ערוך
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-red-600 hover:text-red-700"
-                onClick={() => openDelete(rule)}
-              >
-                מחק
-              </Button>
+        <CollapsibleContent>
+          <div className="space-y-3 pt-1">
+            {rules.length > SEARCH_THRESHOLD && (
+              <div className="relative">
+                <Search className="text-muted-foreground pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="חיפוש לפי תבנית או קטגוריה"
+                  dir="auto"
+                  className="ps-9"
+                />
+              </div>
+            )}
+
+            <div className="divide-y rounded-lg border">
+              {!hasRules && (
+                <EmptyState
+                  icon={Tags}
+                  heading="לא נוצרו כללי קטגוריה"
+                  explainer="צור כלל כדי לקטלג עסקאות באופן אוטומטי לפי תיאור."
+                  cta={{ label: "הוסף כלל", onClick: openAdd }}
+                />
+              )}
+              {hasRules && filteredRules.length === 0 && (
+                <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+                  לא נמצאו כללים תואמים לחיפוש
+                </p>
+              )}
+              {filteredRules.map((rule) => (
+                <div key={rule.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium ${MATCH_TYPE_CLASSES[rule.matchType]}`}
+                    >
+                      {MATCH_TYPE_LABELS[rule.matchType]}
+                    </span>
+                    <span className="truncate text-sm font-medium" title={rule.pattern}>
+                      {rule.pattern}
+                    </span>
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      {categoryMap[rule.categoryId] ?? rule.categoryId}
+                    </span>
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      עדיפות: {rule.priority}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openApply(rule)}>
+                      יישום על קיימים
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openEdit(rule)}>
+                      ערוך
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={() => openDelete(rule)}
+                    >
+                      מחק
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Add / Edit dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
