@@ -35,6 +35,13 @@ import { buildFilterSearchParams } from "@/lib/transactions/filter-params";
 import type { ReportMonth, MonthlyReportWithVerdicts } from "@/lib/reports";
 import type { MonthlyReport, MonthlyReportNode, YoyValue } from "@/lib/reports/monthly";
 import type { MonthCloseVerdicts } from "@/lib/reports/month-close";
+import type {
+  TrendsReport,
+  TrendsMonthPoint,
+  TrendsGroupSeries,
+  TrendsCategorySeries,
+  TrendsYearRow,
+} from "@/lib/reports/trends";
 
 const HEBREW_MONTHS = [
   "ינואר",
@@ -49,6 +56,21 @@ const HEBREW_MONTHS = [
   "אוקטובר",
   "נובמבר",
   "דצמבר",
+];
+
+const HEBREW_MONTHS_SHORT = [
+  "ינו",
+  "פבר",
+  "מרץ",
+  "אפר",
+  "מאי",
+  "יונ",
+  "יול",
+  "אוג",
+  "ספט",
+  "אוק",
+  "נוב",
+  "דצמ",
 ];
 
 // Currency/date formatting stays client-side only (hydration rule, CLAUDE.md).
@@ -428,7 +450,7 @@ function ReportSkeleton() {
   );
 }
 
-export function ReportsPanel() {
+function MonthlyReportView() {
   const [months, setMonths] = React.useState<ReportMonth[] | null>(null);
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<MonthlyReportWithVerdicts | null>(null);
@@ -493,8 +515,7 @@ export function ReportsPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold tracking-tight">דוח חודשי</h2>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           {months && months.length > 0 && selectedKey && (
             <Select value={selectedKey} onValueChange={setSelectedKey}>
@@ -633,6 +654,503 @@ export function ReportsPanel() {
         </Link>{" "}
         מציג את החודש הנוכחי; כאן ניתן לעיין בכל חודש שעבר.
       </p>
+    </div>
+  );
+}
+
+// ── trends report (issue #170 — BGR13) ───────────────────────────────────────
+
+const RANGE_OPTIONS = [6, 12, 24];
+
+// Palette laws (locked): the net-savings hero uses emerald/red by sign — a
+// single emphasized metric colored semantically, exactly like the summary
+// table's net-savings cell. Income and expenses stay neutral (grays),
+// differentiated by their legend dot and line style — never a second saturated
+// hue competing with the hero.
+const NET_POS = "#10b981"; // emerald-500
+const NET_NEG = "#ef4444"; // red-500
+const INCOME_NEUTRAL = "#9ca3af"; // gray-400
+const EXPENSE_NEUTRAL = "#4b5563"; // gray-600
+
+// Fixed pixel height; the width is MEASURED from the container so the SVG
+// coordinate space is 1:1 with rendered pixels. That fills the card width at
+// any screen size (wide external monitor included) with no letterboxing and no
+// distortion — the failure mode of a constant viewBox + preserveAspectRatio,
+// which shrinks-and-centers on wide screens, and of preserveAspectRatio="none",
+// which stretches strokes/dots into ellipses. Switching range (6/12/24) only
+// changes internal density, never the frame size.
+const CHART_H = 256;
+const CHART_PAD_X = 24;
+const CHART_PLOT_TOP = 16;
+const CHART_PLOT_BOTTOM = 206;
+
+/** Tracks the live pixel width of a container via ResizeObserver (client-only). */
+function useMeasuredWidth<T extends HTMLElement>() {
+  const ref = React.useRef<T | null>(null);
+  const [width, setWidth] = React.useState(0);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      setWidth(entries[0]?.contentRect.width ?? 0);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width] as const;
+}
+
+function TrendsChart({ points }: { points: TrendsMonthPoint[] }) {
+  const [ref, width] = useMeasuredWidth<HTMLDivElement>();
+  const n = points.length;
+  const plotH = CHART_PLOT_BOTTOM - CHART_PLOT_TOP;
+  const slot = n > 0 ? (width - 2 * CHART_PAD_X) / n : 0;
+  const barW = Math.min(18, slot * 0.55);
+  const cx = (i: number) => CHART_PAD_X + slot * (i + 0.5);
+
+  const incomes = points.map((p) => p.income);
+  const expenses = points.map((p) => p.expenses);
+  const nets = points.map((p) => p.netSavings);
+  const yMax = Math.max(0, ...incomes, ...expenses, ...nets);
+  const yMin = Math.min(0, ...nets);
+  const span = yMax - yMin || 1;
+  const yOf = (v: number) => CHART_PLOT_TOP + ((yMax - v) / span) * plotH;
+  const zeroY = yOf(0);
+  const linePath = (vals: number[]) =>
+    vals.map((v, i) => `${i === 0 ? "M" : "L"}${cx(i)},${yOf(v)}`).join(" ");
+
+  // Thin month labels out when the range is dense so they never overlap.
+  const labelStep = n > 14 ? 2 : 1;
+
+  return (
+    // dir="ltr": time flows left→right (oldest→newest) — the universal chart
+    // convention, independent of the page's RTL, so months read in order.
+    <div ref={ref} dir="ltr" className="w-full" style={{ height: CHART_H }}>
+      {width > 0 && (
+        <svg
+          width={width}
+          height={CHART_H}
+          viewBox={`0 0 ${width} ${CHART_H}`}
+          role="img"
+          aria-label="מגמת הכנסות, הוצאות וחיסכון נטו לפי חודש"
+        >
+          <line x1={0} x2={width} y1={zeroY} y2={zeroY} stroke="#d1d5db" strokeWidth={1} />
+          {points.map((p, i) => {
+            const y = yOf(p.netSavings);
+            const top = Math.min(y, zeroY);
+            const h = Math.max(1, Math.abs(y - zeroY));
+            return (
+              <rect
+                key={i}
+                x={cx(i) - barW / 2}
+                y={top}
+                width={barW}
+                height={h}
+                rx={2}
+                fill={p.netSavings >= 0 ? NET_POS : NET_NEG}
+                // The last point is always the current calendar month
+                // (enumerateMonthRange ends at today's month) — it is still
+                // in progress, so it renders faded to match the caption.
+                opacity={i === n - 1 ? 0.5 : 1}
+              />
+            );
+          })}
+          <path d={linePath(incomes)} fill="none" stroke={INCOME_NEUTRAL} strokeWidth={1.75} />
+          <path
+            d={linePath(expenses)}
+            fill="none"
+            stroke={EXPENSE_NEUTRAL}
+            strokeWidth={1.75}
+            strokeDasharray="5 3"
+          />
+          {points.map((p, i) => (
+            <g key={i}>
+              <circle cx={cx(i)} cy={yOf(p.income)} r={2.5} fill={INCOME_NEUTRAL} />
+              <circle cx={cx(i)} cy={yOf(p.expenses)} r={2.5} fill={EXPENSE_NEUTRAL} />
+            </g>
+          ))}
+          {points.map((p, i) =>
+            i % labelStep === 0 ? (
+              <text
+                key={`m${i}`}
+                x={cx(i)}
+                y={CHART_PLOT_BOTTOM + 20}
+                textAnchor="middle"
+                className="text-muted-foreground"
+                fill="currentColor"
+                fontSize={11}
+              >
+                {HEBREW_MONTHS_SHORT[p.month - 1]}
+              </text>
+            ) : null,
+          )}
+          {points.map((p, i) =>
+            i === 0 || p.month === 1 ? (
+              <text
+                key={`y${i}`}
+                x={cx(i)}
+                y={CHART_PLOT_BOTTOM + 36}
+                textAnchor="middle"
+                className="text-muted-foreground"
+                fill="currentColor"
+                fontSize={10}
+              >
+                {p.year}
+              </text>
+            ) : null,
+          )}
+        </svg>
+      )}
+    </div>
+  );
+}
+
+function LegendSwatch({
+  color,
+  colorNeg,
+  label,
+  variant,
+}: {
+  color: string;
+  colorNeg?: string;
+  label: string;
+  variant: "bar" | "split" | "line" | "dashed";
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      {variant === "split" ? (
+        // Net savings is green when positive AND red when negative — the marker
+        // conveys both states, not a single-colour dot.
+        <span className="inline-flex h-3 w-3 overflow-hidden rounded-sm">
+          <span className="w-1/2" style={{ backgroundColor: color }} />
+          <span className="w-1/2" style={{ backgroundColor: colorNeg }} />
+        </span>
+      ) : variant === "bar" ? (
+        <span className="inline-block h-3 w-2.5 rounded-sm" style={{ backgroundColor: color }} />
+      ) : (
+        <span
+          className="inline-block h-0 w-4"
+          style={{ borderTop: `2px ${variant === "dashed" ? "dashed" : "solid"} ${color}` }}
+        />
+      )}
+      {label}
+    </span>
+  );
+}
+
+// Neutral sparkline bars; the category dot on the row is the differentiation
+// mechanism (palette law), so every bar here stays gray. This is NOT a skeleton
+// — bg-gray-400 keeps the bars clearly readable (bg-gray-200 read as a loading
+// placeholder). Each row normalizes to its own max so the trend SHAPE reads;
+// magnitude is the amount + delta columns beside it. Hovering a bar surfaces its
+// month + that month's amount (client-side formatting, RTL).
+function MiniBars({ amounts, months }: { amounts: number[]; months: ReportMonth[] }) {
+  const max = Math.max(0, ...amounts);
+  const [hover, setHover] = React.useState<number | null>(null);
+  return (
+    <div dir="ltr" className="relative flex h-7 items-end gap-0.5">
+      {amounts.map((a, i) => (
+        <div
+          key={i}
+          className="min-w-[3px] flex-1 rounded-sm bg-gray-400 hover:bg-gray-500"
+          style={{ height: max > 0 ? `${Math.max(8, (a / max) * 100)}%` : "8%" }}
+          onMouseEnter={() => setHover(i)}
+          onMouseLeave={() => setHover((h) => (h === i ? null : h))}
+        />
+      ))}
+      {hover !== null && months[hover] && (
+        <div
+          dir="rtl"
+          className="bg-popover text-popover-foreground pointer-events-none absolute bottom-full z-10 mb-1 -translate-x-1/2 rounded-md border px-2 py-1 text-xs whitespace-nowrap shadow-sm"
+          style={{ left: `${((hover + 0.5) / amounts.length) * 100}%` }}
+        >
+          <span className="font-medium">
+            {HEBREW_MONTHS[months[hover].month - 1]} {months[hover].year}
+          </span>
+          <span className="text-muted-foreground"> · </span>
+          <span className="tabular-nums">{formatILS(amounts[hover])}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Latest-month amount and the month-over-month delta chip (expenses: good = down). */
+function TrendsAmountCells({ amounts }: { amounts: number[] }) {
+  const current = amounts[amounts.length - 1] ?? 0;
+  const previous = amounts.length > 1 ? amounts[amounts.length - 2] : null;
+  return (
+    <>
+      <TableCell className="text-left font-semibold tabular-nums">{formatILS(current)}</TableCell>
+      <TableCell className="text-left">
+        <DeltaChip current={current} lastYear={previous} good="down" />
+      </TableCell>
+    </>
+  );
+}
+
+function TrendsBreakdownRow({
+  series,
+  months,
+}: {
+  series: TrendsGroupSeries;
+  months: ReportMonth[];
+}) {
+  const [open, setOpen] = React.useState(false);
+  const isGroup = series.children.length > 0;
+  return (
+    <>
+      <TableRow
+        className={isGroup ? "cursor-pointer" : undefined}
+        onClick={isGroup ? () => setOpen((o) => !o) : undefined}
+        aria-expanded={isGroup ? open : undefined}
+      >
+        <TableCell className="font-medium">
+          <span className="flex items-center gap-2">
+            {isGroup ? (
+              <ChevronDown
+                className={cn(
+                  "text-muted-foreground size-4 shrink-0 transition-transform",
+                  open ? "" : "-rotate-90",
+                )}
+                strokeWidth={1.5}
+              />
+            ) : (
+              <span className="size-4 shrink-0" />
+            )}
+            <CategoryDot color={series.color} />
+            <span className="truncate">{series.categoryName}</span>
+          </span>
+        </TableCell>
+        <TableCell className="w-40">
+          <MiniBars amounts={series.amounts} months={months} />
+        </TableCell>
+        <TrendsAmountCells amounts={series.amounts} />
+      </TableRow>
+      {isGroup &&
+        open &&
+        series.children.map((leaf: TrendsCategorySeries) => (
+          <TableRow key={leaf.categoryId} className="bg-muted/20">
+            <TableCell className="text-muted-foreground pr-12">
+              <span className="flex items-center gap-2">
+                <CategoryDot color={leaf.color} />
+                <span className="truncate">{leaf.categoryName}</span>
+              </span>
+            </TableCell>
+            <TableCell className="w-40">
+              <MiniBars amounts={leaf.amounts} months={months} />
+            </TableCell>
+            <TrendsAmountCells amounts={leaf.amounts} />
+          </TableRow>
+        ))}
+    </>
+  );
+}
+
+function YearRowsTable({ years }: { years: TrendsYearRow[] }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="text-right">שנה</TableHead>
+          <TableHead className="text-left">הכנסות</TableHead>
+          <TableHead className="text-left">הוצאות</TableHead>
+          <TableHead className="text-left">חיסכון נטו</TableHead>
+          <TableHead className="text-left">הושקע</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {years.map((y) => (
+          <TableRow key={y.year}>
+            <TableCell className="font-medium">
+              {y.year}
+              {y.monthCount < 12 && (
+                <span className="text-muted-foreground mr-1 text-xs">({y.monthCount} ח׳)</span>
+              )}
+            </TableCell>
+            <TableCell className="text-left tabular-nums">{formatILS(y.income)}</TableCell>
+            <TableCell className="text-left tabular-nums">{formatILS(y.expenses)}</TableCell>
+            <TableCell
+              className={cn(
+                "text-left font-semibold tabular-nums",
+                y.netSavings >= 0 ? "text-emerald-600" : "text-red-600",
+              )}
+            >
+              {formatILS(y.netSavings)}
+            </TableCell>
+            <TableCell className="text-left text-blue-600 tabular-nums">
+              {formatILS(y.investment)}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function TrendsView() {
+  const [range, setRange] = React.useState(12);
+  const [report, setReport] = React.useState<TrendsReport | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors the monthly view's range-scoped fetch idiom
+    setLoading(true);
+    fetch(`/api/reports/trends?range=${range}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: TrendsReport | null) => setReport(data))
+      .finally(() => setLoading(false));
+  }, [range]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <Select value={String(range)} onValueChange={(v) => setRange(Number(v))}>
+          <SelectTrigger className="w-40">
+            <span>{range} חודשים אחרונים</span>
+          </SelectTrigger>
+          <SelectContent>
+            {RANGE_OPTIONS.map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n} חודשים אחרונים
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {loading ? (
+        <ReportSkeleton />
+      ) : !report || !report.hasData ? (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={FileBarChart}
+              heading="אין נתונים לטווח זה"
+              explainer="לא נמצאו עסקאות בטווח החודשים שנבחר."
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-base font-semibold">מגמה חודשית</CardTitle>
+                <div className="text-muted-foreground flex flex-wrap items-center gap-4 text-xs">
+                  <LegendSwatch
+                    color={NET_POS}
+                    colorNeg={NET_NEG}
+                    label="חיסכון נטו"
+                    variant="split"
+                  />
+                  <LegendSwatch color={INCOME_NEUTRAL} label="הכנסות" variant="line" />
+                  <LegendSwatch color={EXPENSE_NEUTRAL} label="הוצאות" variant="dashed" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <TrendsChart points={report.months} />
+              <p className="text-muted-foreground mt-3 text-xs">
+                עמודות = חיסכון נטו (ירוק חיובי, אדום שלילי); הקווים = הכנסות והוצאות. החודש הנוכחי
+                חלקי ומוצג בשקיפות.
+              </p>
+            </CardContent>
+          </Card>
+
+          {report.years.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold">סיכום שנתי</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <YearRowsTable years={report.years} />
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">מגמה לפי קטגוריה</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {report.breakdown.length === 0 ? (
+                <p className="text-muted-foreground text-sm">אין הוצאות מסווגות בטווח זה.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">קטגוריה</TableHead>
+                      <TableHead className="text-right">מגמה</TableHead>
+                      <TableHead className="text-left">חודש אחרון</TableHead>
+                      <TableHead className="text-left">שינוי</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {report.breakdown.map((series) => (
+                      <TrendsBreakdownRow
+                        key={series.categoryId}
+                        series={series}
+                        months={report.months}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      <p className="text-muted-foreground text-xs">
+        פתחו קבוצה כדי לראות את מגמת הקטגוריות שבתוכה. סכום הקבוצה שווה תמיד לסכום הקטגוריות שבה.
+      </p>
+    </div>
+  );
+}
+
+function SegmentedTabs({
+  value,
+  onChange,
+}: {
+  value: "monthly" | "trends";
+  onChange: (v: "monthly" | "trends") => void;
+}) {
+  const tabs: { key: "monthly" | "trends"; label: string }[] = [
+    { key: "monthly", label: "דוח חודשי" },
+    { key: "trends", label: "מגמות" },
+  ];
+  return (
+    <div className="bg-muted inline-flex rounded-lg p-1">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={() => onChange(t.key)}
+          aria-pressed={value === t.key}
+          className={cn(
+            "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+            value === t.key
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ReportsPanel() {
+  const [tab, setTab] = React.useState<"monthly" | "trends">("monthly");
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">דוחות</h1>
+        <SegmentedTabs value={tab} onChange={setTab} />
+      </div>
+      {tab === "monthly" ? <MonthlyReportView /> : <TrendsView />}
     </div>
   );
 }

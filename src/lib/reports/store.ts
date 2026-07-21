@@ -8,7 +8,7 @@
  */
 import { db } from "@/db";
 import { transactions, bankAccounts, bankCredentials, categories } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   buildTransactionFilterConditions,
@@ -18,6 +18,7 @@ import { getGroupLeafIndex } from "@/lib/categories";
 import {
   getMonthTransactions,
   getRollupCategories,
+  toTransactionWithCategory,
   type TransactionWithCategory,
   type RollupCategory,
 } from "@/lib/analytics";
@@ -26,6 +27,9 @@ import type { ReportRow } from "./csv";
 
 /** A calendar month with at least one transaction, for the report month picker. */
 export type ReportMonth = { year: number; month: number };
+
+/** A range-scoped transaction tagged with its calendar year/month, for bucketing the trends series. */
+export type RangeTransactionRow = TransactionWithCategory & { year: number; month: number };
 
 /** A budget's raw configuration (no display fields — the wrapper joins those from `getRollupCategories`). */
 export type BudgetConfigRow = { id: string; categoryId: string; monthlyLimit: number };
@@ -38,6 +42,12 @@ export type ReportsStore = {
   getRollupCategories(): Promise<RollupCategory[]>;
   /** Every calendar month that has any transaction, newest first. */
   getAvailableMonths(): Promise<ReportMonth[]>;
+  /**
+   * Every transaction in an inclusive `[from, to]` date range (on
+   * `transactions.date`), each tagged with its calendar year/month — one range
+   * query the trends wrapper buckets per month, rather than N per-month reads.
+   */
+  getRangeTransactions(from: string, to: string): Promise<RangeTransactionRow[]>;
   /** Every budget's current configuration (issue #169 — month-close verdicts are judged against current values). */
   getBudgetConfigs(): Promise<BudgetConfigRow[]>;
   /** The current monthly savings target, or null when unset. */
@@ -113,6 +123,36 @@ export const drizzleReportsStore: ReportsStore = {
         sql`extract(month from ${transactions.date}) desc`,
       );
     return rows.map((r) => ({ year: Number(r.year), month: Number(r.month) }));
+  },
+
+  // Single range query for the trends series. Same column set + join as
+  // analytics' getMonthTransactions (the shared month read), and the row→shape
+  // coalescing is the one owned by analytics (`toTransactionWithCategory`), so a
+  // range bucket for month M is byte-identical to that month's own read — the
+  // "reports windows can't diverge" invariant (#168), extended to trends (#170).
+  // Bucketing by extract(year/month) matches monthDateRange's calendar month
+  // exactly, so trends totals agree with the monthly report per month.
+  async getRangeTransactions(from, to) {
+    const rows = await db
+      .select({
+        year: sql<number>`extract(year from ${transactions.date})::int`,
+        month: sql<number>`extract(month from ${transactions.date})::int`,
+        chargedAmount: transactions.chargedAmount,
+        categoryType: categories.type,
+        categoryId: categories.id,
+        categoryName: categories.name,
+        categoryColor: categories.color,
+        categoryIcon: categories.icon,
+      })
+      .from(transactions)
+      .leftJoin(categories, eq(transactions.categoryId, categories.id))
+      .where(and(gte(transactions.date, from), lte(transactions.date, to)));
+
+    return rows.map((r) => ({
+      year: Number(r.year),
+      month: Number(r.month),
+      ...toTransactionWithCategory(r),
+    }));
   },
 
   // Both routed through the budgets module's own index.ts (its public

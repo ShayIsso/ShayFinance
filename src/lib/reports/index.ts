@@ -5,14 +5,30 @@
  * filters cleared). No schema changes; no new tables.
  */
 import type { TransactionFilterConditions } from "@/lib/transactions";
+import { monthDateRange, type TransactionWithCategory } from "@/lib/analytics";
 import { drizzleReportsStore, type ReportsStore, type ReportMonth } from "./store";
 import { buildCsvWithBom, resolveExportDateRange, buildExportFilename } from "./csv";
 import { buildMonthlyReport, type MonthlyReport } from "./monthly";
 import { buildMonthCloseVerdicts, type BudgetConfig, type MonthCloseVerdicts } from "./month-close";
+import {
+  buildTrendsReport,
+  enumerateMonthRange,
+  type TrendsMonthInput,
+  type TrendsReport,
+} from "./trends";
 
 export type { ReportRow, BankType, CategoryType, CategorySource, TransactionStatus } from "./csv";
 export { CSV_HEADERS, buildCsv, buildCsvWithBom } from "./csv";
-export type { ReportsStore, ReportMonth, BudgetConfigRow } from "./store";
+export type { ReportsStore, ReportMonth, BudgetConfigRow, RangeTransactionRow } from "./store";
+export { buildTrendsReport, enumerateMonthRange } from "./trends";
+export type {
+  TrendsReport,
+  TrendsMonthInput,
+  TrendsMonthPoint,
+  TrendsCategorySeries,
+  TrendsGroupSeries,
+  TrendsYearRow,
+} from "./trends";
 export { buildMonthlyReport } from "./monthly";
 export type {
   MonthlyReport,
@@ -117,4 +133,47 @@ export async function getReportMonths(
   store: ReportsStore = drizzleReportsStore,
 ): Promise<ReportMonth[]> {
   return store.getAvailableMonths();
+}
+
+/**
+ * Trends report (BGR13 #170): income / expenses / net savings as a per-calendar-
+ * month series over the last `rangeMonths` months (ending at `today`'s month,
+ * default 12), plus per-group/leaf spend series and annual year rows. Composes
+ * analytics' pure functions in `trends.ts` — zero duplicated aggregation. One
+ * range read is bucketed per calendar month here, then handed to the pure core
+ * (empty months included so the series stays continuous across range edges).
+ * `today` is threaded through (defaults to the real date) for deterministic
+ * tests — mirrors `getMonthlyReport`'s idiom.
+ */
+export async function getTrendsReport(
+  rangeMonths = 12,
+  store: ReportsStore = drizzleReportsStore,
+  today: string = isoToday(),
+): Promise<TrendsReport> {
+  const monthsList = enumerateMonthRange(today, rangeMonths);
+  const first = monthsList[0];
+  const last = monthsList[monthsList.length - 1];
+  const { from } = monthDateRange(first.year, first.month);
+  const { to } = monthDateRange(last.year, last.month);
+
+  const [rows, categories] = await Promise.all([
+    store.getRangeTransactions(from, to),
+    store.getRollupCategories(),
+  ]);
+
+  const byKey = new Map<string, TransactionWithCategory[]>();
+  for (const { year, month, ...tx } of rows) {
+    const key = `${year}-${month}`;
+    const list = byKey.get(key) ?? [];
+    list.push(tx);
+    byKey.set(key, list);
+  }
+
+  const months: TrendsMonthInput[] = monthsList.map((m) => ({
+    year: m.year,
+    month: m.month,
+    transactions: byKey.get(`${m.year}-${m.month}`) ?? [],
+  }));
+
+  return buildTrendsReport(months, categories);
 }

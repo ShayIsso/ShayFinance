@@ -296,6 +296,31 @@ export function computeNextDebitEstimate(
   return { estimate, nextDebitDate };
 }
 
+/**
+ * Coalesces one joined transaction row (the analytics month/range select shape)
+ * to {@link TransactionWithCategory}. Single owner of the null defaults so the
+ * month read and the reports range read can never drift — the "reports windows
+ * can't diverge" invariant (issue #168 / #170) is enforced here structurally,
+ * not by two hand-copied mappers agreeing by convention.
+ */
+export function toTransactionWithCategory(row: {
+  chargedAmount: string | number;
+  categoryType: AnalyticsTransaction["categoryType"];
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryColor: string | null;
+  categoryIcon: string | null;
+}): TransactionWithCategory {
+  return {
+    chargedAmount: Number(row.chargedAmount),
+    categoryType: row.categoryType ?? null,
+    categoryId: row.categoryId ?? null,
+    categoryName: row.categoryName ?? "",
+    categoryColor: row.categoryColor ?? "#888888",
+    categoryIcon: row.categoryIcon ?? "MoreHorizontal",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // DB-backed wrapper functions
 // ---------------------------------------------------------------------------
@@ -327,14 +352,7 @@ export async function getMonthTransactions(
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .where(and(gte(transactions.date, from), lte(transactions.date, to)));
 
-  return rows.map((r) => ({
-    chargedAmount: Number(r.chargedAmount),
-    categoryType: r.categoryType ?? null,
-    categoryId: r.categoryId ?? null,
-    categoryName: r.categoryName ?? "",
-    categoryColor: r.categoryColor ?? "#888888",
-    categoryIcon: r.categoryIcon ?? "MoreHorizontal",
-  }));
+  return rows.map(toTransactionWithCategory);
 }
 
 /** The category roll-up structure (ADR-0011 shape) — single owner for group-first breakdowns. */
