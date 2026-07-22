@@ -77,13 +77,17 @@
 }
 
 /*
- * Theme = a token swap, not a rewrite (#109 direction F, "Original, elevated").
- * Light is the primary target and lives in :root; [data-theme="dark"] (and the
- * .dark alias) swaps the same token names to their dark values, so every color
- * utility (bg-background, text-muted-foreground, border-border, ...) re-skins
- * by cascade — sidebar and main as one. The active theme is stamped on <html>
- * pre-paint by the inline script in the root layout (SSR-safe, no white flash).
- * Achromatic zinc, chroma = 0 unless noted. The --radius calc scale and the
+ * #109 direction F, "Original, elevated" — true-neutral zinc in BOTH modes.
+ * Both light and dark adopt the #109 palette: :root holds the light F values
+ * (a few shift vs the old baseline — foreground 0.145→0.16, muted-foreground
+ * 0.556→0.505, accent 0.97→0.965, border/input 0.922→0.918, sidebar→pure
+ * white, warning recolored to 0.72 0.15 65), and [data-theme="dark"] (with the
+ * .dark alias) is a scoped token swap over that same set. Only values change,
+ * so every color utility (bg-background, text-muted-foreground, border-border,
+ * ...) re-skins by cascade — sidebar and main as one. The active theme is
+ * stamped on <html> pre-paint by the inline script in the root layout
+ * (SSR-safe, no white flash). Achromatic zinc, chroma = 0 unless noted. The
+ * --radius calc scale (kept at the 0.625rem baseline per #195) and the
  * Assistant font family are unchanged.
  */
 :root {
@@ -127,12 +131,13 @@
   --chart-4: oklch(0.627 0.265 303.9); /* violet */
   --chart-5: oklch(0.645 0.246 16.439); /* red */
 
-  /* ── Sidebar ── */
+  /* ── Sidebar ── (--sidebar and --sidebar-border are the #109-F sheet values;
+     the rest stay at baseline — the sheet does not respec them) */
   --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.16 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.965 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
@@ -162,7 +167,19 @@
 
   --destructive: oklch(0.71 0.17 22); /* brighter rose — muddy at 0.577 on dark */
   --emerald: oklch(0.72 0.15 163);
+  /* emerald is lifted in dark — dark text reads, white washes out */
+  --emerald-foreground: oklch(0.165 0 0);
   --warning: oklch(0.78 0.15 70);
+  /* warning stays amber (light) in both modes → dark foreground */
+  --warning-foreground: oklch(0.145 0 0);
+
+  /* ── Chart palette ── lightness lifted, hue preserved so each category keeps
+     its identity and stays legible on the dark surface (chart-1 tracks --emerald). */
+  --chart-1: oklch(0.72 0.15 163.225); /* emerald */
+  --chart-2: oklch(0.65 0.19 264.376); /* blue */
+  --chart-3: oklch(0.8 0.16 70.08); /* amber */
+  --chart-4: oklch(0.7 0.2 303.9); /* violet */
+  --chart-5: oklch(0.7 0.19 16.439); /* red */
 
   --sidebar: oklch(0.185 0 0);
   --sidebar-foreground: oklch(0.955 0 0);
