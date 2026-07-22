@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { transactions, recurringExpenses, categories } from "@/db/schema";
-import { and, or, eq, gte, lt, isNull, notInArray } from "drizzle-orm";
-import type { DetectionTransaction, RecurringPattern } from "./types";
+import { and, or, eq, gte, lt, ne, isNull, notInArray } from "drizzle-orm";
+import type { DetectionTransaction, RecurringPattern, PersistedRecurringPattern } from "./types";
 
 // ── Store interface ───────────────────────────────────────────────────────────
 
@@ -18,6 +18,15 @@ export interface RecurringStore {
    * DO NOT overwrite status — preserves user-set paused/canceled state.
    */
   upsertPattern(pattern: RecurringPattern): Promise<void>;
+
+  /**
+   * All non-canceled patterns as the anomaly detectors need them. Mirrors the
+   * row→pattern mapping in the subscriptions page exactly (#196 attention
+   * count), so a pattern that would render an alert there is never miscounted
+   * here. `occurrenceDates` is not a DB column — detectors never read it, so
+   * it comes back empty.
+   */
+  getPersistedPatterns(): Promise<PersistedRecurringPattern[]>;
 }
 
 // ── Drizzle implementation ────────────────────────────────────────────────────
@@ -92,5 +101,37 @@ export const drizzleRecurringStore: RecurringStore = {
           updatedAt: now,
         },
       });
+  },
+
+  async getPersistedPatterns(): Promise<PersistedRecurringPattern[]> {
+    const rows = await db
+      .select({
+        id: recurringExpenses.id,
+        merchant: recurringExpenses.merchant,
+        displayName: recurringExpenses.displayName,
+        expectedAmount: recurringExpenses.expectedAmount,
+        cadence: recurringExpenses.expectedCadence,
+        nextExpectedDate: recurringExpenses.nextExpectedDate,
+        status: recurringExpenses.status,
+        confirmedAt: recurringExpenses.confirmedAt,
+        patternFingerprint: recurringExpenses.patternFingerprint,
+        lastMatchedTxnId: recurringExpenses.lastMatchedTxnId,
+      })
+      .from(recurringExpenses)
+      .where(ne(recurringExpenses.status, "canceled"));
+
+    return rows.map((row) => ({
+      id: row.id,
+      merchant: row.merchant,
+      displayName: row.displayName ?? null,
+      expectedAmount: Number(row.expectedAmount),
+      cadence: row.cadence,
+      occurrenceDates: [],
+      lastMatchedTxnId: row.lastMatchedTxnId ?? "",
+      patternFingerprint: row.patternFingerprint,
+      nextExpectedDate: new Date(row.nextExpectedDate),
+      status: row.status,
+      confirmedAt: row.confirmedAt ?? null,
+    }));
   },
 };

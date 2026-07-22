@@ -48,6 +48,15 @@ export interface ReviewStore {
    */
   getActiveAutoApplied(transactionId: string): Promise<ActiveAutoAppliedSuggestion | null>;
   markSuggestionStatus(suggestionId: string, status: ReviewSuggestionStatus): Promise<void>;
+  /**
+   * Count of DISTINCT transactions with a pending-review suggestion — the
+   * dashboard's attention feeder (#196). Mirrors the transaction-level
+   * `{ mode: "needsReview" }` row filter, not raw suggestion-row count: a
+   * transaction can carry more than one `pending_review` row (no uniqueness
+   * guard on insert), and counting rows there would overstate what that
+   * filter lists.
+   */
+  getPendingSuggestionCount(): Promise<number>;
 }
 
 export interface AcceptSuggestionInput {

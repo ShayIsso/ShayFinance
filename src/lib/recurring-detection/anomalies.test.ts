@@ -11,8 +11,10 @@ import {
   detectMissedPayments,
   detectNewlyDetected,
   detectDormant,
+  countAnomalyAlerts,
+  type AnomalyAlertLists,
 } from "./anomalies";
-import type { PersistedRecurringPattern, DetectionTransaction } from "./types";
+import type { PersistedRecurringPattern, DetectionTransaction, PriceChangeAlert } from "./types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -451,5 +453,93 @@ describe("missed / dormant mutual exclusivity (monthly, threshold = 45 days)", (
     const today = addDays(nextExpected, 8);
     expect(detectMissedPayments([monthly], today)).toHaveLength(1);
     expect(detectDormant([monthly], today)).toHaveLength(0);
+  });
+});
+
+// ── countAnomalyAlerts ────────────────────────────────────────────────────────
+// Pure fold over the four detectors' outputs (#196 attention-counts feeder).
+// No detector logic here — only summation, so these tests target the fold
+// itself: totals, the zero case, and that each category counts independently.
+
+function makePriceChangeAlert(id: string): PriceChangeAlert {
+  return {
+    type: "price_change",
+    patternId: id,
+    merchant: "m",
+    oldAmount: 1,
+    newAmount: 2,
+    pctChange: 1,
+  };
+}
+
+function emptyLists(): AnomalyAlertLists {
+  return { priceChanges: [], missedPayments: [], dormant: [], newlyDetected: [] };
+}
+
+describe("countAnomalyAlerts", () => {
+  it("returns 0 when all four detector outputs are empty", () => {
+    expect(countAnomalyAlerts(emptyLists())).toBe(0);
+  });
+
+  it("counts a single alert in a single category", () => {
+    const lists = { ...emptyLists(), priceChanges: [makePriceChangeAlert("p1")] };
+    expect(countAnomalyAlerts(lists)).toBe(1);
+  });
+
+  it("sums alerts across all four categories", () => {
+    const netflixPriceChange = detectPriceChanges(
+      [makePattern({ id: "p1", merchant: "netflix", expectedAmount: 100 })],
+      [makeTxn("t1", "NETFLIX", -150, "2025-05-01")],
+    );
+    const missed = detectMissedPayments(
+      [makePattern({ id: "p2", nextExpectedDate: new Date("2025-05-01T00:00:00.000Z") })],
+      addDays(new Date("2025-05-01T00:00:00.000Z"), 10),
+    );
+    const dormant = detectDormant(
+      [makePattern({ id: "p3", nextExpectedDate: new Date("2025-05-01T00:00:00.000Z") })],
+      addDays(new Date("2025-05-01T00:00:00.000Z"), 240),
+    );
+    const newlyDetected = detectNewlyDetected([makePattern({ id: "p4", confirmedAt: null })], []);
+
+    expect(netflixPriceChange).toHaveLength(1);
+    expect(missed).toHaveLength(1);
+    expect(dormant).toHaveLength(1);
+    expect(newlyDetected).toHaveLength(1);
+
+    const total = countAnomalyAlerts({
+      priceChanges: netflixPriceChange,
+      missedPayments: missed,
+      dormant,
+      newlyDetected,
+    });
+    expect(total).toBe(4);
+  });
+
+  it("each category contributes independently — one empty category does not zero out the total", () => {
+    const lists: AnomalyAlertLists = {
+      priceChanges: [makePriceChangeAlert("a"), makePriceChangeAlert("b")],
+      missedPayments: [],
+      dormant: [],
+      newlyDetected: [],
+    };
+    expect(countAnomalyAlerts(lists)).toBe(2);
+  });
+
+  it("counts multiple alerts within the same category plus alerts in another category", () => {
+    const lists: AnomalyAlertLists = {
+      priceChanges: [makePriceChangeAlert("a"), makePriceChangeAlert("b")],
+      missedPayments: [],
+      dormant: [],
+      newlyDetected: [
+        {
+          type: "newly_detected",
+          patternId: "n1",
+          merchant: "m",
+          expectedAmount: 10,
+          cadence: "monthly",
+        },
+      ],
+    };
+    expect(countAnomalyAlerts(lists)).toBe(3);
   });
 });

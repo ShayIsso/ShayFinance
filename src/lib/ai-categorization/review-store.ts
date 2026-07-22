@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { aiSuggestions, categories, transactions } from "@/db/schema";
-import { eq, and, inArray, desc, sql, type SQL } from "drizzle-orm";
+import { eq, and, inArray, desc, sql, count, type SQL } from "drizzle-orm";
 import type { ReviewStore, ReviewSuggestionStatus } from "./review";
 
 type DbClient = Pick<typeof db, "select" | "insert" | "update">;
@@ -69,6 +69,21 @@ export function createReviewStore(client: DbClient = db): ReviewStore {
         .update(aiSuggestions)
         .set({ status, updatedAt: new Date() })
         .where(eq(aiSuggestions.id, suggestionId));
+    },
+
+    async getPendingSuggestionCount() {
+      // Counts transactions, not suggestion rows: insertSuggestion has no
+      // uniqueness guard and runAiCategorization re-runs over still-uncategorized
+      // rows on every sync, so a transaction can accumulate 2+ pending_review
+      // rows (pre-existing, out of scope here). Reusing needsReviewSql() against
+      // transactions — the exact predicate the `{ mode: "needsReview" }` row
+      // filter applies — counts each such transaction once, so this scalar can
+      // never overstate what that filter lists.
+      const rows = await client
+        .select({ count: count() })
+        .from(transactions)
+        .where(needsReviewSql());
+      return rows[0]?.count ?? 0;
     },
   };
 }

@@ -9,6 +9,14 @@ import type {
   Cadence,
 } from "./types";
 
+/** One alert-list result per detector — the shape `countAnomalyAlerts` folds over. */
+export type AnomalyAlertLists = {
+  priceChanges: readonly PriceChangeAlert[];
+  missedPayments: readonly MissedPaymentAlert[];
+  dormant: readonly DormantAlert[];
+  newlyDetected: readonly NewlyDetectedAlert[];
+};
+
 const PRICE_CHANGE_THRESHOLD = 0.15; // strictly greater than 15%
 const MISSED_PAYMENT_GRACE_DAYS = 7; // exactly 7 days is NOT missed; 8+ is missed
 const MS_PER_DAY = 86_400_000;
@@ -190,4 +198,21 @@ export function detectNewlyDetected(
   }
 
   return alerts;
+}
+
+/**
+ * Total anomaly-alert count for the dashboard's attention feeder (#196) — a
+ * pure fold over the four detectors' outputs, so the count and the
+ * subscriptions page's rendered alerts (built from the same four calls) can
+ * never disagree on what counts as an alert. Detector categories are
+ * independent: each list's length contributes on its own, so one empty
+ * category never suppresses another's count.
+ */
+export function countAnomalyAlerts(alerts: AnomalyAlertLists): number {
+  return (
+    alerts.priceChanges.length +
+    alerts.missedPayments.length +
+    alerts.dormant.length +
+    alerts.newlyDetected.length
+  );
 }
