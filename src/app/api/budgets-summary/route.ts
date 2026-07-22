@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { ZodError, z } from "zod";
-import { getBudgetStatuses, getMonthlyTargets, getSavingsTargetStatus } from "@/lib/budgets";
+import {
+  getBudgetStatuses,
+  getMonthlyTargets,
+  getSavingsTargetStatus,
+  getExpenseTargetPace,
+} from "@/lib/budgets";
 import { formatZodError } from "@/lib/api-utils";
 
 const querySchema = z.object({
@@ -15,12 +20,13 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const { year, month } = querySchema.parse(Object.fromEntries(searchParams));
-    const [budgets, monthlyTargets, savingsTarget] = await Promise.all([
+    const [budgets, monthlyTargets, savingsTarget, expenseTargetPace] = await Promise.all([
       getBudgetStatuses(year, month),
       getMonthlyTargets(),
       getSavingsTargetStatus(year, month),
+      getExpenseTargetPace(year, month),
     ]);
-    return NextResponse.json({ budgets, monthlyTargets, savingsTarget });
+    return NextResponse.json({ budgets, monthlyTargets, savingsTarget, expenseTargetPace });
   } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json({ error: formatZodError(err) }, { status: 400 });

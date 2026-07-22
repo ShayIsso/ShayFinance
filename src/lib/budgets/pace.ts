@@ -165,3 +165,20 @@ export function classifySavingsTarget(target: number, netSavings: number): Savin
 export function monthNetSavings(transactions: AnalyticsTransaction[]): number {
   return computeMonthlySummary(transactions).netSavings;
 }
+
+/**
+ * Pace for the overall monthly expense target (CONTEXT.md "monthly targets"),
+ * composing {@link evaluateBudget} verbatim: month expenses stand in for a
+ * budget's subtree spend, `expenseTarget` for its limit. Same bands, same ₪0
+ * and month-close behavior as a per-category budget — this is a thin
+ * composite, not a second pace semantic. Null when no target is set, mirroring
+ * {@link classifySavingsTarget}'s target-optional convention.
+ */
+export function evaluateExpenseTargetPace(
+  expenseTarget: number | null,
+  monthExpenses: number,
+  elapsed: MonthElapsed,
+): BudgetPace | null {
+  if (expenseTarget == null) return null;
+  return evaluateBudget(expenseTarget, monthExpenses, elapsed);
+}
