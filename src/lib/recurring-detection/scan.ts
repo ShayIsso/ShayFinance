@@ -1,5 +1,12 @@
 import { detectPatterns } from "./detect";
-import type { RecurringStore } from "./store";
+import {
+  detectPriceChanges,
+  detectMissedPayments,
+  detectDormant,
+  detectNewlyDetected,
+  countAnomalyAlerts,
+} from "./anomalies";
+import { drizzleRecurringStore, type RecurringStore } from "./store";
 import type { RecurringPattern } from "./types";
 
 /**
@@ -24,4 +31,28 @@ export async function runDetection(store: RecurringStore): Promise<void> {
   const txns = await store.getTransactionsForDetection();
   const patterns = detectPatterns(txns);
   await persistDetectedPatterns(patterns, store);
+}
+
+/**
+ * DB-backed total anomaly count for the dashboard's attention feeder (#196).
+ * Runs the same four detector calls the subscriptions page renders from, then
+ * folds them with `countAnomalyAlerts` — so the dashboard's number and that
+ * page's alert list are always in agreement. `store` defaults to the Drizzle
+ * implementation; tests inject a fake to stay DB-free.
+ */
+export async function countPendingAnomalies(
+  store: RecurringStore = drizzleRecurringStore,
+  now: Date = new Date(),
+): Promise<number> {
+  const [patterns, recentTxns] = await Promise.all([
+    store.getPersistedPatterns(),
+    store.getTransactionsForDetection(),
+  ]);
+
+  return countAnomalyAlerts({
+    priceChanges: detectPriceChanges(patterns, recentTxns),
+    missedPayments: detectMissedPayments(patterns, now),
+    dormant: detectDormant(patterns, now),
+    newlyDetected: detectNewlyDetected(patterns, recentTxns),
+  });
 }

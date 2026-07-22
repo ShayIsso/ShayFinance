@@ -48,6 +48,12 @@ export interface ReviewStore {
    */
   getActiveAutoApplied(transactionId: string): Promise<ActiveAutoAppliedSuggestion | null>;
   markSuggestionStatus(suggestionId: string, status: ReviewSuggestionStatus): Promise<void>;
+  /**
+   * Total suggestions awaiting review — the same `status = 'pending_review'`
+   * predicate as `getPendingSuggestions`, counted rather than fetched, for the
+   * dashboard's attention feeder (#196).
+   */
+  getPendingSuggestionCount(): Promise<number>;
 }
 
 export interface AcceptSuggestionInput {

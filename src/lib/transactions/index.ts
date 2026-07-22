@@ -196,6 +196,22 @@ export function buildTransactionFilterConditions(
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
+/**
+ * Total uncategorized transactions — same predicate as the `{ mode:
+ * "uncategorized" }` row filter (`buildTransactionFilterConditions`), counted
+ * rather than fetched, for the dashboard's attention feeder (#196). Any drift
+ * between this count and the row filter would show a badge count that
+ * disagrees with what the "uncategorized" list actually contains.
+ */
+export async function getUncategorizedTransactionCount(): Promise<number> {
+  const whereClause = buildTransactionFilterConditions({
+    uncategorized: true,
+    needsReview: false,
+  });
+  const result = await db.select({ count: count() }).from(transactions).where(whereClause);
+  return result[0]?.count ?? 0;
+}
+
 export async function getTransactions(filters: z.infer<typeof transactionFiltersSchema>) {
   const { page, pageSize } = filters;
   const offset = (page - 1) * pageSize;

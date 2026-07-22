@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { aiSuggestions, categories, transactions } from "@/db/schema";
-import { eq, and, inArray, desc, sql, type SQL } from "drizzle-orm";
+import { eq, and, inArray, desc, sql, count, type SQL } from "drizzle-orm";
 import type { ReviewStore, ReviewSuggestionStatus } from "./review";
 
 type DbClient = Pick<typeof db, "select" | "insert" | "update">;
@@ -69,6 +69,14 @@ export function createReviewStore(client: DbClient = db): ReviewStore {
         .update(aiSuggestions)
         .set({ status, updatedAt: new Date() })
         .where(eq(aiSuggestions.id, suggestionId));
+    },
+
+    async getPendingSuggestionCount() {
+      const rows = await client
+        .select({ count: count() })
+        .from(aiSuggestions)
+        .where(eq(aiSuggestions.status, "pending_review"));
+      return rows[0]?.count ?? 0;
     },
   };
 }

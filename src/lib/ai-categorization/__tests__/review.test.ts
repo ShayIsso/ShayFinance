@@ -152,6 +152,9 @@ function createFake(seed: {
       const s = suggestions.find((x) => x.id === suggestionId);
       if (s) s.status = status;
     },
+    async getPendingSuggestionCount() {
+      return suggestions.filter((s) => s.status === "pending_review").length;
+    },
   };
 
   // Mirrors store.ts's getSuppressedPairs predicate exactly (status in
@@ -468,5 +471,102 @@ describe("recategorizing an ai-assigned row (regression, not reimplemented)", ()
       fromSource: "ai",
     });
     expect(result.fanOutCount).toBe(0);
+  });
+});
+
+// ── getPendingSuggestionCount (#196 attention-counts feeder) ─────────────────
+// Mirrors the `status = 'pending_review'` predicate getPendingSuggestions
+// already applies — these tests prove the count and the row-returning method
+// never disagree on which suggestions are pending.
+
+describe("getPendingSuggestionCount", () => {
+  it("returns 0 when there are no suggestions", async () => {
+    const { reviewStore } = createFake({ txns: [] });
+    expect(await reviewStore.getPendingSuggestionCount()).toBe(0);
+  });
+
+  it("counts only pending_review suggestions, excluding every other status", async () => {
+    const { reviewStore } = createFake({
+      txns: [],
+      suggestions: [
+        {
+          id: "s1",
+          transactionId: "t1",
+          categoryId: "c1",
+          categoryName: "a",
+          confidence: 4,
+          status: "pending_review",
+        },
+        {
+          id: "s2",
+          transactionId: "t2",
+          categoryId: "c1",
+          categoryName: "a",
+          confidence: 4,
+          status: "auto_applied",
+        },
+        {
+          id: "s3",
+          transactionId: "t3",
+          categoryId: "c1",
+          categoryName: "a",
+          confidence: 4,
+          status: "accepted",
+        },
+        {
+          id: "s4",
+          transactionId: "t4",
+          categoryId: "c1",
+          categoryName: "a",
+          confidence: 4,
+          status: "rejected",
+        },
+        {
+          id: "s5",
+          transactionId: "t5",
+          categoryId: "c1",
+          categoryName: "a",
+          confidence: 4,
+          status: "undone",
+        },
+      ],
+    });
+    expect(await reviewStore.getPendingSuggestionCount()).toBe(1);
+  });
+
+  it("agrees with getPendingSuggestions: count equals the length of the full pending-rows result", async () => {
+    const { reviewStore } = createFake({
+      txns: [],
+      suggestions: [
+        {
+          id: "s1",
+          transactionId: "t1",
+          categoryId: "c1",
+          categoryName: "a",
+          confidence: 4,
+          status: "pending_review",
+        },
+        {
+          id: "s2",
+          transactionId: "t2",
+          categoryId: "c1",
+          categoryName: "a",
+          confidence: 4,
+          status: "pending_review",
+        },
+        {
+          id: "s3",
+          transactionId: "t3",
+          categoryId: "c1",
+          categoryName: "a",
+          confidence: 4,
+          status: "accepted",
+        },
+      ],
+    });
+    const pendingRows = await reviewStore.getPendingSuggestions(["t1", "t2", "t3"]);
+    const pendingCount = await reviewStore.getPendingSuggestionCount();
+    expect(pendingCount).toBe(pendingRows.length);
+    expect(pendingCount).toBe(2);
   });
 });
