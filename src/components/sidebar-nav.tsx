@@ -12,6 +12,7 @@ import {
   FileBarChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type NavItem = {
   href: string;
@@ -68,6 +69,9 @@ export function SidebarNav({ pendingReconCount = 0 }: { pendingReconCount?: numb
           );
         })}
       </nav>
+      <div className="border-t p-3">
+        <ThemeToggle className="w-full" />
+      </div>
     </aside>
   );
 }

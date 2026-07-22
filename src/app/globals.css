@@ -76,24 +76,38 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * #109 direction F, "Original, elevated" — true-neutral zinc in BOTH modes.
+ * Both light and dark adopt the #109 palette: :root holds the light F values
+ * (a few shift vs the old baseline — foreground 0.145→0.16, muted-foreground
+ * 0.556→0.505, accent 0.97→0.965, border/input 0.922→0.918, sidebar→pure
+ * white, warning recolored to 0.72 0.15 65), and [data-theme="dark"] (with the
+ * .dark alias) is a scoped token swap over that same set. Only values change,
+ * so every color utility (bg-background, text-muted-foreground, border-border,
+ * ...) re-skins by cascade — sidebar and main as one. The active theme is
+ * stamped on <html> pre-paint by the inline script in the root layout
+ * (SSR-safe, no white flash). Achromatic zinc, chroma = 0 unless noted. The
+ * --radius calc scale (kept at the 0.625rem baseline per #195) and the
+ * Assistant font family are unchanged.
+ */
 :root {
-  /* ── Neutral base (zinc/stone — achromatic, chroma ≈ 0) ── */
-  --background: oklch(0.985 0 0); /* zinc-50 equivalent */
-  --foreground: oklch(0.145 0 0); /* zinc-950 equivalent */
-  --card: oklch(1 0 0); /* pure white */
-  --card-foreground: oklch(0.145 0 0);
+  /* ── Neutral base (zinc — achromatic, chroma = 0) ── */
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.16 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0); /* zinc-900 equivalent */
+  --popover-foreground: oklch(0.16 0 0);
+  --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0); /* zinc-100 equivalent */
+  --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0); /* zinc-500 equivalent */
-  --accent: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.505 0 0);
+  --accent: oklch(0.965 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --border: oklch(0.922 0 0); /* zinc-200 equivalent */
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.918 0 0);
+  --input: oklch(0.918 0 0);
   --ring: oklch(0.708 0 0);
   --radius: 0.625rem;
 
@@ -106,8 +120,8 @@
   --emerald: oklch(0.596 0.145 163.225); /* emerald-600 */
   --emerald-foreground: oklch(1 0 0);
 
-  /* Warning — amber tone, for pending/in-progress states */
-  --warning: oklch(0.769 0.188 70.08); /* amber-400 equivalent */
+  /* Warning — amber tone, for pending/in-progress states only */
+  --warning: oklch(0.72 0.15 65);
   --warning-foreground: oklch(0.145 0 0);
 
   /* ── Chart palette ── */
@@ -117,8 +131,9 @@
   --chart-4: oklch(0.627 0.265 303.9); /* violet */
   --chart-5: oklch(0.645 0.246 16.439); /* red */
 
-  /* ── Sidebar ── */
-  --sidebar: oklch(0.985 0 0);
+  /* ── Sidebar ── (--sidebar and --sidebar-border are the #109-F sheet values;
+     the rest stay at baseline — the sheet does not respec them) */
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -126,6 +141,54 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Dark theme — same token names, dark values. muted-foreground and destructive
+ * are lifted/brightened for legibility on the dark surface. */
+[data-theme="dark"],
+.dark {
+  --background: oklch(0.165 0 0);
+  --foreground: oklch(0.955 0 0);
+  --card: oklch(0.215 0 0);
+  --card-foreground: oklch(0.955 0 0);
+  --popover: oklch(0.215 0 0);
+  --popover-foreground: oklch(0.955 0 0);
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.165 0 0);
+  --secondary: oklch(0.265 0 0);
+  --secondary-foreground: oklch(0.955 0 0);
+  --muted: oklch(0.265 0 0);
+  --muted-foreground: oklch(0.71 0 0); /* lifted — secondary text was near the noise floor */
+  --accent: oklch(0.285 0 0);
+  --accent-foreground: oklch(0.955 0 0);
+  --border: oklch(0.29 0 0);
+  --input: oklch(0.29 0 0);
+  --ring: oklch(0.55 0 0);
+
+  --destructive: oklch(0.71 0.17 22); /* brighter rose — muddy at 0.577 on dark */
+  --emerald: oklch(0.72 0.15 163);
+  /* emerald is lifted in dark — dark text reads, white washes out */
+  --emerald-foreground: oklch(0.165 0 0);
+  --warning: oklch(0.78 0.15 70);
+  /* warning stays amber (light) in both modes → dark foreground */
+  --warning-foreground: oklch(0.145 0 0);
+
+  /* ── Chart palette ── lightness lifted, hue preserved so each category keeps
+     its identity and stays legible on the dark surface (chart-1 tracks --emerald). */
+  --chart-1: oklch(0.72 0.15 163.225); /* emerald */
+  --chart-2: oklch(0.65 0.19 264.376); /* blue */
+  --chart-3: oklch(0.8 0.16 70.08); /* amber */
+  --chart-4: oklch(0.7 0.2 303.9); /* violet */
+  --chart-5: oklch(0.7 0.19 16.439); /* red */
+
+  --sidebar: oklch(0.185 0 0);
+  --sidebar-foreground: oklch(0.955 0 0);
+  --sidebar-primary: oklch(0.92 0 0);
+  --sidebar-primary-foreground: oklch(0.165 0 0);
+  --sidebar-accent: oklch(0.285 0 0);
+  --sidebar-accent-foreground: oklch(0.955 0 0);
+  --sidebar-border: oklch(0.29 0 0);
+  --sidebar-ring: oklch(0.55 0 0);
 }
 
 @layer base {
