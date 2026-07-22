@@ -17,7 +17,7 @@ export const metadata: Metadata = {
  * from the stored preference, falling back to the OS `prefers-color-scheme`.
  * Doing this in a mount effect instead would paint light first and flash on a
  * dark load, and diverge from SSR markup (hydration mismatch) — #109 line-item
- * 4. Keep the localStorage key in sync with THEME_STORAGE_KEY in theme-provider.
+ * 4. Keep the localStorage key in sync with THEME_STORAGE_KEY in components/theme.
  */
 const themeScript = `(function(){try{var t=localStorage.getItem("shayfinance-theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();`;
 
