@@ -1,0 +1,24 @@
+import { NextResponse } from "next/server";
+import { ZodError, z } from "zod";
+import { getTopMerchants } from "@/lib/analytics";
+import { formatZodError } from "@/lib/api-utils";
+
+const querySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const { year, month, limit } = querySchema.parse(Object.fromEntries(searchParams));
+    const data = await getTopMerchants(year, month, limit);
+    return NextResponse.json(data);
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return NextResponse.json({ error: formatZodError(err) }, { status: 400 });
+    }
+    throw err;
+  }
+}

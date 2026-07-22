@@ -2,6 +2,11 @@ import { db } from "@/db";
 import { transactions, categories, bankAccounts, bankCredentials } from "@/db/schema";
 import { eq, and, gte, lte, gt, inArray, desc } from "drizzle-orm";
 import { monthDateRange } from "./month-window";
+import {
+  extractMerchant,
+  canonicalizeMerchant,
+  matchesTransferDescriptor,
+} from "@/lib/transaction-matching";
 
 export { monthDateRange } from "./month-window";
 
@@ -144,6 +149,53 @@ export function computeSpendingByCategory(
   }
 
   return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+}
+
+export type MerchantTransaction = {
+  description: string;
+  chargedAmount: number;
+  categoryType: AnalyticsTransaction["categoryType"];
+};
+
+export type TopMerchant = {
+  merchant: string;
+  amount: number;
+};
+
+const DEFAULT_TOP_MERCHANTS_LIMIT = 5;
+
+/**
+ * Ranks the month's real spending merchants, top-N descending by total spend.
+ * Expense-only (income/investment/transfer/ignore/uncategorized rows never
+ * rank), grouped by canonicalized merchant (transaction-matching's
+ * `extractMerchant` + `canonicalizeMerchant`, so brand variants like
+ * "רכישה בנטפליקס" and "NETFLIX.COM" collapse into one entry).
+ *
+ * The `card_settlement` transfer-descriptor (מקס/כ.א.ל bill lump, CONTEXT.md
+ * "The Paradox") is excluded by description shape in addition to the
+ * expense-only filter — a settlement lump that hasn't yet been reconciled to
+ * `transfer` must still never masquerade as a top merchant.
+ */
+export function computeTopMerchants(
+  transactions: MerchantTransaction[],
+  limit: number = DEFAULT_TOP_MERCHANTS_LIMIT,
+): TopMerchant[] {
+  const totals = new Map<string, number>();
+
+  for (const t of transactions) {
+    if (t.categoryType !== "expense") continue;
+    if (matchesTransferDescriptor(t.description, ["card_settlement"])) continue;
+
+    const merchant = canonicalizeMerchant(extractMerchant(t.description));
+    if (!merchant) continue;
+
+    totals.set(merchant, (totals.get(merchant) ?? 0) + Math.abs(t.chargedAmount));
+  }
+
+  return Array.from(totals.entries())
+    .map(([merchant, amount]) => ({ merchant, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, limit);
 }
 
 /**
@@ -377,6 +429,44 @@ export async function getSpendingByCategory(
   month: number,
 ): Promise<CategorySpending[]> {
   return computeSpendingByCategory(await getMonthTransactions(year, month));
+}
+
+/**
+ * The month read {@link getTopMerchants} aggregates over: the raw `description`
+ * alongside `chargedAmount`/category type, for the same calendar-month window
+ * {@link getMonthTransactions} uses. Kept separate from that shared shape
+ * because `description` is merchant-matching input, not part of the
+ * type-driven totals reader's contract.
+ */
+export async function getMonthMerchantTransactions(
+  year: number,
+  month: number,
+): Promise<MerchantTransaction[]> {
+  const { from, to } = monthDateRange(year, month);
+
+  const rows = await db
+    .select({
+      description: transactions.description,
+      chargedAmount: transactions.chargedAmount,
+      categoryType: categories.type,
+    })
+    .from(transactions)
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(and(gte(transactions.date, from), lte(transactions.date, to)));
+
+  return rows.map((r) => ({
+    description: r.description,
+    chargedAmount: Number(r.chargedAmount),
+    categoryType: r.categoryType ?? null,
+  }));
+}
+
+export async function getTopMerchants(
+  year: number,
+  month: number,
+  limit?: number,
+): Promise<TopMerchant[]> {
+  return computeTopMerchants(await getMonthMerchantTransactions(year, month), limit);
 }
 
 /**
