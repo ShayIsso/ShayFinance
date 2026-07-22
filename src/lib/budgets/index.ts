@@ -26,6 +26,7 @@ import {
   monthElapsed,
   isMonthClosed,
   classifySavingsTarget,
+  evaluateExpenseTargetPace,
   type BudgetPace,
   type SavingsTargetVerdict,
   type YearMonth,
@@ -42,6 +43,7 @@ export {
   computeCategorySpend,
   classifySavingsTarget,
   monthNetSavings,
+  evaluateExpenseTargetPace,
   WARN_MARGIN,
   REASSURE_MARGIN,
   MUTE_THROUGH_DAY,
@@ -212,4 +214,27 @@ export async function getSavingsTargetStatus(
     monthClosed,
     verdict: monthClosed ? classifySavingsTarget(savingsTarget, netSavings) : null,
   };
+}
+
+/**
+ * Pace verdict for the overall monthly expense target against the month's
+ * total expense spend (CONTEXT.md "monthly targets" — the Dashboard's
+ * pace-hero composite, issue #198). Reuses the same `evaluateBudget` core and
+ * `monthElapsed` tick as a per-category budget; `limit` on the returned pace
+ * is the target itself, so there's no separate "target" field to thread.
+ * Returns null when no expense target is set.
+ */
+export async function getExpenseTargetPace(
+  year: number,
+  month: number,
+  today: string = isoToday(),
+): Promise<BudgetPace | null> {
+  const { expenseTarget } = await getMonthlyTargets();
+
+  const ym: YearMonth = { year, month };
+  const txns = await loadMonthTransactions(ym);
+  const monthExpenses = computeMonthlySummary(txns).expenses;
+  const elapsed = monthElapsed(ym, today);
+
+  return evaluateExpenseTargetPace(expenseTarget, monthExpenses, elapsed);
 }

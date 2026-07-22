@@ -8,6 +8,7 @@ import {
   computeCategorySpend,
   classifySavingsTarget,
   monthNetSavings,
+  evaluateExpenseTargetPace,
   WARN_MARGIN,
   REASSURE_MARGIN,
   MUTE_THROUGH_DAY,
@@ -218,5 +219,51 @@ describe("classifySavingsTarget", () => {
     ];
     expect(monthNetSavings(monthly)).toBe(5000);
     expect(classifySavingsTarget(5000, monthNetSavings(monthly))).toBe("met");
+  });
+});
+
+describe("evaluateExpenseTargetPace", () => {
+  it("is null when no expense target is set — nothing to pace against", () => {
+    expect(evaluateExpenseTargetPace(null, 500, at(0.5))).toBeNull();
+    expect(evaluateExpenseTargetPace(null, 0, at(0.5))).toBeNull();
+  });
+
+  it("mirrors evaluateBudget's verdict transitions across the neutral/warn/reassure bands", () => {
+    const elapsed = at(0.5);
+    expect(evaluateExpenseTargetPace(1000, 500, elapsed)?.verdict).toBe("on-pace");
+    expect(evaluateExpenseTargetPace(1000, 610, elapsed)?.verdict).toBe("at-risk");
+    expect(evaluateExpenseTargetPace(1000, 290, elapsed)?.verdict).toBe("comfortably-under");
+    expect(evaluateExpenseTargetPace(1000, 1000, elapsed)?.verdict).toBe("over");
+    expect(evaluateExpenseTargetPace(1000, 1200, elapsed)?.verdict).toBe("over");
+  });
+
+  it("threads the monthElapsed tick straight through — same fraction on the returned pace", () => {
+    const elapsed = at(0.4);
+    const pace = evaluateExpenseTargetPace(2000, 800, elapsed);
+    expect(pace?.elapsedFraction).toBe(0.4);
+    expect(pace?.spentFraction).toBe(0.4);
+    expect(pace?.verdict).toBe("on-pace");
+  });
+
+  it("mutes comfortably-under through day 7, same as a per-category budget", () => {
+    expect(evaluateExpenseTargetPace(1000, 100, at(0.5, MUTE_THROUGH_DAY))?.verdict).toBe(
+      "on-pace",
+    );
+    expect(evaluateExpenseTargetPace(1000, 100, at(0.5, MUTE_THROUGH_DAY + 1))?.verdict).toBe(
+      "comfortably-under",
+    );
+  });
+
+  it("treats a ₪0 target the same as evaluateBudget: any spend is over, no spend is on-pace", () => {
+    expect(evaluateExpenseTargetPace(0, 1, at(0.5))?.verdict).toBe("over");
+    expect(evaluateExpenseTargetPace(0, 0, at(0.5))?.verdict).toBe("on-pace");
+  });
+
+  it("resolves to over/on-pace/comfortably-under only at month close — never at-risk", () => {
+    const closed = monthElapsed({ year: 2026, month: 6 }, "2026-07-01");
+    expect(closed.fraction).toBe(1);
+    expect(evaluateExpenseTargetPace(1000, 1500, closed)?.verdict).toBe("over");
+    expect(evaluateExpenseTargetPace(1000, 950, closed)?.verdict).toBe("on-pace");
+    expect(evaluateExpenseTargetPace(1000, 700, closed)?.verdict).toBe("comfortably-under");
   });
 });
