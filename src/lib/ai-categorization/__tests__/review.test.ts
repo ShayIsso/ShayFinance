@@ -153,7 +153,13 @@ function createFake(seed: {
       if (s) s.status = status;
     },
     async getPendingSuggestionCount() {
-      return suggestions.filter((s) => s.status === "pending_review").length;
+      // Distinct transactions, not raw rows — mirrors needsReviewSql's
+      // per-transaction EXISTS semantics (a transaction can carry more than
+      // one pending_review row; it must still contribute 1).
+      const pendingTxnIds = new Set(
+        suggestions.filter((s) => s.status === "pending_review").map((s) => s.transactionId),
+      );
+      return pendingTxnIds.size;
     },
   };
 
@@ -475,9 +481,13 @@ describe("recategorizing an ai-assigned row (regression, not reimplemented)", ()
 });
 
 // ── getPendingSuggestionCount (#196 attention-counts feeder) ─────────────────
-// Mirrors the `status = 'pending_review'` predicate getPendingSuggestions
-// already applies — these tests prove the count and the row-returning method
-// never disagree on which suggestions are pending.
+// Counts DISTINCT transactions with a pending-review suggestion — the same
+// transaction-level unit the `{ mode: "needsReview" }` row filter
+// (needsReviewSql) counts. insertSuggestion has no uniqueness guard and
+// runAiCategorization re-runs over still-uncategorized rows on every sync, so
+// a transaction can carry more than one pending_review row (pre-existing, out
+// of scope for #196) — these tests pin that such a transaction still
+// contributes exactly 1, never 2.
 
 describe("getPendingSuggestionCount", () => {
   it("returns 0 when there are no suggestions", async () => {
@@ -534,7 +544,7 @@ describe("getPendingSuggestionCount", () => {
     expect(await reviewStore.getPendingSuggestionCount()).toBe(1);
   });
 
-  it("agrees with getPendingSuggestions: count equals the length of the full pending-rows result", async () => {
+  it("a transaction with TWO pending_review rows contributes 1, not 2 (duplicate-row accumulation)", async () => {
     const { reviewStore } = createFake({
       txns: [],
       suggestions: [
@@ -543,30 +553,76 @@ describe("getPendingSuggestionCount", () => {
           transactionId: "t1",
           categoryId: "c1",
           categoryName: "a",
+          confidence: 3,
+          status: "pending_review",
+        },
+        {
+          // Same transaction, a second pending row from a later sync run
+          // (insertSuggestion has no uniqueness guard) — must not double-count.
+          id: "s2",
+          transactionId: "t1",
+          categoryId: "c2",
+          categoryName: "b",
           confidence: 4,
           status: "pending_review",
         },
         {
-          id: "s2",
+          id: "s3",
           transactionId: "t2",
           categoryId: "c1",
           categoryName: "a",
           confidence: 4,
           status: "pending_review",
         },
-        {
-          id: "s3",
-          transactionId: "t3",
-          categoryId: "c1",
-          categoryName: "a",
-          confidence: 4,
-          status: "accepted",
-        },
       ],
     });
-    const pendingRows = await reviewStore.getPendingSuggestions(["t1", "t2", "t3"]);
-    const pendingCount = await reviewStore.getPendingSuggestionCount();
-    expect(pendingCount).toBe(pendingRows.length);
-    expect(pendingCount).toBe(2);
+    expect(await reviewStore.getPendingSuggestionCount()).toBe(2);
+  });
+
+  it("agrees with the distinct-transaction count the needsReview row filter would return, even with duplicate pending rows per transaction", async () => {
+    const seedSuggestions = [
+      {
+        id: "s1",
+        transactionId: "t1",
+        categoryId: "c1",
+        categoryName: "a",
+        confidence: 3,
+        status: "pending_review" as const,
+      },
+      {
+        id: "s2",
+        transactionId: "t1",
+        categoryId: "c2",
+        categoryName: "b",
+        confidence: 4,
+        status: "pending_review" as const,
+      },
+      {
+        id: "s3",
+        transactionId: "t2",
+        categoryId: "c1",
+        categoryName: "a",
+        confidence: 4,
+        status: "pending_review" as const,
+      },
+      {
+        id: "s4",
+        transactionId: "t3",
+        categoryId: "c1",
+        categoryName: "a",
+        confidence: 4,
+        status: "accepted" as const,
+      },
+    ];
+    const { reviewStore } = createFake({ txns: [], suggestions: seedSuggestions });
+
+    // Ground truth for what the transaction-level `{ mode: "needsReview" }`
+    // filter would list: distinct transactionIds among pending_review rows.
+    const distinctPendingTxnCount = new Set(
+      seedSuggestions.filter((s) => s.status === "pending_review").map((s) => s.transactionId),
+    ).size;
+
+    expect(await reviewStore.getPendingSuggestionCount()).toBe(distinctPendingTxnCount);
+    expect(distinctPendingTxnCount).toBe(2);
   });
 });

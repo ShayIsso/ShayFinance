@@ -72,10 +72,17 @@ export function createReviewStore(client: DbClient = db): ReviewStore {
     },
 
     async getPendingSuggestionCount() {
+      // Counts transactions, not suggestion rows: insertSuggestion has no
+      // uniqueness guard and runAiCategorization re-runs over still-uncategorized
+      // rows on every sync, so a transaction can accumulate 2+ pending_review
+      // rows (pre-existing, out of scope here). Reusing needsReviewSql() against
+      // transactions — the exact predicate the `{ mode: "needsReview" }` row
+      // filter applies — counts each such transaction once, so this scalar can
+      // never overstate what that filter lists.
       const rows = await client
         .select({ count: count() })
-        .from(aiSuggestions)
-        .where(eq(aiSuggestions.status, "pending_review"));
+        .from(transactions)
+        .where(needsReviewSql());
       return rows[0]?.count ?? 0;
     },
   };
