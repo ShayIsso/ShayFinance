@@ -1,0 +1,479 @@
+/*
+ * PROTOTYPE — design-system direction (#109). THROWAWAY. Not production.
+ *
+ * Three token directions × {light, dark}, scoped under [data-proto][data-mode]
+ * on a single wrapper so the whole shell (sidebar + main) re-skins by cascade —
+ * this is exactly the "dark = a token swap, not a rewrite" claim being tested.
+ *
+ * The app's real utilities (bg-background, text-foreground, rounded-xl, …) all
+ * resolve to these vars via globals.css @theme inline, so overriding the vars
+ * here restyles the real components verbatim. Proto-only concepts the real
+ * token set doesn't have yet (elevation, motion, adaptive pos/neg) are prefixed
+ * --proto-* and consumed by the .proto-* classes below.
+ */
+
+/* ─────────────────────────────  Direction A — "שקט" / Quiet Ledger  ─────────
+   Warm-stone neutral, borderless cards, generous whitespace, light-weight
+   display numbers, gentle 220ms motion. Separation by air + hairline, no ring. */
+[data-proto="A"] {
+  --background: oklch(0.992 0.003 80);
+  --foreground: oklch(0.22 0.008 60);
+  --card: oklch(0.998 0.002 80);
+  --card-foreground: oklch(0.22 0.008 60);
+  --popover: oklch(0.998 0.002 80);
+  --popover-foreground: oklch(0.22 0.008 60);
+  --primary: oklch(0.26 0.008 60);
+  --primary-foreground: oklch(0.99 0.003 80);
+  --secondary: oklch(0.955 0.004 75);
+  --secondary-foreground: oklch(0.26 0.008 60);
+  --muted: oklch(0.955 0.004 75);
+  --muted-foreground: oklch(0.5 0.008 60);
+  --accent: oklch(0.95 0.005 75);
+  --accent-foreground: oklch(0.26 0.008 60);
+  --border: oklch(0.9 0.005 75);
+  --input: oklch(0.9 0.005 75);
+  --ring: oklch(0.7 0.006 70);
+  --destructive: oklch(0.55 0.2 25);
+  --emerald: oklch(0.55 0.13 160);
+  --emerald-foreground: oklch(0.99 0.003 80);
+  --radius: 0.5rem;
+
+  --proto-shadow: none;
+  --proto-ring: 0 0 0 1px oklch(0.9 0.005 75 / 0.7);
+  --proto-pad: 1.5rem;
+  --proto-gap: 1.5rem;
+  --proto-dur: 220ms;
+  --proto-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --proto-enter-y: 6px;
+  --proto-enter-scale: 1;
+  --proto-num-weight: 400;
+  --proto-label-weight: 500;
+  --proto-label-size: 0.8125rem;
+  --proto-label-tracking: 0;
+
+  --proto-pos: var(--emerald);
+  --proto-neg: var(--destructive);
+  --proto-warn: oklch(0.72 0.15 65);
+  --sidebar: oklch(0.988 0.003 80);
+  --sidebar-border: oklch(0.9 0.005 75);
+}
+[data-proto="A"][data-mode="dark"] {
+  --background: oklch(0.2 0.006 70);
+  --foreground: oklch(0.94 0.004 80);
+  --card: oklch(0.235 0.006 70);
+  --card-foreground: oklch(0.94 0.004 80);
+  --popover: oklch(0.235 0.006 70);
+  --popover-foreground: oklch(0.94 0.004 80);
+  --primary: oklch(0.92 0.004 80);
+  --primary-foreground: oklch(0.22 0.006 70);
+  --secondary: oklch(0.28 0.006 70);
+  --secondary-foreground: oklch(0.94 0.004 80);
+  --muted: oklch(0.27 0.006 70);
+  --muted-foreground: oklch(0.7 0.006 75);
+  --accent: oklch(0.3 0.006 70);
+  --accent-foreground: oklch(0.94 0.004 80);
+  --border: oklch(0.3 0.006 70);
+  --input: oklch(0.3 0.006 70);
+  --ring: oklch(0.55 0.006 70);
+  --destructive: oklch(0.68 0.19 25);
+  --emerald: oklch(0.7 0.14 162);
+  --proto-ring: 0 0 0 1px oklch(1 0 0 / 0.06);
+  --proto-warn: oklch(0.78 0.15 70);
+  --sidebar: oklch(0.185 0.006 70);
+  --sidebar-border: oklch(0.3 0.006 70);
+}
+
+/* ─────────────────────────  Direction B — "מכשור" / Instrument  ────────────
+   Cool-slate neutral, compact density, crisp hairline ring on every surface,
+   heavy weight contrast (small tracked labels + bold tabular numbers), tight
+   6px radius, snappy 120ms motion. Terminal-clean. */
+[data-proto="B"] {
+  --background: oklch(0.985 0.004 250);
+  --foreground: oklch(0.18 0.02 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 255);
+  --primary: oklch(0.22 0.02 255);
+  --primary-foreground: oklch(0.98 0.004 250);
+  --secondary: oklch(0.955 0.006 250);
+  --secondary-foreground: oklch(0.22 0.02 255);
+  --muted: oklch(0.955 0.006 250);
+  --muted-foreground: oklch(0.48 0.02 255);
+  --accent: oklch(0.945 0.008 250);
+  --accent-foreground: oklch(0.22 0.02 255);
+  --border: oklch(0.9 0.008 250);
+  --input: oklch(0.9 0.008 250);
+  --ring: oklch(0.65 0.02 255);
+  --destructive: oklch(0.55 0.22 27);
+  --emerald: oklch(0.58 0.14 162);
+  --emerald-foreground: oklch(0.98 0.004 250);
+  --radius: 0.375rem;
+
+  --proto-shadow: none;
+  --proto-ring: 0 0 0 1px oklch(0.18 0.02 255 / 0.12);
+  --proto-pad: 1rem;
+  --proto-gap: 1rem;
+  --proto-dur: 120ms;
+  --proto-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --proto-enter-y: 0px;
+  --proto-enter-scale: 1;
+  --proto-num-weight: 600;
+  --proto-label-weight: 600;
+  --proto-label-size: 0.6875rem;
+  --proto-label-tracking: 0.04em;
+
+  --proto-pos: var(--emerald);
+  --proto-neg: var(--destructive);
+  --proto-warn: oklch(0.7 0.16 65);
+  --sidebar: oklch(0.97 0.005 250);
+  --sidebar-border: oklch(0.9 0.008 250);
+}
+[data-proto="B"][data-mode="dark"] {
+  --background: oklch(0.16 0.015 258);
+  --foreground: oklch(0.95 0.006 250);
+  --card: oklch(0.205 0.016 258);
+  --card-foreground: oklch(0.95 0.006 250);
+  --popover: oklch(0.205 0.016 258);
+  --popover-foreground: oklch(0.95 0.006 250);
+  --primary: oklch(0.93 0.006 250);
+  --primary-foreground: oklch(0.18 0.015 258);
+  --secondary: oklch(0.25 0.014 258);
+  --secondary-foreground: oklch(0.95 0.006 250);
+  --muted: oklch(0.25 0.014 258);
+  --muted-foreground: oklch(0.68 0.012 252);
+  --accent: oklch(0.28 0.014 258);
+  --accent-foreground: oklch(0.95 0.006 250);
+  --border: oklch(0.3 0.014 258);
+  --input: oklch(0.3 0.014 258);
+  --ring: oklch(0.6 0.018 255);
+  --destructive: oklch(0.7 0.19 27);
+  --emerald: oklch(0.72 0.15 162);
+  --proto-ring: 0 0 0 1px oklch(1 0 0 / 0.1);
+  --proto-warn: oklch(0.78 0.16 70);
+  --sidebar: oklch(0.14 0.015 258);
+  --sidebar-border: oklch(0.3 0.014 258);
+}
+
+/* ───────────────────────  Direction C — "עומק רך" / Soft Depth  ────────────
+   True-achromatic zinc, subtle soft elevation (deliberately tests relaxing the
+   no-shadow rule for premium depth), large 16px radius, medium density, 200ms
+   motion with a gentle scale-in + stagger. Friendly premium SaaS. */
+[data-proto="C"] {
+  --background: oklch(0.98 0 0);
+  --foreground: oklch(0.16 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.16 0 0);
+  --primary: oklch(0.2 0 0);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.2 0 0);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.955 0 0);
+  --accent-foreground: oklch(0.2 0 0);
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.7 0 0);
+  --destructive: oklch(0.577 0.245 27);
+  --emerald: oklch(0.6 0.145 163);
+  --emerald-foreground: oklch(1 0 0);
+  --radius: 1rem;
+
+  --proto-shadow: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 14px oklch(0 0 0 / 0.06);
+  --proto-ring: 0 0 0 0 transparent;
+  --proto-pad: 1.25rem;
+  --proto-gap: 1.25rem;
+  --proto-dur: 200ms;
+  --proto-ease: cubic-bezier(0.34, 1.2, 0.64, 1);
+  --proto-enter-y: 10px;
+  --proto-enter-scale: 0.98;
+  --proto-num-weight: 500;
+  --proto-label-weight: 500;
+  --proto-label-size: 0.8125rem;
+  --proto-label-tracking: 0;
+
+  --proto-pos: var(--emerald);
+  --proto-neg: var(--destructive);
+  --proto-warn: oklch(0.72 0.15 65);
+  --sidebar: oklch(1 0 0);
+  --sidebar-border: oklch(0.92 0 0);
+}
+[data-proto="C"][data-mode="dark"] {
+  --background: oklch(0.15 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.2 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.2 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.18 0 0);
+  --secondary: oklch(0.25 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.25 0 0);
+  --muted-foreground: oklch(0.66 0 0);
+  --accent: oklch(0.27 0 0);
+  --accent-foreground: oklch(0.95 0 0);
+  --border: oklch(0.27 0 0);
+  --input: oklch(0.27 0 0);
+  --ring: oklch(0.55 0 0);
+  --destructive: oklch(0.68 0.2 27);
+  --emerald: oklch(0.7 0.15 163);
+  --proto-shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 24px oklch(0 0 0 / 0.35);
+  --proto-warn: oklch(0.78 0.15 70);
+  --sidebar: oklch(0.13 0 0);
+  --sidebar-border: oklch(0.27 0 0);
+}
+
+/* ═══════════════════  Direction F — "מומלץ" / Recommended  ═════════════════
+   The resolved direction from the gate: neutral-zinc base (the "original" feel
+   Shay likes), subtle soft elevation in LIGHT, a unified hairline edge in DARK
+   (no stray foreground ring — fixes the sync-card white border), original card
+   radius (not C's oversized round), medium number weight, gentle 200ms rise.
+   This is what the token sheet specs from. */
+[data-proto="F"] {
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.16 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.16 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.505 0 0);
+  --accent: oklch(0.965 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.918 0 0);
+  --input: oklch(0.918 0 0);
+  --ring: oklch(0.708 0 0);
+  --destructive: oklch(0.577 0.245 27);
+  --emerald: oklch(0.596 0.145 163);
+  --emerald-foreground: oklch(1 0 0);
+  --radius: 0.5rem; /* → cards (rounded-xl) ≈ 11px, controls (rounded-lg) = 8px */
+
+  /* light = soft shadow + a thin hairline border (owner missed the border;
+     kept subtle, not the heavy 1px-heavy ring). */
+  --proto-shadow: 0 1px 2px oklch(0.145 0 0 / 0.04), 0 2px 8px oklch(0.145 0 0 / 0.06);
+  --proto-ring: 0 0 0 1px oklch(0.145 0 0 / 0.09);
+  --proto-pad: 1.25rem;
+  --proto-gap: 1.25rem;
+  --proto-dur: 220ms;
+  --proto-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --proto-enter-y: 8px;
+  --proto-enter-scale: 1;
+  --proto-num-weight: 500;
+  --proto-label-weight: 500;
+  --proto-label-size: 0.8125rem;
+  --proto-label-tracking: 0;
+
+  --proto-pos: var(--emerald);
+  --proto-neg: var(--destructive);
+  --proto-warn: oklch(0.72 0.15 65);
+  --sidebar: oklch(1 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+}
+[data-proto="F"][data-mode="dark"] {
+  /* lifted off near-black — F@0.145 read as "too dark"; this sits at/above C's
+     charcoal so cards separate by lightness AND by the hairline below. */
+  --background: oklch(0.165 0 0);
+  --foreground: oklch(0.955 0 0);
+  --card: oklch(0.215 0 0);
+  --card-foreground: oklch(0.955 0 0);
+  --popover: oklch(0.215 0 0);
+  --popover-foreground: oklch(0.955 0 0);
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.165 0 0);
+  --secondary: oklch(0.265 0 0);
+  --secondary-foreground: oklch(0.955 0 0);
+  --muted: oklch(0.265 0 0);
+  --muted-foreground: oklch(0.71 0 0); /* lifted — secondary text was near the noise floor */
+  --accent: oklch(0.285 0 0);
+  --accent-foreground: oklch(0.955 0 0);
+  --border: oklch(0.29 0 0);
+  --input: oklch(0.29 0 0);
+  --ring: oklch(0.55 0 0);
+  --destructive: oklch(0.71 0.17 22); /* brighter rose — muddy at 0.577 on dark */
+  --emerald: oklch(0.72 0.15 163);
+  /* dark: shadows invisible → a visible-but-thin hairline on every card */
+  --proto-shadow: none;
+  --proto-ring: 0 0 0 1px oklch(1 0 0 / 0.1);
+  --proto-warn: oklch(0.78 0.15 70);
+  --sidebar: oklch(0.185 0 0);
+  --sidebar-border: oklch(0.29 0 0);
+}
+
+/* ───────────────────────────  shared proto component layer  ────────────────
+   Structure is identical across directions; only the vars above differ. */
+
+/* Unify EVERY real Card onto one edge treatment so dark mode has no stray
+   foreground-tinted ring (the "white border" seen on the sync card). Overrides
+   the component's own ring-foreground/10 with the direction's tokens. */
+[data-proto] [data-slot="card"] {
+  box-shadow: var(--proto-shadow), var(--proto-ring) !important;
+}
+
+/* Motion vocabulary made VISIBLE on the real dashboard: the whole view washes
+   in (opacity), and every card rises with a per-position stagger so you see a
+   clear cascade on load / navigation / replay — not a single silent fade. */
+@keyframes proto-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+[data-proto] main {
+  animation: proto-fade var(--proto-dur) var(--proto-ease) both;
+}
+[data-proto] main [data-slot="card"] {
+  animation: proto-enter var(--proto-dur) var(--proto-ease) both;
+}
+[data-proto] main [data-slot="card"]:nth-child(1) {
+  animation-delay: 0ms;
+}
+[data-proto] main [data-slot="card"]:nth-child(2) {
+  animation-delay: 55ms;
+}
+[data-proto] main [data-slot="card"]:nth-child(3) {
+  animation-delay: 110ms;
+}
+[data-proto] main [data-slot="card"]:nth-child(4) {
+  animation-delay: 165ms;
+}
+[data-proto] main [data-slot="card"]:nth-child(n + 5) {
+  animation-delay: 220ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-proto] main,
+  [data-proto] main [data-slot="card"] {
+    animation: none;
+  }
+}
+
+/* Dark money legibility — the real <Amount> hardcodes text-emerald-600 /
+ * text-red-600 (fixed Tailwind classes, NOT tokens), so they neither adapt to
+ * dark nor clear the card bg (red goes muddy). Lifting them here proves the
+ * required migration for the token sheet: positive/negative must be tokens. */
+[data-proto][data-mode="dark"] .text-emerald-600 {
+  color: oklch(0.72 0.15 163);
+}
+[data-proto][data-mode="dark"] .text-red-600 {
+  color: oklch(0.71 0.17 22);
+}
+
+.proto-shell {
+  background: var(--background);
+  color: var(--foreground);
+  min-height: 100vh;
+}
+.proto-sidebar {
+  background: var(--sidebar);
+  border-inline-start: 1px solid var(--sidebar-border);
+}
+.proto-card {
+  background: var(--card);
+  color: var(--card-foreground);
+  border-radius: var(--radius);
+  padding: var(--proto-pad);
+  box-shadow: var(--proto-shadow), var(--proto-ring);
+}
+.proto-gap {
+  gap: var(--proto-gap);
+}
+.proto-label {
+  font-size: var(--proto-label-size);
+  font-weight: var(--proto-label-weight);
+  letter-spacing: var(--proto-label-tracking);
+  color: var(--muted-foreground);
+}
+.proto-stat-num {
+  font-weight: var(--proto-num-weight);
+  font-variant-numeric: tabular-nums;
+}
+.proto-hero-num {
+  font-weight: var(--proto-num-weight);
+  font-variant-numeric: tabular-nums;
+}
+.proto-pos {
+  color: var(--proto-pos);
+}
+.proto-neg {
+  color: var(--proto-neg);
+}
+.proto-warn {
+  color: var(--proto-warn);
+}
+
+/* Motion vocabulary — one keyframe, character comes from the per-direction
+   duration / easing / travel / scale vars. Stagger via inline animation-delay. */
+@keyframes proto-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--proto-enter-y)) scale(var(--proto-enter-scale));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.proto-enter {
+  animation: proto-enter var(--proto-dur) var(--proto-ease) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .proto-enter {
+    animation: none;
+  }
+}
+
+/* Toast / feedback — styled with the active direction's tokens.
+ * Treatment: faint full tint in the tone color + a leading tone icon, no
+ * single-edge accent bar (the edge-only bar read as buggy at the gate). */
+.proto-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: color-mix(in oklab, var(--proto-pos) 9%, var(--card));
+  color: var(--card-foreground);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  box-shadow:
+    var(--proto-shadow),
+    var(--proto-ring),
+    0 8px 30px oklch(0 0 0 / 0.12);
+  animation: proto-enter var(--proto-dur) var(--proto-ease) both;
+}
+.proto-toast[data-tone="neg"] {
+  background: color-mix(in oklab, var(--proto-neg) 9%, var(--card));
+}
+.proto-toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  color: var(--card);
+  background: var(--proto-pos);
+}
+.proto-toast[data-tone="neg"] .proto-toast-icon {
+  background: var(--proto-neg);
+}
+
+/* Progress / pace bar */
+.proto-track {
+  background: var(--muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.proto-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width var(--proto-dur) var(--proto-ease);
+}
