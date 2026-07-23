@@ -67,6 +67,8 @@
   --color-card: var(--card);
   --color-emerald: var(--emerald);
   --color-emerald-foreground: var(--emerald-foreground);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -120,6 +122,11 @@
   --emerald: oklch(0.596 0.145 163.225); /* emerald-600 */
   --emerald-foreground: oklch(1 0 0);
 
+  /* Money-color source of truth (#109 sheet): --pos = positive money (emerald),
+     --neg = negative money (red). <Amount> is the sole consumer via text-pos/text-neg. */
+  --pos: oklch(0.596 0.145 163);
+  --neg: oklch(0.577 0.245 27);
+
   /* Warning — amber tone, for pending/in-progress states only */
   --warning: oklch(0.72 0.15 65);
   --warning-foreground: oklch(0.145 0 0);
@@ -169,6 +176,10 @@
   --emerald: oklch(0.72 0.15 163);
   /* emerald is lifted in dark — dark text reads, white washes out */
   --emerald-foreground: oklch(0.165 0 0);
+
+  /* Money colors lifted for the dark surface; dark red brightened so it isn't muddy. */
+  --pos: oklch(0.72 0.15 163);
+  --neg: oklch(0.71 0.17 22);
   --warning: oklch(0.78 0.15 70);
   /* warning stays amber (light) in both modes → dark foreground */
   --warning-foreground: oklch(0.145 0 0);
