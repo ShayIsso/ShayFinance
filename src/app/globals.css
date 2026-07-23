@@ -172,8 +172,14 @@
   --input: oklch(0.29 0 0);
   --ring: oklch(0.55 0 0);
 
-  /* Card edge (#109) — dark cards drop the shadow entirely; hairline only. */
-  --card-shadow: none;
+  /* Card edge (#109) — dark cards drop the shadow entirely; hairline only.
+     Uses a transparent zero-shadow, NOT the `none` keyword: the base Card feeds
+     this into Tailwind's shared box-shadow chain (shadow-* and ring-* compose
+     into one declaration), and a literal `none` mid-list is invalid CSS that
+     voids the whole box-shadow — silently killing any ring a card stacks on top
+     (e.g. the highlighted bank card's amber ring). `0 0 #0000` renders nothing
+     while keeping the chain valid. */
+  --card-shadow: 0 0 #0000;
   --card-border: oklch(1 0 0 / 0.1);
 
   --destructive: oklch(0.71 0.17 22); /* brighter rose — muddy at 0.577 on dark */
