@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Toast } from "@/components/ui/toast";
 import { EmptyState } from "@/components/empty-state";
 
 type BankSyncState = {
@@ -380,29 +381,18 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
       </div>
 
       {reconciliationToast && (
-        <Card className="border-emerald-200 bg-emerald-50">
-          <CardContent className="flex items-start justify-between py-3">
-            <div className="space-y-0.5 text-sm">
-              {reconciliationToast.autoApplied > 0 && (
-                <p className="text-emerald-800">
-                  סווגו אוטומטית {reconciliationToast.autoApplied} עסקאות כהסדרת כרטיס אשראי
-                </p>
-              )}
-              {reconciliationToast.queued > 0 && (
-                <p className="text-emerald-700">
-                  {reconciliationToast.queued} התאמות ממתינות לאישור
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => setReconciliationToast(null)}
-              className="mt-0.5 text-xs leading-none text-emerald-600 hover:text-emerald-800"
-              aria-label="סגור"
-            >
-              ✕
-            </button>
-          </CardContent>
-        </Card>
+        <Toast variant="success" onDismiss={() => setReconciliationToast(null)}>
+          {reconciliationToast.autoApplied > 0 && (
+            <p className="text-foreground">
+              סווגו אוטומטית {reconciliationToast.autoApplied} עסקאות כהסדרת כרטיס אשראי
+            </p>
+          )}
+          {reconciliationToast.queued > 0 && (
+            <p className="text-muted-foreground">
+              {reconciliationToast.queued} התאמות ממתינות לאישור
+            </p>
+          )}
+        </Toast>
       )}
 
       {aiSummary && (
