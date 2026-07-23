@@ -14,8 +14,10 @@
  *   Warning       — amber (oklch ~0.769 0.188 70) — pending states only
  *
  * Card convention:
- *   rounded-xl + ring-1 ring-foreground/10 + no shadow + no gradient.
- *   See src/components/ui/card.tsx — Card component enforces this.
+ *   rounded-xl + unified --card-edge (border + box-shadow bundle, mode-aware).
+ *   Light: hairline border + soft shadow. Dark: hairline border, no shadow.
+ *   See src/components/ui/card.tsx — Card component enforces this; no card
+ *   may layer its own ring/border/shadow on top.
  *
  * Lucide icon convention:
  *   Default stroke width: 1.5px (Lucide library default — do not override).
@@ -111,6 +113,11 @@
   --ring: oklch(0.708 0 0);
   --radius: 0.625rem;
 
+  /* Card edge (#109) — hairline border + soft shadow bundle, mode-dependent.
+     Consumed by the base Card component only; no card overrides these. */
+  --card-shadow: 0 1px 2px oklch(0.145 0 0 / 0.04), 0 2px 8px oklch(0.145 0 0 / 0.06);
+  --card-border: oklch(0.145 0 0 / 0.09);
+
   /* ── Semantic colors ── */
 
   /* Destructive — muted red (used for negative values, error states) */
@@ -164,6 +171,10 @@
   --border: oklch(0.29 0 0);
   --input: oklch(0.29 0 0);
   --ring: oklch(0.55 0 0);
+
+  /* Card edge (#109) — dark cards drop the shadow entirely; hairline only. */
+  --card-shadow: none;
+  --card-border: oklch(1 0 0 / 0.1);
 
   --destructive: oklch(0.71 0.17 22); /* brighter rose — muddy at 0.577 on dark */
   --emerald: oklch(0.72 0.15 163);

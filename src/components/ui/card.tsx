@@ -3,15 +3,18 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Card convention (Phase 2 F3):
+ * Card convention (#109 — unified card edge):
  *   - Shape  : rounded-xl (all four corners)
- *   - Border : ring-1 ring-foreground/10  (1px subtle ring, no box-shadow)
- *   - Surface: bg-card (pure white)
- *   - Shadow : none — use ring only
+ *   - Edge   : --card-edge token bundle — hairline border + box-shadow,
+ *              mode-dependent (see src/app/globals.css). Light: border +
+ *              soft shadow. Dark: border only, no shadow.
+ *   - Surface: bg-card
  *   - Gradient: none — flat surfaces only
  *
- * Do not add shadow or gradient classes to Card. If you need elevation,
- * increase ring opacity (e.g. ring-foreground/15) rather than adding shadow.
+ * The edge lives on the base Card only. Do not layer an additional
+ * ring/border/shadow on top in a consumer — that produces the double-edge
+ * bug this convention replaces. Adjust --card-border / --card-shadow in
+ * globals.css instead.
  */
 function Card({
   className,
@@ -23,7 +26,7 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card bg-card text-card-foreground ring-foreground/10 flex flex-col gap-4 overflow-hidden rounded-xl py-4 text-sm ring-1 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+        "group/card bg-card text-card-foreground flex flex-col gap-4 overflow-hidden rounded-xl border border-[color:var(--card-border)] py-4 text-sm shadow-[var(--card-shadow)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
         className,
       )}
       {...props}
