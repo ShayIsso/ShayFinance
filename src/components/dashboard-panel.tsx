@@ -366,36 +366,45 @@ export function DashboardPanel({
 
   return (
     <div className="space-y-6">
-      {/* Month navigation */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">לוח בקרה</h2>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={nextMonth} aria-label="חודש הבא">
-            <ChevronRight className="size-4" />
-          </Button>
-          <span className="min-w-32 text-center text-sm font-medium">
-            {HEBREW_MONTHS[month - 1]} {year}
-          </span>
-          <Button variant="outline" size="icon" onClick={prevMonth} aria-label="חודש קודם">
-            <ChevronLeft className="size-4" />
-          </Button>
+      {/*
+       * .stagger is scoped to this month-nav/recon-strip/sync-strip block
+       * only — none of these three depend on `loading`, so this wrapper's
+       * children never remount on the month-strip refetch below. The
+       * Goals/data slots past this point DO remount every refetch (the
+       * loading ternary swaps their JSX), so they stay unanimated (#202).
+       */}
+      <div className="stagger space-y-6">
+        {/* Month navigation */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold tracking-tight">לוח בקרה</h2>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={nextMonth} aria-label="חודש הבא">
+              <ChevronRight className="size-4" />
+            </Button>
+            <span className="min-w-32 text-center text-sm font-medium">
+              {HEBREW_MONTHS[month - 1]} {year}
+            </span>
+            <Button variant="outline" size="icon" onClick={prevMonth} aria-label="חודש קודם">
+              <ChevronLeft className="size-4" />
+            </Button>
+          </div>
         </div>
+
+        {/* Reconciliation pending strip */}
+        {pendingReconCount > 0 && (
+          <Link
+            href="/reconciliation"
+            className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+          >
+            <Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+            <span>{pendingReconCount} התאמות ממתינות לאישור</span>
+            <span className="mr-auto text-xs text-amber-600">לחץ לאישור &#x2190;</span>
+          </Link>
+        )}
+
+        {/* Last sync strip */}
+        {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
       </div>
-
-      {/* Reconciliation pending strip */}
-      {pendingReconCount > 0 && (
-        <Link
-          href="/reconciliation"
-          className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
-        >
-          <Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-          <span>{pendingReconCount} התאמות ממתינות לאישור</span>
-          <span className="mr-auto text-xs text-amber-600">לחץ לאישור &#x2190;</span>
-        </Link>
-      )}
-
-      {/* Last sync strip */}
-      {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
 
       {/* Goals progress — independent of the month strip below (always
           today's real month, per CONTEXT.md "savings goal"), so it renders

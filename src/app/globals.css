@@ -22,8 +22,17 @@
  *   Duo-tone treatment: section headers only, nowhere else.
  *   See src/components/ui/amount.tsx for the canonical reference comment.
  *
- * Motion convention:
- *   Use .fade-in utility for enter transitions (150ms ease-out).
+ * Motion convention (Phase 3 A5, #202):
+ *   .fade-in     — 150ms opacity-only enter (legacy, still valid for small bits).
+ *   .enter       — 220ms fade + 8px rise, cubic-bezier(0.16, 1, 0.3, 1). Sections/cards.
+ *   .stagger     — container utility: staggers direct children's .enter by ~55ms/position.
+ *   .view-wash   — whole-view opacity fade on load, applied once at the outermost container.
+ *   .hover-tint  — 130ms background/edge tint on hover.
+ *   .press       — 100ms scale(.98) on press (:active).
+ *   All animations run once per DOM node creation — a re-render that doesn't
+ *   remount the element (e.g. the dashboard month-strip refetch) never replays
+ *   them. Don't key an animated container by data that changes on refetch.
+ *   prefers-reduced-motion drops translate/scale and keeps opacity only.
  *   No scroll-triggered animations (Phase 3 backlog).
  *
  * Numeric displays:
@@ -228,6 +237,119 @@
     }
     to {
       opacity: 1;
+    }
+  }
+
+  /**
+   * .enter — fade + 8px rise, 220ms, cubic-bezier(0.16, 1, 0.3, 1) (#202).
+   * Apply to a section/card wrapper that should enter gently on mount.
+   * .stagger > * shares this same animation (see below) — kept as one
+   * selector so the timing/easing only needs to change in one place.
+   */
+  .enter,
+  .stagger > * {
+    animation: enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /**
+   * .stagger — apply to a grid/list CONTAINER to stagger its direct children's
+   * entrance by ~55ms per position, without adding a class to every child
+   * (#202). nth-child rules assign the position; capped at 10, beyond which
+   * every further child shares the last delay rather than growing unbounded.
+   */
+  .stagger > * {
+    animation-delay: calc(var(--stagger-i, 0) * 55ms);
+  }
+  .stagger > *:nth-child(1) {
+    --stagger-i: 0;
+  }
+  .stagger > *:nth-child(2) {
+    --stagger-i: 1;
+  }
+  .stagger > *:nth-child(3) {
+    --stagger-i: 2;
+  }
+  .stagger > *:nth-child(4) {
+    --stagger-i: 3;
+  }
+  .stagger > *:nth-child(5) {
+    --stagger-i: 4;
+  }
+  .stagger > *:nth-child(6) {
+    --stagger-i: 5;
+  }
+  .stagger > *:nth-child(7) {
+    --stagger-i: 6;
+  }
+  .stagger > *:nth-child(8) {
+    --stagger-i: 7;
+  }
+  .stagger > *:nth-child(9) {
+    --stagger-i: 8;
+  }
+  .stagger > *:nth-child(n + 10) {
+    --stagger-i: 9;
+  }
+
+  /**
+   * .view-wash — whole-view opacity fade on load. Apply once, at the
+   * outermost dashboard container (not per-page-navigation, not per-refetch).
+   */
+  .view-wash {
+    animation: fade-in 220ms ease-out both;
+  }
+
+  /**
+   * .hover-tint — 130ms background/edge tint on hover (#202).
+   */
+  .hover-tint {
+    transition:
+      background-color 130ms ease-out,
+      border-color 130ms ease-out;
+  }
+  .hover-tint:hover {
+    background-color: var(--accent);
+    border-color: var(--border);
+  }
+
+  /**
+   * .press — scale(.98) over 100ms on press (#202).
+   */
+  .press {
+    transition: transform 100ms ease-out;
+  }
+  .press:active {
+    transform: scale(0.98);
+  }
+
+  /**
+   * prefers-reduced-motion — drop translate/scale, keep opacity only (#202).
+   * Falls back to the existing .fade-in keyframes (opacity 0→1) rather than
+   * a new one, per the "single .fade-in" motion convention above.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .enter,
+    .view-wash,
+    .stagger > * {
+      animation-name: fade-in;
+      animation-duration: 150ms;
+      animation-delay: 0s;
+    }
+    .press,
+    .press:active {
+      transition: none;
+      transform: none;
     }
   }
 }
