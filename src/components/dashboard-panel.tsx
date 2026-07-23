@@ -508,9 +508,9 @@ export function DashboardPanel({
                   {summary ? formatPercent(summary.savingsRate) : "—"}
                 </p>
                 {summary && (
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div className="bg-muted mt-2 h-2 overflow-hidden rounded-full">
                     <div
-                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      className="bg-bar-strong h-full rounded-full transition-all"
                       style={{ width: `${Math.min(Math.max(summary.savingsRate, 0), 100)}%` }}
                     />
                   </div>

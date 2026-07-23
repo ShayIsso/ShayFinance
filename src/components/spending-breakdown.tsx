@@ -137,9 +137,9 @@ function LeafRow({
       <span className="text-muted-foreground w-36 shrink-0 truncate text-sm">
         {leaf.categoryName}
       </span>
-      <div className="h-1 flex-1 overflow-hidden rounded-full bg-gray-50">
+      <div className="bg-muted h-1 flex-1 overflow-hidden rounded-full">
         <div
-          className="h-full rounded-full bg-gray-300"
+          className="bg-bar h-full rounded-full"
           style={{ width: max > 0 ? `${(leaf.amount / max) * 100}%` : "0%" }}
         />
       </div>
@@ -189,9 +189,9 @@ function NodeRow({
       )}
       <CategoryDot color={node.color} />
       <span className="w-40 shrink-0 truncate text-sm font-medium">{node.categoryName}</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+      <div className="bg-muted h-1.5 flex-1 overflow-hidden rounded-full">
         <div
-          className="h-full rounded-full bg-gray-400"
+          className="bg-bar-strong h-full rounded-full"
           style={{ width: max > 0 ? `${(node.amount / max) * 100}%` : "0%" }}
         />
       </div>
