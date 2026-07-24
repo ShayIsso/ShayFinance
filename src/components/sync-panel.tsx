@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, Lock, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toast } from "@/components/ui/toast";
 import { EmptyState } from "@/components/empty-state";
+import type { SyncRunSummary } from "@/lib/sync/runs";
 
-type BankSyncState = {
+export type BankSyncState = {
   status:
     | "idle"
     | "initializing"
@@ -82,10 +83,69 @@ function formatCountdown(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function SyncPanelInner({ banks }: { banks: Bank[] }) {
+// ── Persisted-row precedence (#223) ──────────────────────────────────────────
+
+export type BankDisplay =
+  | { source: "live"; state: BankSyncState }
+  | { source: "persisted"; run: SyncRunSummary }
+  | { source: "none" };
+
+/**
+ * Live SSE state always wins over the persisted `sync_runs` row — a sync
+ * that's in progress (or one that just finished this session) is strictly
+ * more current than the snapshot the page loaded with. The persisted row is
+ * only ever a fallback for a bank this tab hasn't heard from yet (a fresh
+ * page load, or a bank the current run hasn't reached). Precedence is
+ * decided here, once, rather than left to fall out of which branch happens
+ * to render first.
+ */
+export function resolveBankDisplay(
+  liveState: BankSyncState | undefined,
+  lastRun: SyncRunSummary | undefined,
+): BankDisplay {
+  if (liveState !== undefined) return { source: "live", state: liveState };
+  if (lastRun !== undefined) return { source: "persisted", run: lastRun };
+  return { source: "none" };
+}
+
+/**
+ * Mirrors sync-freshness-pill.tsx's bucket wording (minutes/hours/days) so a
+ * persisted row here and the header pill never disagree on how "3 hours ago"
+ * reads. Not imported from there: the pill only exports its classifier
+ * (`classifySyncFreshness`), not this formatter, and #223's brief keeps that
+ * file read-only — duplicating one small clock-free formatter costs less
+ * than widening that file's surface for it. Takes `ageMs`, never a `Date`,
+ * so it can't reintroduce the `Date.now()`-in-render pattern that is bug
+ * #193.
+ */
+export function formatRelativeAge(ageMs: number): string {
+  const minutes = Math.floor(ageMs / (60 * 1000));
+  if (minutes < 1) return "לפני פחות מדקה";
+  if (minutes < 60) return `לפני ${minutes} דקות`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `לפני ${hours} שעות`;
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "אתמול";
+  return `לפני ${days} ימים`;
+}
+
+function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunSummary[] }) {
   const searchParams = useSearchParams();
-  // ?bank=<bankType> deep-link from LastSyncStrip — highlights the flagged bank
+  // ?bank=<bankType> deep-link target — highlights the flagged bank card
   const highlightedBank = searchParams.get("bank");
+  const lastRunByBank = useMemo(() => {
+    const map: Record<string, SyncRunSummary> = {};
+    for (const run of lastRuns) map[run.bank] = run;
+    return map;
+  }, [lastRuns]);
+  // Mounted-only clock seed — SSR and the hydration pass render the
+  // no-age form below; classification (and its `new Date()` reads) only
+  // runs once this is set, so a clock read never happens in the render
+  // path shared with SSR (bug #193's exact trap; same shape as
+  // sync-freshness-pill.tsx's `nowMs`).
+  const [nowMs, setNowMs] = useState<number | null>(null);
   const [bankStates, setBankStates] = useState<Record<string, BankSyncState>>({});
   const [syncing, setSyncing] = useState(false);
   const [summary, setSummary] = useState<SyncSummary | null>(null);
@@ -111,6 +171,11 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
         clearInterval(interval);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot mount flag, mirrors sync-freshness-pill.tsx's nowMs seed
+    setNowMs(Date.now());
   }, []);
 
   function clearCountdown(bank: string) {
@@ -253,7 +318,7 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
         {connectionError && <p className="text-destructive text-sm">שגיאת חיבור. נסה שוב.</p>}
       </div>
 
-      {!syncing && !summary && Object.keys(bankStates).length === 0 && (
+      {!syncing && !summary && Object.keys(bankStates).length === 0 && lastRuns.length === 0 && (
         <Card>
           <CardContent className="p-0">
             <EmptyState
@@ -268,15 +333,28 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
 
       <div className="space-y-3">
         {banks.map((bank) => {
-          const state = bankStates[bank.bankType];
-          const isSpinning = state !== undefined && SPINNING_STATUSES.has(state.status);
+          const display = resolveBankDisplay(
+            bankStates[bank.bankType],
+            lastRunByBank[bank.bankType],
+          );
+          const liveState = display.source === "live" ? display.state : undefined;
+          const isSpinning = liveState !== undefined && SPINNING_STATUSES.has(liveState.status);
           const countdown = otpCountdowns[bank.bankType];
           const isHighlighted = highlightedBank === bank.bankType;
+          const persistedAge =
+            display.source === "persisted" && nowMs !== null
+              ? formatRelativeAge(nowMs - new Date(display.run.startedAt).getTime())
+              : null;
+          const canRetry =
+            liveState?.status === "error" ||
+            liveState?.status === "otp_timeout" ||
+            (display.source === "persisted" &&
+              (display.run.status === "error" || display.run.status === "otp_skipped"));
 
           return (
             <Card
               key={bank.id}
-              className={isHighlighted ? "border-amber-300 ring-1 ring-amber-200" : undefined}
+              className={isHighlighted ? "border-warning/50 ring-warning/25 ring-1" : undefined}
             >
               <CardContent className="space-y-3 py-4">
                 <div className="flex items-center justify-between">
@@ -286,54 +364,78 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
                   </div>
 
                   <div className="flex items-center gap-1.5 text-sm">
-                    {state === undefined && (
+                    {display.source === "none" && (
                       <span className="text-muted-foreground flex items-center gap-1.5">
                         <span className="bg-muted-foreground/40 inline-block h-2 w-2 rounded-full" />
-                        ממתין
+                        מעולם לא סונכרן
                       </span>
                     )}
-                    {isSpinning && (
+                    {isSpinning && liveState !== undefined && (
                       <span className="text-muted-foreground flex items-center gap-1.5">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        {STATUS_TEXT[state.status]}
+                        {STATUS_TEXT[liveState.status]}
                       </span>
                     )}
-                    {state?.status === "login_success" && (
-                      <span className="flex items-center gap-1.5 text-emerald-600">
+                    {liveState?.status === "login_success" && (
+                      <span className="text-foreground flex items-center gap-1.5">
                         <CheckCircle2 className="h-4 w-4" />
                         {STATUS_TEXT.login_success}
                       </span>
                     )}
-                    {state?.status === "complete" && (
-                      <span className="flex items-center gap-1.5 text-emerald-600">
+                    {liveState?.status === "complete" && (
+                      <span className="text-foreground flex items-center gap-1.5">
                         <CheckCircle2 className="h-4 w-4" />
-                        {state.transactionCount !== undefined
-                          ? `${state.transactionCount} תנועות`
+                        {liveState.transactionCount !== undefined
+                          ? `${liveState.transactionCount} תנועות`
                           : STATUS_TEXT.complete}
                       </span>
                     )}
-                    {state?.status === "otp_required" && (
+                    {liveState?.status === "otp_required" && (
                       <span className="text-muted-foreground flex items-center gap-1.5">
                         <AlertTriangle className="h-4 w-4" />
                         {STATUS_TEXT.otp_required}
                       </span>
                     )}
-                    {state?.status === "otp_timeout" && (
+                    {liveState?.status === "otp_timeout" && (
                       <span className="text-destructive flex items-center gap-1.5">
                         <AlertTriangle className="h-4 w-4" />
                         {STATUS_TEXT.otp_timeout}
                       </span>
                     )}
-                    {state?.status === "error" && (
+                    {liveState?.status === "error" && (
                       <span className="text-destructive flex items-center gap-1.5">
                         <XCircle className="h-4 w-4" />
-                        {state.error ?? STATUS_TEXT.error}
+                        {liveState.error ?? STATUS_TEXT.error}
+                      </span>
+                    )}
+
+                    {display.source === "persisted" && display.run.status === "success" && (
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4" />
+                        {`${display.run.transactionsImported} תנועות`}
+                        {persistedAge && ` · ${persistedAge}`}
+                      </span>
+                    )}
+                    {display.source === "persisted" && display.run.status === "otp_skipped" && (
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Lock className="h-4 w-4" />
+                        <span className="bg-warning text-warning-foreground rounded-full px-2 py-0.5 text-xs font-medium">
+                          קוד אימות לא הוזן בזמן
+                        </span>
+                        {persistedAge && <span>{persistedAge}</span>}
+                      </span>
+                    )}
+                    {display.source === "persisted" && display.run.status === "error" && (
+                      <span className="text-destructive flex items-center gap-1.5">
+                        <AlertTriangle className="h-4 w-4" />
+                        {display.run.errorMessage ?? STATUS_TEXT.error}
+                        {persistedAge && ` · ${persistedAge}`}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {state?.status === "otp_required" && (
+                {liveState?.status === "otp_required" && (
                   <div className="flex items-center gap-2">
                     <Input
                       className="max-w-[160px]"
@@ -357,17 +459,17 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
                   </div>
                 )}
 
-                {(state?.status === "error" || state?.status === "otp_timeout") && (
+                {canRetry && (
                   <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={startSync}>
                       נסה שוב
                     </Button>
-                    {state?.screenshotFilename && (
+                    {liveState?.screenshotFilename && (
                       <a
-                        href={`/api/screenshots/${state.screenshotFilename}`}
+                        href={`/api/screenshots/${liveState.screenshotFilename}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-primary text-xs hover:underline"
                       >
                         צפה בצילום מסך
                       </a>
@@ -436,10 +538,10 @@ function SyncPanelInner({ banks }: { banks: Bank[] }) {
 }
 
 // useSearchParams requires a Suspense boundary (Next.js App Router requirement)
-export function SyncPanel({ banks }: { banks: Bank[] }) {
+export function SyncPanel({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunSummary[] }) {
   return (
     <Suspense fallback={null}>
-      <SyncPanelInner banks={banks} />
+      <SyncPanelInner banks={banks} lastRuns={lastRuns} />
     </Suspense>
   );
 }
