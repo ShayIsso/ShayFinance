@@ -165,6 +165,32 @@ export type TopMerchant = {
 const DEFAULT_TOP_MERCHANTS_LIMIT = 5;
 
 /**
+ * Whole-token match for the "משיכת שיק" (check-withdrawal) descriptor family,
+ * which the bank suffixes with a cheque serial ("משיכת שיק:<serial>") — a
+ * teller-window cash withdrawal against a cheque, not a place money was
+ * spent. It's the same *class* of noise as the
+ * `card_settlement` transfer-descriptor filtered below (a bank mechanism, not
+ * a merchant), but it isn't transfer-shaped — no counterparty account, no
+ * settlement cycle — so it can't be added to `matchesTransferDescriptor`
+ * without inventing a new `TransferDescriptorKind`, which reconciliation and
+ * the kind-scoped AI guard (#145) also consume and could misread as a real
+ * transfer signal. The exclusion instead lives here, scoped to this one
+ * presentation aggregate, and never touches category assignment or totals.
+ *
+ * Matching is whole-token, not substring, for the same reason
+ * `canonicalizeMerchant` is: "שיק" alone would wrongly catch unrelated
+ * descriptors like a cheque-book fee ("עמלת פנקסי שיקים אישיים").
+ */
+function isCheckWithdrawalDescriptor(description: string): boolean {
+  const tokens = description
+    .normalize("NFC")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  return tokens.some((token, i) => token === "משיכת" && tokens[i + 1] === "שיק");
+}
+
+/**
  * Ranks the month's real spending merchants, top-N descending by total spend.
  * Expense-only (income/investment/transfer/ignore/uncategorized rows never
  * rank), grouped by canonicalized merchant (transaction-matching's
@@ -174,7 +200,9 @@ const DEFAULT_TOP_MERCHANTS_LIMIT = 5;
  * The `card_settlement` transfer-descriptor (מקס/כ.א.ל bill lump, CONTEXT.md
  * "The Paradox") is excluded by description shape in addition to the
  * expense-only filter — a settlement lump that hasn't yet been reconciled to
- * `transfer` must still never masquerade as a top merchant.
+ * `transfer` must still never masquerade as a top merchant. Same for a
+ * check-withdrawal descriptor (`isCheckWithdrawalDescriptor`) — a bank
+ * mechanism, not a merchant, but outside `matchesTransferDescriptor`'s kinds.
  */
 export function computeTopMerchants(
   transactions: MerchantTransaction[],
@@ -185,6 +213,7 @@ export function computeTopMerchants(
   for (const t of transactions) {
     if (t.categoryType !== "expense") continue;
     if (matchesTransferDescriptor(t.description, ["card_settlement"])) continue;
+    if (isCheckWithdrawalDescriptor(t.description)) continue;
 
     const merchant = canonicalizeMerchant(extractMerchant(t.description));
     if (!merchant) continue;

@@ -226,9 +226,15 @@ export function BudgetStatusCard({
   budgets: BudgetChipData[];
   targetsHeadline: TargetsHeadlineInput;
 }) {
-  const [expanded, setExpanded] = React.useState(false);
   const headline = buildTargetsHeadline(targetsHeadline);
   const counts = countByVerdict(budgets);
+  // With no savings target configured, SavingsHeadline renders nothing and
+  // the collapsed-by-default Variant C (#166) would leave only a chip row +
+  // chevron — the card's one line of real content is the per-budget
+  // breakdown, so start expanded rather than hiding it behind a click (#227
+  // item 2). This is a default only: the user's own expand/collapse choice
+  // still wins for the rest of the session.
+  const [expanded, setExpanded] = React.useState(() => headline.savings === null);
 
   return (
     <Card>
