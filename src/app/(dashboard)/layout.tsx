@@ -6,7 +6,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen">
       <SidebarNav pendingReconCount={pendingReconCount} />
-      <main className="mr-56 flex-1 p-8">{children}</main>
+      <main className="view-wash mr-56 flex-1 p-8">{children}</main>
     </div>
   );
 }
