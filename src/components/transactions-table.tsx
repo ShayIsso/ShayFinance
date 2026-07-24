@@ -412,9 +412,12 @@ function UndoReconciliationButton({ txnId, onUndone }: { txnId: string; onUndone
 export function TransactionsTable({
   categories,
   tree,
+  initialCategoryFilter = "",
 }: {
   categories: Category[];
   tree: CategoryTreeNode<Category>[];
+  /** Seeds the categoryId sentinel from a dashboard deep link (#206) — e.g. `__uncategorized__`. */
+  initialCategoryFilter?: string;
 }) {
   const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -423,7 +426,7 @@ export function TransactionsTable({
   const [filters, setFilters] = React.useState<Filters>({
     dateFrom: "",
     dateTo: "",
-    categoryId: "",
+    categoryId: initialCategoryFilter,
     status: "",
     search: "",
     page: 1,
