@@ -33,8 +33,8 @@ const PACE_LABELS: Record<GoalPaceVerdict, string> = {
 };
 
 const PACE_CHIP_CLASSES: Record<GoalPaceVerdict, string> = {
-  "ahead-or-on-pace": "border-emerald-200 text-emerald-700",
-  "behind-pace": "border-red-200 text-red-700",
+  "ahead-or-on-pace": "border-emerald/40 text-emerald",
+  "behind-pace": "border-destructive/40 text-destructive",
   "no-deadline": "border-muted text-muted-foreground",
 };
 
@@ -58,7 +58,10 @@ function GoalRow({ goal }: { goal: GoalProgressCardData }) {
         <span className="text-muted-foreground tabular-nums">{Math.round(percent)}%</span>
       </div>
       <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
-        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${percent}%` }} />
+        {/* Neutral fill (A4 #201 positive-only law): a ladder's fill percent is
+            progress, not a money value — emerald stays reserved for actual
+            positive balances/amounts. */}
+        <div className="bg-bar-strong h-full rounded-full" style={{ width: `${percent}%` }} />
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">
