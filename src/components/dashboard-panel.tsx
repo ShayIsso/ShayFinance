@@ -18,7 +18,6 @@ import type {
   RecentTransaction,
   TopMerchant,
 } from "@/lib/analytics";
-import { LastSyncStrip } from "@/components/last-sync-strip";
 import type { SyncRunSummary } from "@/lib/sync/runs";
 import { GoalsProgressCard, type GoalProgressCardData } from "@/components/goals-progress-card";
 import { BudgetStatusCard, type BudgetChipData } from "@/components/budget-status-card";
@@ -344,10 +343,6 @@ export function DashboardPanel({
             <span className="mr-auto text-xs text-amber-600">לחץ לאישור &#x2190;</span>
           </Link>
         )}
-
-        {/* Last sync strip — superseded by the header pill in #207, which owns
-            removing it from the dashboard. */}
-        {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
       </div>
 
       {loading ? (
