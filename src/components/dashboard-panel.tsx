@@ -18,7 +18,6 @@ import type {
   RecentTransaction,
   TopMerchant,
 } from "@/lib/analytics";
-import { LastSyncStrip } from "@/components/last-sync-strip";
 import type { SyncRunSummary } from "@/lib/sync/runs";
 import { GoalsProgressCard, type GoalProgressCardData } from "@/components/goals-progress-card";
 import { BudgetStatusCard, type BudgetChipData } from "@/components/budget-status-card";
@@ -299,12 +298,12 @@ export function DashboardPanel({ categories }: { categories: Category[] }) {
   return (
     <div className="space-y-6">
       {/*
-       * .stagger is scoped to this month-nav/sync-strip block only — neither
-       * depends on `loading`, so this wrapper's children never remount on the
-       * month-strip refetch below. (The sync freshness pill lives *inside*
-       * the month-nav child, so it doesn't occupy a stagger position of its
-       * own.) The data slots past this point DO remount every refetch (the
-       * loading ternary swaps their JSX), so they stay unanimated (#202).
+       * .stagger is scoped to this month-nav block only — it doesn't depend on
+       * `loading`, so this wrapper's children never remount on the month-strip
+       * refetch below. (The sync freshness pill lives *inside* the month-nav
+       * child, so it doesn't occupy a stagger position of its own.) The data
+       * slots past this point DO remount every refetch (the loading ternary
+       * swaps their JSX), so they stay unanimated (#202).
        */}
       <div className="stagger space-y-6">
         {/* Header — month navigation + sync-freshness pill */}
@@ -325,10 +324,6 @@ export function DashboardPanel({ categories }: { categories: Category[] }) {
             </div>
           </div>
         </div>
-
-        {/* Last sync strip — superseded by the header pill in #207, which owns
-            removing it from the dashboard. */}
-        {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
       </div>
 
       {loading ? (
