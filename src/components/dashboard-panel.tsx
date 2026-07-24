@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Inbox, Wallet } from "lucide-react";
+import { ChevronLeft, ChevronRight, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -208,13 +208,7 @@ function KpiTile({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-export function DashboardPanel({
-  categories,
-  pendingReconCount = 0,
-}: {
-  categories: Category[];
-  pendingReconCount?: number;
-}) {
+export function DashboardPanel({ categories }: { categories: Category[] }) {
   const now = new Date();
   const [year, setYear] = React.useState(now.getFullYear());
   const [month, setMonth] = React.useState(now.getMonth() + 1);
@@ -304,13 +298,12 @@ export function DashboardPanel({
   return (
     <div className="space-y-6">
       {/*
-       * .stagger is scoped to this month-nav/recon-strip/sync-strip block
-       * only — none of these three depend on `loading`, so this wrapper's
-       * children never remount on the month-strip refetch below. (The sync
-       * freshness pill lives *inside* the month-nav child, so it doesn't
-       * occupy a stagger position of its own.) The data slots past this point
-       * DO remount every refetch (the loading ternary swaps their JSX), so
-       * they stay unanimated (#202).
+       * .stagger is scoped to this month-nav block only — it doesn't depend on
+       * `loading`, so this wrapper's children never remount on the month-strip
+       * refetch below. (The sync freshness pill lives *inside* the month-nav
+       * child, so it doesn't occupy a stagger position of its own.) The data
+       * slots past this point DO remount every refetch (the loading ternary
+       * swaps their JSX), so they stay unanimated (#202).
        */}
       <div className="stagger space-y-6">
         {/* Header — month navigation + sync-freshness pill */}
@@ -331,18 +324,6 @@ export function DashboardPanel({
             </div>
           </div>
         </div>
-
-        {/* Reconciliation pending strip */}
-        {pendingReconCount > 0 && (
-          <Link
-            href="/reconciliation"
-            className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
-          >
-            <Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-            <span>{pendingReconCount} התאמות ממתינות לאישור</span>
-            <span className="mr-auto text-xs text-amber-600">לחץ לאישור &#x2190;</span>
-          </Link>
-        )}
       </div>
 
       {loading ? (

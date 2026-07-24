@@ -85,15 +85,21 @@ export const VERDICT_LABEL: Record<BudgetVerdict, string> = {
 /**
  * The shared positive/negative chip fill — reused by both the per-verdict
  * palette below and the savings met/missed chip, so the two "good/bad" chip
- * treatments on this card can't drift apart.
+ * treatments on this card can't drift apart. Token-driven (not the
+ * hardcoded `-50`/`-700` Tailwind literals this replaced) so the wash reads
+ * correctly in dark mode too — same low-opacity-fill technique as the toast
+ * primitive's success/error variants (`src/components/ui/toast.tsx`).
  */
-const POSITIVE_CHIP_CLASS = "border-emerald-200 bg-emerald-50 text-emerald-700";
-const NEGATIVE_CHIP_CLASS = "border-red-200 bg-red-50 text-red-700";
+const POSITIVE_CHIP_CLASS = "border-emerald/30 bg-emerald/10 text-emerald";
+const NEGATIVE_CHIP_CLASS = "border-destructive/30 bg-destructive/10 text-destructive";
 
-/** Light-theme, low-saturation chip fills — the status palette. Never applied to a dot. */
+/** Low-saturation chip fills — the status palette. Never applied to a dot. */
 export const VERDICT_CHIP_CLASS: Record<BudgetVerdict, string> = {
   over: NEGATIVE_CHIP_CLASS,
-  "at-risk": "border-amber-200 bg-amber-50 text-amber-700",
+  // Amber as small text fails contrast at --warning's lightness (see
+  // globals.css's warning token comment) — the wash carries the signal,
+  // foreground carries the text.
+  "at-risk": "border-warning/50 bg-warning/15 text-foreground",
   "on-pace": "border-muted text-muted-foreground",
   "comfortably-under": POSITIVE_CHIP_CLASS,
 };
@@ -140,34 +146,29 @@ export function countByVerdict(budgets: { verdict: BudgetVerdict }[]): VerdictCo
   }));
 }
 
-function TargetsHeadline({ headline }: { headline: TargetsHeadlineViewModel }) {
-  if (!headline.expense && !headline.savings) return null;
+/**
+ * Renders only the savings-target line. The expense-target line (spend vs.
+ * ceiling) is deliberately never rendered here — #205 makes the pace hero the
+ * sole owner of that comparison; `TargetsHeadlineViewModel.expense` still
+ * flows through `buildTargetsHeadline` (the dashboard panel's props still
+ * hand it in) but this card no longer surfaces it. No ceiling phrasing
+ * belongs on this card.
+ */
+function SavingsHeadline({ headline }: { headline: TargetsHeadlineViewModel }) {
+  if (!headline.savings) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b pb-3 text-sm">
-      {headline.expense && (
-        <span className="text-muted-foreground">
-          יעד הוצאות{" "}
-          <span
-            className={`font-semibold ${headline.expense.over ? "text-red-600" : "text-foreground"}`}
-          >
-            <Amount amount={headline.expense.actual} colorize={false} fractionDigits={0} /> מתוך{" "}
-            <Amount amount={headline.expense.target} colorize={false} fractionDigits={0} />
-          </span>
+    <div className="border-b pb-3 text-sm">
+      <span className="text-muted-foreground">
+        יעד חיסכון{" "}
+        <span className="text-foreground font-semibold">
+          <Amount amount={headline.savings.actual} colorize={false} fractionDigits={0} /> מתוך{" "}
+          <Amount amount={headline.savings.target} colorize={false} fractionDigits={0} />
         </span>
-      )}
-      {headline.savings && (
-        <span className="text-muted-foreground">
-          יעד חיסכון{" "}
-          <span className="text-foreground font-semibold">
-            <Amount amount={headline.savings.actual} colorize={false} fractionDigits={0} /> מתוך{" "}
-            <Amount amount={headline.savings.target} colorize={false} fractionDigits={0} />
-          </span>
-          {headline.savings.verdict && (
-            <SavingsVerdictChip verdict={headline.savings.verdict} className="mr-1.5" />
-          )}
-        </span>
-      )}
+        {headline.savings.verdict && (
+          <SavingsVerdictChip verdict={headline.savings.verdict} className="mr-1.5" />
+        )}
+      </span>
     </div>
   );
 }
@@ -238,7 +239,7 @@ export function BudgetStatusCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <TargetsHeadline headline={headline} />
+        <SavingsHeadline headline={headline} />
         {budgets.length === 0 ? (
           <EmptyState
             icon={Wallet}
