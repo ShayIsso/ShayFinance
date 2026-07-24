@@ -52,15 +52,6 @@ const BANK_LABELS: Record<string, string> = {
   visaCal: "ויזה כאל",
 };
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("he-IL", {
-    style: "currency",
-    currency: "ILS",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
@@ -483,13 +474,15 @@ export function DashboardPanel({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p
-                  className={`text-2xl font-bold ${
-                    summary && summary.netSavings >= 0 ? "text-emerald-600" : "text-red-600"
-                  }`}
-                >
-                  {summary ? formatCurrency(summary.netSavings) : "—"}
-                </p>
+                {summary ? (
+                  <Amount
+                    amount={summary.netSavings}
+                    fractionDigits={0}
+                    className="text-2xl font-bold"
+                  />
+                ) : (
+                  <p className="text-2xl font-bold">—</p>
+                )}
               </CardContent>
             </Card>
 
@@ -502,7 +495,7 @@ export function DashboardPanel({
               <CardContent>
                 <p
                   className={`text-2xl font-bold ${
-                    summary && summary.savingsRate >= 0 ? "text-emerald-600" : "text-red-600"
+                    summary && summary.savingsRate >= 0 ? "text-pos" : "text-neg"
                   }`}
                 >
                   {summary ? formatPercent(summary.savingsRate) : "—"}
@@ -523,9 +516,16 @@ export function DashboardPanel({
                 <CardTitle className="text-muted-foreground text-sm font-medium">הושקע</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-blue-600">
-                  {summary ? formatCurrency(summary.investmentTotal) : "—"}
-                </p>
+                {summary ? (
+                  <Amount
+                    amount={summary.investmentTotal}
+                    fractionDigits={0}
+                    colorize={false}
+                    className="text-2xl font-bold"
+                  />
+                ) : (
+                  <p className="text-2xl font-bold">—</p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -537,9 +537,15 @@ export function DashboardPanel({
                 <CardTitle className="text-muted-foreground text-sm font-medium">הכנסות</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-emerald-600">
-                  {summary ? formatCurrency(summary.income) : "—"}
-                </p>
+                {summary ? (
+                  <Amount
+                    amount={summary.income}
+                    fractionDigits={0}
+                    className="text-2xl font-bold"
+                  />
+                ) : (
+                  <p className="text-2xl font-bold">—</p>
+                )}
               </CardContent>
             </Card>
 
@@ -548,9 +554,19 @@ export function DashboardPanel({
                 <CardTitle className="text-muted-foreground text-sm font-medium">הוצאות</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-red-600">
-                  {summary ? formatCurrency(summary.expenses) : "—"}
-                </p>
+                {summary ? (
+                  // summary.expenses is a stored positive magnitude (analytics sums
+                  // Math.abs), so sign-driven colorize would read it as positive money
+                  // and go emerald. Expenses are money-out: force the --neg token.
+                  <Amount
+                    amount={summary.expenses}
+                    fractionDigits={0}
+                    colorize={false}
+                    className="text-neg text-2xl font-bold"
+                  />
+                ) : (
+                  <p className="text-2xl font-bold">—</p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -587,15 +603,15 @@ export function DashboardPanel({
                           <Badge variant="outline" className="mb-1 text-xs">
                             {BANK_LABELS[acc.bankType] ?? acc.bankType}
                           </Badge>
-                          <p
-                            className={`text-sm font-semibold ${
-                              acc.balance !== null && acc.balance >= 0
-                                ? "text-emerald-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {acc.balance !== null ? formatCurrency(acc.balance) : "—"}
-                          </p>
+                          {acc.balance !== null ? (
+                            <Amount
+                              amount={acc.balance}
+                              fractionDigits={0}
+                              className="text-sm font-semibold"
+                            />
+                          ) : (
+                            <p className="text-sm font-semibold">—</p>
+                          )}
                           {acc.nextDebitDate && acc.balance !== 0 && (
                             <p className="text-muted-foreground mt-0.5 text-xs">
                               חיוב קרוב · {formatDebitDateHint(acc.nextDebitDate)}
@@ -662,13 +678,11 @@ export function DashboardPanel({
                               {tx.categoryName}
                             </Badge>
                           )}
-                          <span
-                            className={`text-sm font-semibold tabular-nums ${
-                              tx.chargedAmount >= 0 ? "text-emerald-600" : "text-red-600"
-                            }`}
-                          >
-                            {formatCurrency(tx.chargedAmount)}
-                          </span>
+                          <Amount
+                            amount={tx.chargedAmount}
+                            fractionDigits={0}
+                            className="text-sm font-semibold"
+                          />
                         </div>
                       </div>
                     ))}
