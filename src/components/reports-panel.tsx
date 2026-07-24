@@ -188,18 +188,18 @@ function BarCell({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-full bg-gray-100",
+        "bg-muted relative w-full overflow-hidden rounded-full",
         strong ? "h-1.5" : "h-1",
       )}
     >
       {showGhost && lastYear !== null && lastYear > 0 && (
         <div
-          className="absolute inset-y-0 right-0 rounded-full border border-dashed border-gray-400"
+          className="border-bar-strong absolute inset-y-0 right-0 rounded-full border border-dashed"
           style={{ width: max > 0 ? `${(lastYear / max) * 100}%` : "0%" }}
         />
       )}
       <div
-        className={cn("h-full rounded-full", strong ? "bg-gray-400" : "bg-gray-300")}
+        className={cn("h-full rounded-full", strong ? "bg-bar-strong" : "bg-bar")}
         style={{ width: max > 0 ? `${(amount / max) * 100}%` : "0%" }}
       />
     </div>
