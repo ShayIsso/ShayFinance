@@ -144,7 +144,7 @@ export function LastSyncStrip({ runs }: LastSyncStripProps) {
   if (runs.length === 0) return null;
 
   return (
-    <Card className="rounded-xl border border-zinc-200">
+    <Card>
       <CardHeader className="pt-4 pb-2">
         <CardTitle className="text-sm font-medium text-zinc-500">סנכרון אחרון</CardTitle>
       </CardHeader>
