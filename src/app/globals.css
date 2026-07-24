@@ -82,6 +82,8 @@
   --color-neg: var(--neg);
   --color-bar: var(--bar);
   --color-bar-strong: var(--bar-strong);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -149,7 +151,12 @@
   --pos: oklch(0.596 0.145 163);
   --neg: oklch(0.577 0.245 27);
 
-  /* Warning — amber tone, for pending/in-progress states only */
+  /* Warning — amber tone, for pending/in-progress/stale states only. Never a
+     "success" or "on track" signal; emerald stays positive-money-only.
+     Reach for it as a FILL (bg-warning + text-warning-foreground): amber at
+     this lightness fails small-text contrast against --card in light mode
+     (raised in the #108 design review), so text-warning is legible only at
+     larger sizes or on a neutral fill. */
   --warning: oklch(0.72 0.15 65);
   --warning-foreground: oklch(0.145 0 0);
 

@@ -2,15 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Inbox,
-  Repeat,
-  ChevronDown,
-  ChevronUp,
-  Wallet,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,12 +16,28 @@ import type {
   CategorySpendingNode,
   AccountBalance,
   RecentTransaction,
+  TopMerchant,
 } from "@/lib/analytics";
 import { LastSyncStrip } from "@/components/last-sync-strip";
 import type { SyncRunSummary } from "@/lib/sync/runs";
 import { GoalsProgressCard, type GoalProgressCardData } from "@/components/goals-progress-card";
 import { BudgetStatusCard, type BudgetChipData } from "@/components/budget-status-card";
-import type { BudgetStatus, MonthlyTargetsData, SavingsTargetStatus } from "@/lib/budgets";
+import type {
+  BudgetPace,
+  BudgetStatus,
+  MonthlyTargetsData,
+  SavingsTargetStatus,
+} from "@/lib/budgets";
+import type { TrendsMonthPoint, TrendsReport } from "@/lib/reports";
+import { PaceHero } from "@/components/dashboard/pace-hero";
+import { AttentionCounters, type AttentionCounts } from "@/components/dashboard/attention-counters";
+import { SyncFreshnessPill } from "@/components/dashboard/sync-freshness-pill";
+import { TrendMiniChart } from "@/components/dashboard/trend-mini-chart";
+import { TopMerchantsCard } from "@/components/dashboard/top-merchants-card";
+import {
+  UpcomingChargesCard,
+  type UpcomingCharge,
+} from "@/components/dashboard/upcoming-charges-card";
 
 const HEBREW_MONTHS = [
   "ינואר",
@@ -56,24 +64,18 @@ function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
-type UpcomingCharge = {
-  id: string;
-  merchant: string;
-  expectedAmount: number;
-  cadence: "monthly" | "quarterly" | "annual";
-  nextExpectedDate: string;
-};
-
 type BudgetsSummaryResponse = {
   budgets: BudgetStatus[];
   monthlyTargets: MonthlyTargetsData;
   savingsTarget: SavingsTargetStatus | null;
+  expenseTargetPace: BudgetPace | null;
 };
 
 const EMPTY_BUDGETS_SUMMARY: BudgetsSummaryResponse = {
   budgets: [],
   monthlyTargets: { expenseTarget: null, savingsTarget: null },
   savingsTarget: null,
+  expenseTargetPace: null,
 };
 
 type DashboardData = {
@@ -87,6 +89,25 @@ type DashboardData = {
   goals: GoalProgressCardData[];
   goalsSurplus: number;
   budgetsSummary: BudgetsSummaryResponse;
+  attention: AttentionCounts | null;
+  topMerchants: TopMerchant[];
+  trend: TrendsMonthPoint[];
+};
+
+const EMPTY_DASHBOARD_DATA: DashboardData = {
+  summary: null,
+  spending: [],
+  balances: [],
+  recent: [],
+  lastSyncRuns: [],
+  upcomingCharges: [],
+  upcomingTotal: 0,
+  goals: [],
+  goalsSurplus: 0,
+  budgetsSummary: EMPTY_BUDGETS_SUMMARY,
+  attention: null,
+  topMerchants: [],
+  trend: [],
 };
 
 type GoalsResponse = {
@@ -106,15 +127,23 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
     upcomingRes,
     goalsRes,
     budgetsSummaryRes,
+    attentionRes,
+    topMerchantsRes,
+    trendRes,
   ] = await Promise.all([
     fetch(`/api/analytics/monthly?year=${year}&month=${month}`),
     fetch(`/api/analytics/spending-rollup?year=${year}&month=${month}`),
     fetch(`/api/analytics/balances`),
-    fetch(`/api/analytics/recent?limit=15`),
+    // 8, not 15: the A′ layout puts the recent list in a half-width column
+    // beside Upcoming, and a 15-row column dwarfs it. "צפה בהכל" carries the rest.
+    fetch(`/api/analytics/recent?limit=8`),
     fetch(`/api/sync-runs`),
     fetch(`/api/recurring-upcoming`),
     fetch(`/api/goals`),
     fetch(`/api/budgets-summary?year=${year}&month=${month}`),
+    fetch(`/api/attention-counts`),
+    fetch(`/api/analytics/top-merchants?year=${year}&month=${month}`),
+    fetch(`/api/reports/trends?range=12`),
   ]);
 
   const [
@@ -126,6 +155,9 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
     upcomingData,
     goalsData,
     budgetsSummary,
+    attention,
+    topMerchants,
+    trendReport,
   ] = await Promise.all([
     summaryRes.ok ? summaryRes.json() : null,
     spendingRes.ok ? spendingRes.json() : [],
@@ -135,6 +167,9 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
     upcomingRes.ok ? upcomingRes.json() : { upcoming: [], total: 0 },
     goalsRes.ok ? (goalsRes.json() as Promise<GoalsResponse>) : EMPTY_GOALS_RESPONSE,
     budgetsSummaryRes.ok ? budgetsSummaryRes.json() : EMPTY_BUDGETS_SUMMARY,
+    attentionRes.ok ? (attentionRes.json() as Promise<AttentionCounts>) : null,
+    topMerchantsRes.ok ? topMerchantsRes.json() : [],
+    trendRes.ok ? (trendRes.json() as Promise<TrendsReport>) : null,
   ]);
 
   return {
@@ -148,108 +183,28 @@ async function fetchDashboardData(year: number, month: number): Promise<Dashboar
     goals: goalsData.goals ?? [],
     goalsSurplus: goalsData.surplus ?? 0,
     budgetsSummary,
+    attention,
+    topMerchants,
+    trend: trendReport?.months ?? [],
   };
 }
 
-const CADENCE_LABELS: Record<UpcomingCharge["cadence"], string> = {
-  monthly: "חודשי",
-  quarterly: "רבעוני",
-  annual: "שנתי",
-};
-
-// Dates formatted client-side to avoid hydration mismatch (CLAUDE.md rule)
-
-function formatUpcomingDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return new Intl.DateTimeFormat("he-IL", {
-    day: "2-digit",
-    month: "2-digit",
-  }).format(new Date(year, month - 1, day));
-}
-
-// Not formatUpcomingDate: the balances card wants an unpadded "day.month" ("9.8"),
-// not Intl's 2-digit form.
+// Dates formatted client-side to avoid hydration mismatch (CLAUDE.md rule).
+//
+// Not the upcoming-charges card's formatter: the balances card wants an
+// unpadded "day.month" ("9.8"), not Intl's 2-digit form.
 function formatDebitDateHint(isoDate: string): string {
   const [, month, day] = isoDate.split("-").map(Number);
   return `${day}.${month}`;
 }
 
-function UpcomingChargesCard({ charges, total }: { charges: UpcomingCharge[]; total: number }) {
-  const [expanded, setExpanded] = React.useState(false);
-
+function KpiTile({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Repeat className="h-4 w-4 text-emerald-600" strokeWidth={1.5} />
-            <CardTitle className="text-base font-semibold">חיובים קרובים</CardTitle>
-          </div>
-          {charges.length > 0 && (
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground text-xs">7 ימים הקרובים</span>
-              <Amount
-                amount={total}
-                currency="ILS"
-                colorize={false}
-                className="text-sm font-semibold tabular-nums"
-              />
-            </div>
-          )}
-        </div>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-muted-foreground text-sm font-medium">{label}</CardTitle>
       </CardHeader>
-      <CardContent>
-        {charges.length === 0 ? (
-          <p className="text-muted-foreground text-sm">אין חיובים חוזרים צפויים בשבוע הקרוב</p>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground text-sm">
-                {charges.length} חיוב{charges.length !== 1 ? "ים" : ""} צפוי
-                {charges.length !== 1 ? "ים" : ""}
-              </span>
-              <button
-                onClick={() => setExpanded((e) => !e)}
-                className="text-muted-foreground hover:text-foreground flex items-center gap-0.5 text-xs"
-                aria-expanded={expanded}
-              >
-                {expanded ? (
-                  <>
-                    הסתר
-                    <ChevronUp className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  </>
-                ) : (
-                  <>
-                    הצג פירוט
-                    <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  </>
-                )}
-              </button>
-            </div>
-            {expanded && (
-              <div className="divide-y rounded-md border">
-                {charges.map((charge) => (
-                  <div key={charge.id} className="flex items-center justify-between px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{charge.merchant}</p>
-                      <p className="text-muted-foreground text-xs">
-                        {CADENCE_LABELS[charge.cadence]} &middot;{" "}
-                        {formatUpcomingDate(charge.nextExpectedDate)}
-                      </p>
-                    </div>
-                    <Amount
-                      amount={charge.expectedAmount}
-                      currency="ILS"
-                      colorize={false}
-                      className="text-sm tabular-nums"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
+      <CardContent>{children}</CardContent>
     </Card>
   );
 }
@@ -264,18 +219,7 @@ export function DashboardPanel({
   const now = new Date();
   const [year, setYear] = React.useState(now.getFullYear());
   const [month, setMonth] = React.useState(now.getMonth() + 1);
-  const [data, setData] = React.useState<DashboardData>({
-    summary: null,
-    spending: [],
-    balances: [],
-    recent: [],
-    lastSyncRuns: [],
-    upcomingCharges: [],
-    upcomingTotal: 0,
-    goals: [],
-    goalsSurplus: 0,
-    budgetsSummary: EMPTY_BUDGETS_SUMMARY,
-  });
+  const [data, setData] = React.useState<DashboardData>(EMPTY_DASHBOARD_DATA);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -315,6 +259,9 @@ export function DashboardPanel({
     goals,
     goalsSurplus,
     budgetsSummary,
+    attention,
+    topMerchants,
+    trend,
   } = data;
 
   // Budgets only ever attach to expense-type categories (src/lib/budgets
@@ -360,24 +307,29 @@ export function DashboardPanel({
       {/*
        * .stagger is scoped to this month-nav/recon-strip/sync-strip block
        * only — none of these three depend on `loading`, so this wrapper's
-       * children never remount on the month-strip refetch below. The
-       * Goals/data slots past this point DO remount every refetch (the
-       * loading ternary swaps their JSX), so they stay unanimated (#202).
+       * children never remount on the month-strip refetch below. (The sync
+       * freshness pill lives *inside* the month-nav child, so it doesn't
+       * occupy a stagger position of its own.) The data slots past this point
+       * DO remount every refetch (the loading ternary swaps their JSX), so
+       * they stay unanimated (#202).
        */}
       <div className="stagger space-y-6">
-        {/* Month navigation */}
-        <div className="flex items-center justify-between">
+        {/* Header — month navigation + sync-freshness pill */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold tracking-tight">לוח בקרה</h2>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={nextMonth} aria-label="חודש הבא">
-              <ChevronRight className="size-4" />
-            </Button>
-            <span className="min-w-32 text-center text-sm font-medium">
-              {HEBREW_MONTHS[month - 1]} {year}
-            </span>
-            <Button variant="outline" size="icon" onClick={prevMonth} aria-label="חודש קודם">
-              <ChevronLeft className="size-4" />
-            </Button>
+          <div className="flex items-center gap-3">
+            <SyncFreshnessPill runs={lastSyncRuns} />
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={nextMonth} aria-label="חודש הבא">
+                <ChevronRight className="size-4" />
+              </Button>
+              <span className="min-w-32 text-center text-sm font-medium">
+                {HEBREW_MONTHS[month - 1]} {year}
+              </span>
+              <Button variant="outline" size="icon" onClick={prevMonth} aria-label="חודש קודם">
+                <ChevronLeft className="size-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -393,46 +345,27 @@ export function DashboardPanel({
           </Link>
         )}
 
-        {/* Last sync strip */}
+        {/* Last sync strip — superseded by the header pill in #207, which owns
+            removing it from the dashboard. */}
         {lastSyncRuns.length > 0 && <LastSyncStrip runs={lastSyncRuns} />}
       </div>
 
-      {/* Goals progress — independent of the month strip below (always
-          today's real month, per CONTEXT.md "savings goal"), so it renders
-          on its own loading cycle rather than waiting on month-scoped data. */}
-      {loading ? (
-        <Card>
-          <CardHeader className="pb-2">
-            <Skeleton className="h-4 w-24" />
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Skeleton className="h-2 w-full" />
-            <Skeleton className="h-2 w-full" />
-          </CardContent>
-        </Card>
-      ) : (
-        <GoalsProgressCard goals={goals} surplus={goalsSurplus} />
-      )}
-
       {loading ? (
         <div className="space-y-6">
-          {/* Summary cards skeleton */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Card key={`sk-summary-${i}`}>
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-32" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          {/* Income / Expenses skeleton */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <Card key={`sk-ie-${i}`}>
+          {/* Pace hero skeleton */}
+          <Card>
+            <CardHeader className="pb-2">
+              <Skeleton className="h-4 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-8 w-40" />
+              <Skeleton className="h-3 w-full" />
+            </CardContent>
+          </Card>
+          {/* KPI band skeleton */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={`sk-kpi-${i}`}>
                 <CardHeader className="pb-2">
                   <Skeleton className="h-4 w-20" />
                 </CardHeader>
@@ -442,7 +375,7 @@ export function DashboardPanel({
               </Card>
             ))}
           </div>
-          {/* Chart skeleton */}
+          {/* Breakdown skeleton */}
           <Card>
             <CardHeader>
               <Skeleton className="h-5 w-40" />
@@ -474,113 +407,83 @@ export function DashboardPanel({
         </Card>
       ) : (
         <div className="space-y-6 transition-opacity duration-150">
-          {/* Savings summary — 3 cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-muted-foreground text-sm font-medium">
-                  חיסכון נטו
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summary ? (
-                  <Amount
-                    amount={summary.netSavings}
-                    fractionDigits={0}
-                    className="text-2xl font-bold"
-                  />
-                ) : (
-                  <p className="text-2xl font-bold">—</p>
-                )}
-              </CardContent>
-            </Card>
+          {/* ── Monthly band — everything below is scoped to the month strip ── */}
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-muted-foreground text-sm font-medium">
-                  אחוז חיסכון
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p
-                  className={`text-2xl font-bold ${
-                    summary && summary.savingsRate >= 0 ? "text-pos" : "text-neg"
-                  }`}
-                >
-                  {summary ? formatPercent(summary.savingsRate) : "—"}
-                </p>
-                {summary && (
-                  <div className="bg-muted mt-2 h-2 overflow-hidden rounded-full">
-                    <div
-                      className="bg-bar-strong h-full rounded-full transition-all"
-                      style={{ width: `${Math.min(Math.max(summary.savingsRate, 0), 100)}%` }}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          <PaceHero pace={budgetsSummary.expenseTargetPace} />
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-muted-foreground text-sm font-medium">הושקע</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summary ? (
-                  <Amount
-                    amount={summary.investmentTotal}
-                    fractionDigits={0}
-                    colorize={false}
-                    className="text-2xl font-bold"
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <KpiTile label="הכנסות">
+              {summary ? (
+                <Amount amount={summary.income} fractionDigits={0} className="text-2xl font-bold" />
+              ) : (
+                <p className="text-2xl font-bold">—</p>
+              )}
+            </KpiTile>
+
+            <KpiTile label="הוצאות">
+              {summary ? (
+                // summary.expenses is a stored positive magnitude (analytics sums
+                // Math.abs), so sign-driven colorize would read it as positive money
+                // and go emerald. Expenses are money-out: force the --neg token.
+                <Amount
+                  amount={summary.expenses}
+                  fractionDigits={0}
+                  colorize={false}
+                  className="text-neg text-2xl font-bold"
+                />
+              ) : (
+                <p className="text-2xl font-bold">—</p>
+              )}
+            </KpiTile>
+
+            <KpiTile label="חיסכון נטו">
+              {summary ? (
+                <Amount
+                  amount={summary.netSavings}
+                  fractionDigits={0}
+                  className="text-2xl font-bold"
+                />
+              ) : (
+                <p className="text-2xl font-bold">—</p>
+              )}
+            </KpiTile>
+
+            <KpiTile label="אחוז חיסכון">
+              <p
+                className={`text-2xl font-bold ${
+                  summary && summary.savingsRate >= 0 ? "text-pos" : "text-neg"
+                }`}
+              >
+                {summary ? formatPercent(summary.savingsRate) : "—"}
+              </p>
+              {summary && (
+                <div className="bg-muted mt-2 h-2 overflow-hidden rounded-full">
+                  <div
+                    className="bg-bar-strong h-full rounded-full transition-all"
+                    style={{ width: `${Math.min(Math.max(summary.savingsRate, 0), 100)}%` }}
                   />
-                ) : (
-                  <p className="text-2xl font-bold">—</p>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+            </KpiTile>
           </div>
 
-          {/* Income / Expenses — 2 cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-muted-foreground text-sm font-medium">הכנסות</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summary ? (
-                  <Amount
-                    amount={summary.income}
-                    fractionDigits={0}
-                    className="text-2xl font-bold"
-                  />
-                ) : (
-                  <p className="text-2xl font-bold">—</p>
-                )}
-              </CardContent>
-            </Card>
+          <AttentionCounters counts={attention} />
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-muted-foreground text-sm font-medium">הוצאות</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summary ? (
-                  // summary.expenses is a stored positive magnitude (analytics sums
-                  // Math.abs), so sign-driven colorize would read it as positive money
-                  // and go emerald. Expenses are money-out: force the --neg token.
-                  <Amount
-                    amount={summary.expenses}
-                    fractionDigits={0}
-                    colorize={false}
-                    className="text-neg text-2xl font-bold"
-                  />
-                ) : (
-                  <p className="text-2xl font-bold">—</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          {/* Spending breakdown — group-first with drill-down (BGR5 #162). Sits
+              directly above budgets so the two monthly spend views are adjacent
+              (#108 gate adjudication). */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">הוצאות לפי קטגוריה</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SpendingBreakdown nodes={spending} />
+            </CardContent>
+          </Card>
 
-          {/* Budgets — pace chips + targets headline (BGR9 #166) */}
+          {/* Budgets — pace chips + targets headline (BGR9 #166). The duplicate
+              spend-vs-ceiling headline is dropped by #205, which makes the pace
+              hero the sole owner of that figure. */}
           <BudgetStatusCard
             budgets={budgetChips}
             targetsHeadline={{
@@ -590,10 +493,13 @@ export function DashboardPanel({
             }}
           />
 
-          {/* Upcoming charges */}
-          <UpcomingChargesCard charges={upcomingCharges} total={upcomingTotal} />
+          {/* ── Long-horizon band — month-independent widgets: goals always
+                track today's real month (CONTEXT.md "savings goal") and
+                balances are current-state, so the month strip doesn't scope
+                either of them. ── */}
 
-          {/* Account balances */}
+          <GoalsProgressCard goals={goals} surplus={goalsSurplus} />
+
           {balances.length > 0 && (
             <div>
               <h3 className="mb-3 text-base font-semibold">יתרות חשבון</h3>
@@ -635,70 +541,75 @@ export function DashboardPanel({
             </div>
           )}
 
-          {/* Spending breakdown — group-first with drill-down (BGR5 #162) */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">הוצאות לפי קטגוריה</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SpendingBreakdown nodes={spending} />
-            </CardContent>
-          </Card>
-
-          {/* Recent transactions */}
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold">עסקאות אחרונות</h3>
-              <Link href="/transactions" className="text-muted-foreground text-sm hover:underline">
-                צפה בהכל
-              </Link>
+          {/* Past | future activity, side by side */}
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-base font-semibold">עסקאות אחרונות</h3>
+                <Link
+                  href="/transactions"
+                  className="text-muted-foreground text-sm hover:underline"
+                >
+                  צפה בהכל
+                </Link>
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  {recent.length === 0 ? (
+                    <p className="text-muted-foreground p-4 text-sm">אין עסקאות להצגה</p>
+                  ) : (
+                    <div className="divide-y">
+                      {recent.map((tx) => (
+                        <div
+                          key={tx.id}
+                          className="flex items-center justify-between gap-3 px-4 py-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {tx.customDescription ?? tx.description}
+                            </p>
+                            <p className="text-muted-foreground text-xs">{tx.date}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {tx.categoryName && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs"
+                                style={
+                                  tx.categoryColor
+                                    ? {
+                                        borderColor: tx.categoryColor,
+                                        color: tx.categoryColor,
+                                      }
+                                    : undefined
+                                }
+                              >
+                                {tx.categoryName}
+                              </Badge>
+                            )}
+                            <Amount
+                              amount={tx.chargedAmount}
+                              fractionDigits={0}
+                              className="text-sm font-semibold"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-            <Card>
-              <CardContent className="p-0">
-                {recent.length === 0 ? (
-                  <p className="text-muted-foreground p-4 text-sm">אין עסקאות להצגה</p>
-                ) : (
-                  <div className="divide-y">
-                    {recent.map((tx) => (
-                      <div
-                        key={tx.id}
-                        className="flex items-center justify-between gap-3 px-4 py-3"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">
-                            {tx.customDescription ?? tx.description}
-                          </p>
-                          <p className="text-muted-foreground text-xs">{tx.date}</p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          {tx.categoryName && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs"
-                              style={
-                                tx.categoryColor
-                                  ? {
-                                      borderColor: tx.categoryColor,
-                                      color: tx.categoryColor,
-                                    }
-                                  : undefined
-                              }
-                            >
-                              {tx.categoryName}
-                            </Badge>
-                          )}
-                          <Amount
-                            amount={tx.chargedAmount}
-                            fractionDigits={0}
-                            className="text-sm font-semibold"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <div>
+              <h3 className="mb-3 text-base font-semibold">צפוי בהמשך</h3>
+              <UpcomingChargesCard charges={upcomingCharges} total={upcomingTotal} />
+            </div>
+          </div>
+
+          {/* Bottom band — secondary, backward-looking (full trend on דוחות) */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <TrendMiniChart months={trend} />
+            <TopMerchantsCard merchants={topMerchants} />
           </div>
         </div>
       )}
