@@ -26,8 +26,7 @@ describe("classifySyncFreshness", () => {
 
   it("classifies a same-day successful run as fresh", () => {
     const verdict = classifySyncFreshness([run({ bank: "discount", startedAt: hoursAgo(2) })], NOW);
-    expect(verdict.level).toBe("fresh");
-    expect(verdict.ageMs).toBe(2 * 60 * 60 * 1000);
+    expect(verdict).toEqual({ level: "fresh", ageMs: 2 * 60 * 60 * 1000 });
   });
 
   it("classifies a 2-day-old successful run as aging (neutral gap between manual syncs)", () => {
