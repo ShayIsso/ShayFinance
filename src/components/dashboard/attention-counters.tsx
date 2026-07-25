@@ -99,11 +99,20 @@ export function AttentionCounters({ counts }: AttentionCountersProps) {
             <Link
               key={key}
               href={href}
-              className="bg-warning text-warning-foreground press flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-opacity hover:opacity-90"
+              className="border-border text-foreground press hover:bg-muted flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors"
             >
               <Icon className="size-3.5" strokeWidth={1.5} />
               <span>{label}</span>
-              <span className="font-semibold">{count}</span>
+              {/* The stale-sync pill (#207) keeps the strongest amber (a full
+                  bg-warning fill) as the one genuinely time-sensitive signal;
+                  a row of four such pills read louder than the approved A′
+                  prototype (#227 item 1). These step down to the same
+                  neutral-bordered pill + amber-wash count badge as the
+                  budget card's "at-risk" chip (VERDICT_CHIP_CLASS), so the
+                  count alone carries the amber, not the whole pill. */}
+              <span className="border-warning/50 bg-warning/15 text-foreground rounded-full border px-1.5 py-0.5 text-xs font-semibold">
+                {count}
+              </span>
             </Link>
           ))}
         </div>

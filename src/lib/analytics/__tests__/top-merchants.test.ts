@@ -53,6 +53,40 @@ describe("computeTopMerchants", () => {
     expect(computeTopMerchants(txs)).toEqual([{ merchant: "סופרמרקט רמי לוי", amount: 200 }]);
   });
 
+  it("excludes a check-withdrawal descriptor even though it isn't transfer-shaped", () => {
+    const txs: MerchantTransaction[] = [
+      { description: "משיכת שיק:0000", chargedAmount: -2500, categoryType: "expense" },
+      { description: "בית קפה קטן", chargedAmount: -122.49, categoryType: "expense" },
+    ];
+    const result = computeTopMerchants(txs);
+    expect(result).toEqual([{ merchant: "בית קפה קטן", amount: 122.49 }]);
+  });
+
+  it("does not exclude an unrelated descriptor that merely contains שיק as a substring", () => {
+    // A cheque-book service fee mentions שיקים (plural), not the two-token
+    // "משיכת שיק" phrase — must still rank as ordinary expense noise, not be
+    // silently dropped by an over-broad match.
+    const txs: MerchantTransaction[] = [
+      { description: "עמלת פנקסי שיקים אישיים", chargedAmount: -16, categoryType: "expense" },
+    ];
+    expect(computeTopMerchants(txs)).toEqual([{ merchant: "עמלת פנקסי שיקים אישיים", amount: 16 }]);
+  });
+
+  it("leaves other rows' amounts and ordering untouched when a check-withdrawal row is excluded", () => {
+    const txs: MerchantTransaction[] = [
+      { description: "משיכת שיק:0001", chargedAmount: -2500, categoryType: "expense" },
+      { description: "בית קפה קטן", chargedAmount: -20, categoryType: "expense" },
+      { description: "סופרמרקט רמי לוי", chargedAmount: -500, categoryType: "expense" },
+      { description: "תחנת דלק", chargedAmount: -200, categoryType: "expense" },
+    ];
+    const result = computeTopMerchants(txs);
+    expect(result).toEqual([
+      { merchant: "סופרמרקט רמי לוי", amount: 500 },
+      { merchant: "תחנת דלק", amount: 200 },
+      { merchant: "בית קפה קטן", amount: 20 },
+    ]);
+  });
+
   it("ranks merchants descending by total spend", () => {
     const txs: MerchantTransaction[] = [
       { description: "בית קפה קטן", chargedAmount: -20, categoryType: "expense" },
