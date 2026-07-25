@@ -15,6 +15,7 @@ function run(overrides: Partial<SyncRunSummary> & Pick<SyncRunSummary, "bank">):
     transactionsImported: 0,
     startedAt: hoursAgo(1),
     finishedAt: hoursAgo(1),
+    errorMessage: null,
     ...overrides,
   };
 }

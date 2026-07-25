@@ -24,6 +24,15 @@ export type SyncRunSummary = {
   transactionsImported: number;
   startedAt: Date;
   finishedAt: Date | null;
+  /**
+   * Already passed through `redact()` at write time (see `failSyncRun`) —
+   * safe to surface as-is. Widened onto the summary (rather than a second
+   * read) because `getLastRunPerBank` is already a single per-bank row
+   * select; adding one column costs nothing and keeps `/sync` (#223) reading
+   * from the same shape the dashboard pill does. Null for every non-error
+   * status and for error runs raised before this field existed.
+   */
+  errorMessage: string | null;
 };
 
 // ── Store interface ───────────────────────────────────────────────────────────
@@ -74,6 +83,7 @@ export function makeDrizzleSyncRunStore(): SyncRunStore {
           transactionsImported: syncRuns.transactionsImported,
           startedAt: syncRuns.startedAt,
           finishedAt: syncRuns.finishedAt,
+          errorMessage: syncRuns.errorMessage,
         })
         .from(syncRuns)
         .orderBy(syncRuns.bank, desc(syncRuns.startedAt));

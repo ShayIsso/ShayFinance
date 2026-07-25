@@ -44,6 +44,7 @@ function makeInMemoryStore(): SyncRunStore & { rows: Map<string, SyncRunRow> } {
         transactionsImported: r.transactionsImported,
         startedAt: r.startedAt,
         finishedAt: r.finishedAt,
+        errorMessage: r.errorMessage,
       }));
     },
   };
