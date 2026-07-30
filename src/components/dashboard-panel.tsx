@@ -538,7 +538,7 @@ export function DashboardPanel({ categories }: { categories: Category[] }) {
                       {recent.map((tx) => (
                         <div
                           key={tx.id}
-                          className="flex items-center justify-between gap-3 px-4 py-3"
+                          className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                         >
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium">
@@ -546,7 +546,7 @@ export function DashboardPanel({ categories }: { categories: Category[] }) {
                             </p>
                             <p className="text-muted-foreground text-xs">{tx.date}</p>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                             {tx.categoryName && (
                               <Badge
                                 variant="outline"

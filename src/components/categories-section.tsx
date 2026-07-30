@@ -350,23 +350,23 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
     return (
       <div
         key={cat.id}
-        className={`flex items-center justify-between gap-3 px-4 py-3 ${opts.indent ? "ps-10" : ""}`}
+        className={`flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${opts.indent ? "ps-10" : ""}`}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div
             className="flex size-8 shrink-0 items-center justify-center rounded-md"
             style={{ backgroundColor: `${cat.color}20` }}
           >
             <CategoryIcon name={cat.icon} color={cat.color} />
           </div>
-          <span className="text-sm font-medium">{cat.name}</span>
+          <span className="truncate text-sm font-medium">{cat.name}</span>
           <span
-            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_CLASSES[cat.type]}`}
+            className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium ${TYPE_CLASSES[cat.type]}`}
           >
             {TYPE_LABELS[cat.type]}
           </span>
           {opts.isGroup && (
-            <span className="text-muted-foreground inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-xs font-medium">
+            <span className="text-muted-foreground inline-flex shrink-0 items-center rounded-full border border-dashed px-2 py-0.5 text-xs font-medium">
               קבוצה
             </span>
           )}
@@ -376,7 +376,7 @@ export function CategoriesSection({ initialCategories }: { initialCategories: Ca
             title={cat.color}
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
           {opts.indent && (
             <Button
               variant="outline"

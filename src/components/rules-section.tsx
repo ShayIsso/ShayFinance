@@ -289,7 +289,10 @@ export function RulesSection({
                 </p>
               )}
               {filteredRules.map((rule) => (
-                <div key={rule.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div
+                  key={rule.id}
+                  className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                >
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium ${MATCH_TYPE_CLASSES[rule.matchType]}`}
@@ -306,7 +309,7 @@ export function RulesSection({
                       עדיפות: {rule.priority}
                     </span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                     <Button variant="outline" size="sm" onClick={() => openApply(rule)}>
                       יישום על קיימים
                     </Button>

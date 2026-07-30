@@ -263,17 +263,20 @@ export function BudgetsSection({
             {budgets.map((budget) => {
               const category = categoryById.get(budget.categoryId);
               return (
-                <div key={budget.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="flex items-center gap-3">
+                <div
+                  key={budget.id}
+                  className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
                     <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-md">
                       <Wallet className="size-4" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-1.5 text-sm font-medium">
                         {category && <CategoryDot color={category.color} />}
-                        {category?.name ?? "קטגוריה לא ידועה"}
+                        <span className="truncate">{category?.name ?? "קטגוריה לא ידועה"}</span>
                         {category && groupIds.has(category.id) && (
-                          <span className="text-muted-foreground inline-flex items-center rounded-full border border-dashed px-2 py-0.5 text-xs font-medium">
+                          <span className="text-muted-foreground inline-flex shrink-0 items-center rounded-full border border-dashed px-2 py-0.5 text-xs font-medium">
                             קבוצה
                           </span>
                         )}
@@ -283,7 +286,7 @@ export function BudgetsSection({
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                     <Button variant="outline" size="sm" onClick={() => openEdit(budget)}>
                       ערוך
                     </Button>

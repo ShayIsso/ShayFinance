@@ -382,7 +382,10 @@ export function GoalsSection({
             const status = statusById.get(goal.id);
             const complete = isComplete(goal);
             return (
-              <div key={goal.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div
+                key={goal.id}
+                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+              >
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex flex-col">
                     <Button
@@ -433,7 +436,7 @@ export function GoalsSection({
                     </div>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
                   <Button variant="outline" size="sm" onClick={() => openEdit(goal)}>
                     ערוך
                   </Button>
@@ -481,10 +484,12 @@ export function GoalsSection({
               {archivedGoals.map((goal) => (
                 <div
                   key={goal.id}
-                  className="text-muted-foreground flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                  className="text-muted-foreground flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                 >
                   <span className="truncate">{goal.name}</span>
-                  <Amount amount={goal.targetAmount} colorize={false} fractionDigits={0} />
+                  <span className="shrink-0 self-end sm:self-auto">
+                    <Amount amount={goal.targetAmount} colorize={false} fractionDigits={0} />
+                  </span>
                 </div>
               ))}
             </div>
