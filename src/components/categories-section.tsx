@@ -163,12 +163,14 @@ const TYPE_LABELS: Record<CategoryType, string> = {
   ignore: "התעלם",
 };
 
+// income/expense/investment keep deliberate categorical palette colors (parallel
+// to DeltaChip's #168 semantics) — not dark-adaptation oversights, do not sweep.
 const TYPE_CLASSES: Record<CategoryType, string> = {
   income: "bg-emerald-100 text-emerald-800 border-emerald-200",
   expense: "bg-red-100 text-red-800 border-red-200",
   investment: "bg-blue-100 text-blue-800 border-blue-200",
-  transfer: "bg-muted text-muted-foreground border",
-  ignore: "bg-muted text-muted-foreground border",
+  transfer: "bg-muted text-muted-foreground",
+  ignore: "bg-muted text-muted-foreground",
 };
 
 // Sentinel for the "no parent — root category" Select option (ADR-0011: a
