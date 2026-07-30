@@ -80,11 +80,11 @@ function GroupSummary({ members }: { members: InboxMember[] }) {
     const detailsTotal = details.reduce((sum, d) => sum + d.chargedAmount, 0);
     return (
       <p className="text-muted-foreground text-sm">
-        <span className="font-medium text-zinc-800">{formatCurrency(lump.chargedAmount)}</span>
+        <span className="text-foreground font-medium">{formatCurrency(lump.chargedAmount)}</span>
         {" חיוב בנקאי "}
-        <span className="text-zinc-500">&#8596;</span>
+        <span className="text-muted-foreground">&#8596;</span>
         {` ${details.length} תנועות כרטיס בסך `}
-        <span className="font-medium text-zinc-800">{formatCurrency(detailsTotal)}</span>
+        <span className="text-foreground font-medium">{formatCurrency(detailsTotal)}</span>
         {". אשר?"}
       </p>
     );
@@ -95,10 +95,10 @@ function GroupSummary({ members }: { members: InboxMember[] }) {
     const [a, b] = pairs;
     return (
       <p className="text-muted-foreground text-sm">
-        <span className="font-medium text-zinc-800">{formatCurrency(a.chargedAmount)}</span>
+        <span className="text-foreground font-medium">{formatCurrency(a.chargedAmount)}</span>
         {` ב${BANK_LABELS[a.bankType] ?? a.bankType}`}
-        <span className="text-zinc-500"> &#8596; </span>
-        <span className="font-medium text-zinc-800">{formatCurrency(b.chargedAmount)}</span>
+        <span className="text-muted-foreground"> &#8596; </span>
+        <span className="text-foreground font-medium">{formatCurrency(b.chargedAmount)}</span>
         {` ב${BANK_LABELS[b.bankType] ?? b.bankType}`}
         {` (${formatDate(a.date)}). אשר?`}
       </p>
@@ -204,7 +204,7 @@ function GroupCard({
                 </Badge>
                 <span
                   className={`text-xs font-semibold tabular-nums ${
-                    member.chargedAmount >= 0 ? "text-emerald-600" : "text-red-600"
+                    member.chargedAmount >= 0 ? "text-pos" : "text-neg"
                   }`}
                 >
                   {formatCurrency(member.chargedAmount)}

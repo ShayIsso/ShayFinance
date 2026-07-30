@@ -145,7 +145,7 @@ function AnomalyStrip({
   if (totalAnomalies === 0) return null;
 
   return (
-    <div className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+    <div className="bg-muted/50 mb-4 rounded-lg border p-4">
       <div className="flex flex-wrap gap-4 text-sm">
         {alerts.priceChanges.length > 0 && (
           <button
@@ -202,8 +202,8 @@ function AnomalyStrip({
             onClick={() => onFilterChange(activeFilter === "dormant" ? "all" : "dormant")}
             className={`flex items-center gap-1.5 rounded px-2 py-1 transition-colors ${
               activeFilter === "dormant"
-                ? "bg-zinc-200 text-zinc-800"
-                : "text-zinc-600 hover:bg-zinc-100"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted"
             }`}
           >
             <CircleSlash className="h-3.5 w-3.5" />
@@ -250,9 +250,12 @@ function NamingForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-2 space-y-2 rounded border bg-white p-3 text-sm">
+    <form onSubmit={handleSubmit} className="bg-card mt-2 space-y-2 rounded border p-3 text-sm">
       <div>
-        <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`name-${subId}`}>
+        <label
+          className="text-muted-foreground mb-1 block text-xs font-medium"
+          htmlFor={`name-${subId}`}
+        >
           שם המנוי
         </label>
         <input
@@ -261,20 +264,23 @@ function NamingForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="לדוגמה: ספוטיפיי"
-          className="w-full rounded border border-zinc-300 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none"
+          className="border-input bg-background focus:border-ring w-full rounded border px-2 py-1 text-sm focus:outline-none"
           dir="rtl"
         />
       </div>
       {categories.length > 0 && (
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor={`cat-${subId}`}>
+          <label
+            className="text-muted-foreground mb-1 block text-xs font-medium"
+            htmlFor={`cat-${subId}`}
+          >
             קטגוריה (אופציונלי)
           </label>
           <select
             id={`cat-${subId}`}
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded border border-zinc-300 px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none"
+            className="border-input bg-background focus:border-ring w-full rounded border px-2 py-1 text-sm focus:outline-none"
             dir="rtl"
           >
             <option value="">ללא קטגוריה</option>
@@ -286,7 +292,7 @@ function NamingForm({
           </select>
         </div>
       )}
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-destructive text-xs">{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={isPending} className="h-7 text-xs">
           {isPending ? "שומר..." : "אשר"}
@@ -406,8 +412,8 @@ function AnomalyDetail({
         </div>
       )}
       {dormantAlert && (
-        <div className="rounded border border-zinc-200 bg-zinc-50 p-2">
-          <p className="mb-1.5 font-medium text-zinc-700">
+        <div className="bg-muted/50 rounded border p-2">
+          <p className="text-foreground mb-1.5 font-medium">
             {"לא זוהה חיוב מאז "}
             {formatDateObj(dormantAlert.nextExpectedDate)}
             {` (מעל ${dormantAlert.daysOverdue} ימים) — ייתכן שהמנוי בוטל`}
@@ -416,7 +422,7 @@ function AnomalyDetail({
             <Button
               variant="outline"
               size="sm"
-              className="h-6 border-zinc-300 text-xs text-zinc-700 hover:bg-zinc-100"
+              className="h-6 text-xs"
               disabled={isPending}
               onClick={() => onCancel(rowId)}
             >
@@ -482,7 +488,7 @@ function AnomalyBadge({ rowId, alerts }: { rowId: string; alerts: AnomalyAlerts 
   // cancelled", not merely a one-off missed payment.
   if (hasDormant) {
     return (
-      <Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-xs text-zinc-600">
+      <Badge variant="outline" className="bg-muted text-muted-foreground text-xs">
         לא פעיל
       </Badge>
     );
@@ -632,7 +638,7 @@ export function SubscriptionsTable({
 
       {/* Filter tabs */}
       {hasAnomalies && (
-        <div className="flex flex-wrap gap-1 border-b border-zinc-200 pb-2">
+        <div className="flex flex-wrap gap-1 border-b pb-2">
           {(
             [
               "all",
@@ -660,8 +666,8 @@ export function SubscriptionsTable({
                 onClick={() => setActiveFilter(tab)}
                 className={`rounded px-3 py-1 text-sm transition-colors ${
                   activeFilter === tab
-                    ? "bg-zinc-900 text-white"
-                    : "text-zinc-600 hover:bg-zinc-100"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {FILTER_LABELS[tab]}

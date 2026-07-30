@@ -167,8 +167,8 @@ const TYPE_CLASSES: Record<CategoryType, string> = {
   income: "bg-emerald-100 text-emerald-800 border-emerald-200",
   expense: "bg-red-100 text-red-800 border-red-200",
   investment: "bg-blue-100 text-blue-800 border-blue-200",
-  transfer: "bg-gray-100 text-gray-600 border-gray-200",
-  ignore: "bg-gray-100 text-gray-500 border-gray-200",
+  transfer: "bg-muted text-muted-foreground border",
+  ignore: "bg-muted text-muted-foreground border",
 };
 
 // Sentinel for the "no parent — root category" Select option (ADR-0011: a
