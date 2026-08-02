@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildTargetsHeadline,
   countByVerdict,
+  targetsHeadlineIsEmpty,
   VERDICT_LABEL,
   VERDICT_CHIP_CLASS,
 } from "@/components/budget-status-card";
@@ -103,5 +104,43 @@ describe("buildTargetsHeadline", () => {
       verdict: "met",
       monthClosed: true,
     });
+  });
+});
+
+describe("targetsHeadlineIsEmpty", () => {
+  it("is empty when neither target is set", () => {
+    const headline = buildTargetsHeadline({
+      expenseTarget: null,
+      expenseActual: 500,
+      savingsTarget: null,
+    });
+    expect(targetsHeadlineIsEmpty(headline)).toBe(true);
+  });
+
+  it("is not empty with only an expense target set", () => {
+    const headline = buildTargetsHeadline({
+      expenseTarget: 1000,
+      expenseActual: 500,
+      savingsTarget: null,
+    });
+    expect(targetsHeadlineIsEmpty(headline)).toBe(false);
+  });
+
+  it("is not empty with only a savings target set", () => {
+    const headline = buildTargetsHeadline({
+      expenseTarget: null,
+      expenseActual: 0,
+      savingsTarget: { target: 3000, netSavings: 1200, monthClosed: false, verdict: null },
+    });
+    expect(targetsHeadlineIsEmpty(headline)).toBe(false);
+  });
+
+  it("is not empty with both targets set", () => {
+    const headline = buildTargetsHeadline({
+      expenseTarget: 1000,
+      expenseActual: 500,
+      savingsTarget: { target: 3000, netSavings: 1200, monthClosed: false, verdict: null },
+    });
+    expect(targetsHeadlineIsEmpty(headline)).toBe(false);
   });
 });

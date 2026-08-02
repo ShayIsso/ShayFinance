@@ -147,28 +147,66 @@ export function countByVerdict(budgets: { verdict: BudgetVerdict }[]): VerdictCo
 }
 
 /**
- * Renders only the savings-target line. The expense-target line (spend vs.
- * ceiling) is deliberately never rendered here — #205 makes the pace hero the
- * sole owner of that comparison; `TargetsHeadlineViewModel.expense` still
- * flows through `buildTargetsHeadline` (the dashboard panel's props still
- * hand it in) but this card no longer surfaces it. No ceiling phrasing
- * belongs on this card.
+ * True when the targets headline has nothing to show. Shared by
+ * `TargetsHeadline`'s null-return and the card's expand-by-default init
+ * (#227) so the two "is there a headline?" checks can't drift — #234
+ * restored the expense line below, widening "headline-less" from
+ * savings-only to both-sides-null.
  */
-function SavingsHeadline({ headline }: { headline: TargetsHeadlineViewModel }) {
-  if (!headline.savings) return null;
+export function targetsHeadlineIsEmpty(headline: TargetsHeadlineViewModel): boolean {
+  return headline.expense === null && headline.savings === null;
+}
+
+/**
+ * Renders the expense-target line (if set) then the savings-target line (if
+ * set). #205 dropped the expense line from this card, making the pace hero
+ * the sole owner of the spend-vs-ceiling comparison; #234 consciously
+ * supersedes that. The hero's figure is a pace VERDICT (projected against
+ * days elapsed in the month); this line is `buildTargetsHeadline`'s plain
+ * actual-vs-target readout (`expense.over`, pinned as not-a-verdict) — no
+ * chip, so it can't be mistaken for the hero's treatment. Returns null only
+ * when `targetsHeadlineIsEmpty`.
+ */
+function TargetsHeadline({ headline }: { headline: TargetsHeadlineViewModel }) {
+  if (targetsHeadlineIsEmpty(headline)) return null;
 
   return (
-    <div className="border-b pb-3 text-sm">
-      <span className="text-muted-foreground">
-        יעד חיסכון{" "}
-        <span className="text-foreground font-semibold">
-          <Amount amount={headline.savings.actual} colorize={false} fractionDigits={0} /> מתוך{" "}
-          <Amount amount={headline.savings.target} colorize={false} fractionDigits={0} />
-        </span>
-        {headline.savings.verdict && (
-          <SavingsVerdictChip verdict={headline.savings.verdict} className="mr-1.5" />
-        )}
-      </span>
+    <div className="space-y-1.5 border-b pb-3 text-sm">
+      {headline.expense && (
+        <div>
+          <span className="text-muted-foreground">
+            יעד הוצאות{" "}
+            <span className="text-foreground font-semibold">
+              {/* Sign-ternary over the plain over/under comparison — the
+                  sanctioned secondary form for money-color tokens when
+                  <Amount>'s own colorize can't apply (globals.css, #219).
+                  Only the actual figure takes the color; the target stays
+                  neutral like the savings line. */}
+              <Amount
+                amount={headline.expense.actual}
+                colorize={false}
+                fractionDigits={0}
+                className={headline.expense.over ? "text-neg" : undefined}
+              />{" "}
+              מתוך <Amount amount={headline.expense.target} colorize={false} fractionDigits={0} />
+            </span>
+          </span>
+        </div>
+      )}
+      {headline.savings && (
+        <div>
+          <span className="text-muted-foreground">
+            יעד חיסכון{" "}
+            <span className="text-foreground font-semibold">
+              <Amount amount={headline.savings.actual} colorize={false} fractionDigits={0} /> מתוך{" "}
+              <Amount amount={headline.savings.target} colorize={false} fractionDigits={0} />
+            </span>
+            {headline.savings.verdict && (
+              <SavingsVerdictChip verdict={headline.savings.verdict} className="mr-1.5" />
+            )}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -228,13 +266,15 @@ export function BudgetStatusCard({
 }) {
   const headline = buildTargetsHeadline(targetsHeadline);
   const counts = countByVerdict(budgets);
-  // With no savings target configured, SavingsHeadline renders nothing and
-  // the collapsed-by-default Variant C (#166) would leave only a chip row +
+  // With neither target configured, TargetsHeadline renders nothing and the
+  // collapsed-by-default Variant C (#166) would leave only a chip row +
   // chevron — the card's one line of real content is the per-budget
   // breakdown, so start expanded rather than hiding it behind a click (#227
-  // item 2). This is a default only: the user's own expand/collapse choice
-  // still wins for the rest of the session.
-  const [expanded, setExpanded] = React.useState(() => headline.savings === null);
+  // item 2). #234 widened "headline-less" from savings-only to both-null via
+  // `targetsHeadlineIsEmpty`, since an expense-only headline is real content
+  // too. This is a default only: the user's own expand/collapse choice still
+  // wins for the rest of the session.
+  const [expanded, setExpanded] = React.useState(() => targetsHeadlineIsEmpty(headline));
 
   return (
     <Card>
@@ -245,7 +285,7 @@ export function BudgetStatusCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <SavingsHeadline headline={headline} />
+        <TargetsHeadline headline={headline} />
         {budgets.length === 0 ? (
           <EmptyState
             icon={Wallet}

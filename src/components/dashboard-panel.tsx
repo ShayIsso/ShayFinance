@@ -457,9 +457,12 @@ export function DashboardPanel({ categories }: { categories: Category[] }) {
             </CardContent>
           </Card>
 
-          {/* Budgets — pace chips + targets headline (BGR9 #166). The duplicate
-              spend-vs-ceiling headline is dropped by #205, which makes the pace
-              hero the sole owner of that figure. */}
+          {/* Budgets — pace chips + targets headline (BGR9 #166). #205 dropped
+              the spend-vs-ceiling headline from this card, giving the pace
+              hero sole ownership of that figure; #234 consciously supersedes
+              that and restores a plain actual-vs-target expense line here,
+              distinct from the hero's pace verdict (see TargetsHeadline in
+              budget-status-card.tsx). */}
           <BudgetStatusCard
             budgets={budgetChips}
             targetsHeadline={{
