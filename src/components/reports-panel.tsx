@@ -307,7 +307,7 @@ type SummaryMetric = {
   asPercentagePoints?: boolean;
   /** Net savings is emphasized (bold row) and colored by sign. */
   strong?: boolean;
-  /** Optional color for the current-value cell (net savings by sign; investment blue). */
+  /** Optional color for the current-value cell (net savings by sign). Investment stays neutral. */
   currentClass?: (v: number) => string;
 };
 
@@ -324,7 +324,7 @@ function summaryMetrics(s: MonthlyReport["summary"]): SummaryMetric[] {
       good: "up",
       format: formatILS,
       strong: true,
-      currentClass: (v) => (v >= 0 ? "text-emerald-600" : "text-red-600"),
+      currentClass: (v) => (v >= 0 ? "text-pos" : "text-neg"),
     },
     {
       key: "savingsRate",
@@ -340,7 +340,6 @@ function summaryMetrics(s: MonthlyReport["summary"]): SummaryMetric[] {
       value: s.investment,
       good: "neutral",
       format: formatILS,
-      currentClass: () => "text-blue-600",
     },
   ];
 }
@@ -840,7 +839,7 @@ function LegendSwatch({
 
 // Neutral sparkline bars; the category dot on the row is the differentiation
 // mechanism (palette law), so every bar here stays gray. This is NOT a skeleton
-// — bg-gray-400 keeps the bars clearly readable (bg-gray-200 read as a loading
+// — bg-bar-strong keeps the bars clearly readable (bg-muted read as a loading
 // placeholder). Each row normalizes to its own max so the trend SHAPE reads;
 // magnitude is the amount + delta columns beside it. Hovering a bar surfaces its
 // month + that month's amount (client-side formatting, RTL).
@@ -852,7 +851,7 @@ function MiniBars({ amounts, months }: { amounts: number[]; months: ReportMonth[
       {amounts.map((a, i) => (
         <div
           key={i}
-          className="min-w-[3px] flex-1 rounded-sm bg-gray-400 hover:bg-gray-500"
+          className="bg-bar-strong min-w-[3px] flex-1 rounded-sm hover:opacity-80"
           style={{ height: max > 0 ? `${Math.max(8, (a / max) * 100)}%` : "8%" }}
           onMouseEnter={() => setHover(i)}
           onMouseLeave={() => setHover((h) => (h === i ? null : h))}
@@ -973,14 +972,12 @@ function YearRowsTable({ years }: { years: TrendsYearRow[] }) {
             <TableCell
               className={cn(
                 "text-left font-semibold tabular-nums",
-                y.netSavings >= 0 ? "text-emerald-600" : "text-red-600",
+                y.netSavings >= 0 ? "text-pos" : "text-neg",
               )}
             >
               {formatILS(y.netSavings)}
             </TableCell>
-            <TableCell className="text-left text-blue-600 tabular-nums">
-              {formatILS(y.investment)}
-            </TableCell>
+            <TableCell className="text-left tabular-nums">{formatILS(y.investment)}</TableCell>
           </TableRow>
         ))}
       </TableBody>

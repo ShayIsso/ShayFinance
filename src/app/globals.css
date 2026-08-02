@@ -147,7 +147,9 @@
   --emerald-foreground: oklch(1 0 0);
 
   /* Money-color source of truth (#109 sheet): --pos = positive money (emerald),
-     --neg = negative money (red). <Amount> is the sole consumer via text-pos/text-neg. */
+     --neg = negative money (red). <Amount> is the primary consumer via text-pos/
+     text-neg; a sign-driven ternary (v >= 0 ? "text-pos" : "text-neg") is the
+     sanctioned secondary form where <Amount> itself doesn't fit. */
   --pos: oklch(0.596 0.145 163);
   --neg: oklch(0.577 0.245 27);
 
