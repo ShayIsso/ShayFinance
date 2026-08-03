@@ -210,6 +210,33 @@ The דוחות monthly report's per-category-budget and savings-target results f
 
 ---
 
+## Recurring-charges vocabulary (Phase 3)
+
+### `recurring series`
+
+A detected repeating charge (subscription, standing order, membership) persisted in `recurring_expenses`, keyed by a fingerprint of (merchant, amount bucket, cadence). `cadence` is its repeat interval: monthly, quarterly, or annual.
+_Avoid_: subscription (a series need not be a subscription — standing orders and fees qualify)
+
+### `liveness evidence` — load-bearing
+
+The only admissible input for judging whether a series is live: the most recent money-out transaction whose normalized merchant matches the series' `merchant`. The stored `next_expected_date` is **never** lifecycle input — it is a detection-time display artifact. See [ADR-0012](./docs/adr/0012-evidence-based-derived-recurring-lifecycle.md).
+
+### `live` / `dead` — load-bearing
+
+A series is **live** when its silence is under the death threshold, **dead** otherwise. The verdict is derived at read time and never persisted — `status: active` means "not user-retired", not "alive". Explicit user cancel is the only persisted death. Dead-but-uncancelled series surface as dormant alerts for owner adjudication.
+_Avoid_: retired, expired (as automated states)
+
+### `silence` and the `death threshold`
+
+**Silence** is days elapsed since a series' last observed matching charge. The **death threshold** is 1.5× the cadence interval (monthly ≈ 45d, quarterly ≈ 137d, annual ≈ 548d) — one shared constant with the dormant/missed anomaly detectors, so a series can never be simultaneously "dormant" on one page and "upcoming" on another. Liveness matching is amount-agnostic: price changes must not kill a series.
+
+### `projected charge` — load-bearing
+
+A forward forecast entry for a live series: projected date = last observed charge + cadence interval; expected amount = rolling average of recent observed charges. Both computed from liveness evidence, never read from stored columns. A projected date in the past (series late but not yet dead) is still shown, first — "expected any day". The upcoming-charges forecast horizon is 31 days, so every live monthly series appears exactly once.
+_Avoid_: fabricated charge (a projection for a dead series — the #192 defect; must never render)
+
+---
+
 ## Architectural vocabulary
 
 ### `deep module`
@@ -239,7 +266,6 @@ Every API route and Server Action validates input through a Zod schema co-locate
 ## What's deliberately not here
 
 - **Reconciliation patterns (P1/P2/P3, confidence scores)** — Phase 2 work in progress. `/grill-with-docs` will capture these terms during reconciliation planning, not before.
-- **Recurring detection vocabulary (cadence, anomaly, next expected date)** — same; capture during recurring-detection planning.
 - **Module file layouts and test surfaces** — read the code: `src/lib/*/index.ts` is each module's public interface. [`ARCHITECTURE.md`](./ARCHITECTURE.md) is the frozen Phase 2 blueprint (historical record, not living truth).
 - **Architectural decisions and their rationale** — see [`docs/adr/`](./docs/adr/). Cross-check before contradicting.
 - **Deferred features** — see [`BACKLOG.md`](./BACKLOG.md).
