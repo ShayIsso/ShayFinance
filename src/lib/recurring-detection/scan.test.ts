@@ -15,8 +15,8 @@ function makePattern(
 ): PersistedRecurringPattern {
   return {
     id: overrides.id,
-    merchant: overrides.merchant ?? "netflix",
-    expectedAmount: overrides.expectedAmount ?? 39.9,
+    merchant: overrides.merchant ?? "acme-stream",
+    expectedAmount: overrides.expectedAmount ?? 100,
     cadence: overrides.cadence ?? "monthly",
     occurrenceDates: overrides.occurrenceDates ?? [],
     lastMatchedTxnId: overrides.lastMatchedTxnId ?? "txn-abc",
@@ -43,6 +43,11 @@ function makeFakeStore(
   };
 }
 
+/** A money-out charge for `merchant` on `date`. */
+function makeTxn(merchant: string, date: string): DetectionTransaction {
+  return { id: `t-${merchant}-${date}`, description: merchant, chargedAmount: -100, date };
+}
+
 describe("countPendingAnomalies", () => {
   it("returns 0 when there are no patterns at all", async () => {
     const store = makeFakeStore([]);
@@ -52,7 +57,8 @@ describe("countPendingAnomalies", () => {
 
   it("counts a single newly-detected pattern (confirmedAt null, no other anomaly)", async () => {
     const pattern = makePattern({ id: "p1", confirmedAt: null });
-    const store = makeFakeStore([pattern]);
+    // Charged a few days ago → live, so newly_detected is the only alert.
+    const store = makeFakeStore([pattern], [makeTxn("acme-stream", "2025-05-29")]);
     const total = await countPendingAnomalies(store, new Date("2025-06-01T00:00:00.000Z"));
     expect(total).toBe(1);
   });
@@ -60,30 +66,24 @@ describe("countPendingAnomalies", () => {
   it("sums independent anomalies across multiple patterns and categories", async () => {
     const today = new Date("2025-06-01T00:00:00.000Z");
 
-    // p1: confirmed, on schedule, price jumped 50% → price_change only.
+    // p1: confirmed, charged 5 days ago, but 50% above the stored amount → price_change only.
     const priceChangePattern = makePattern({
       id: "p1",
-      merchant: "netflix",
+      merchant: "acme-stream",
       expectedAmount: 100,
-      nextExpectedDate: today,
     });
-    // p2: confirmed, 30 days overdue (monthly grace=7, dormancy=45) → missed_payment only.
-    const missedPattern = makePattern({
-      id: "p2",
-      merchant: "spotify",
-      nextExpectedDate: new Date("2025-05-02T00:00:00.000Z"),
-    });
-    // p3: confirmed, 240 days overdue → dormant only.
-    const dormantPattern = makePattern({
-      id: "p3",
-      merchant: "adobe",
-      nextExpectedDate: new Date("2024-10-01T00:00:00.000Z"),
-    });
-    // p4: unconfirmed → newly_detected only.
-    const newPattern = makePattern({ id: "p4", merchant: "icloud", confirmedAt: null });
+    // p2: confirmed, silent 40 days (monthly grace 37, death 45) → missed_payment only.
+    const missedPattern = makePattern({ id: "p2", merchant: "acme-gym" });
+    // p3: confirmed, silent 60 days → dormant only.
+    const dormantPattern = makePattern({ id: "p3", merchant: "acme-club" });
+    // p4: unconfirmed and live → newly_detected only.
+    const newPattern = makePattern({ id: "p4", merchant: "acme-news", confirmedAt: null });
 
     const recentTxns: DetectionTransaction[] = [
-      { id: "t1", description: "NETFLIX.COM", chargedAmount: -150, date: "2025-05-25" },
+      { id: "t1", description: "acme-stream", chargedAmount: -150, date: "2025-05-27" },
+      makeTxn("acme-gym", "2025-04-22"),
+      makeTxn("acme-club", "2025-04-02"),
+      makeTxn("acme-news", "2025-05-27"),
     ];
 
     const store = makeFakeStore(
@@ -95,13 +95,10 @@ describe("countPendingAnomalies", () => {
   });
 
   it("defaults `now` to the current time when not supplied", async () => {
-    // Overdue far enough in the past that it fires regardless of when the
-    // test runs — proves the default-now path works without a fixed clock.
-    const dormantPattern = makePattern({
-      id: "p1",
-      nextExpectedDate: new Date("2000-01-01T00:00:00.000Z"),
-    });
-    const store = makeFakeStore([dormantPattern]);
+    // Silent since 2000 — dormant regardless of when the test runs, so the
+    // default-now path is exercised without a fixed clock.
+    const dormantPattern = makePattern({ id: "p1", merchant: "acme-stream" });
+    const store = makeFakeStore([dormantPattern], [makeTxn("acme-stream", "2000-01-01")]);
     const total = await countPendingAnomalies(store);
     expect(total).toBe(1);
   });

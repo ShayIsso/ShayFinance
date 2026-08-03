@@ -67,7 +67,7 @@ const FILTER_LABELS: Record<FilterTab, string> = {
 
 // ── Sorting ───────────────────────────────────────────────────────────────────
 
-type SortKey = "expectedAmount" | "nextExpectedDate";
+type SortKey = "expectedAmount" | "projectedDate";
 type SortDir = "asc" | "desc";
 
 function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
@@ -81,12 +81,17 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
 
 function sortRows(rows: SubscriptionRow[], key: SortKey, dir: SortDir): SubscriptionRow[] {
   return [...rows].sort((a, b) => {
-    let cmp = 0;
     if (key === "expectedAmount") {
-      cmp = a.expectedAmount - b.expectedAmount;
-    } else {
-      cmp = a.nextExpectedDate.localeCompare(b.nextExpectedDate);
+      const cmp = a.expectedAmount - b.expectedAmount;
+      return dir === "asc" ? cmp : -cmp;
     }
+    // Rows without liveness evidence have no projected charge — they sort last
+    // in both directions rather than clustering at whichever end null lands on.
+    if (a.projectedDate === null || b.projectedDate === null) {
+      if (a.projectedDate === b.projectedDate) return 0;
+      return a.projectedDate === null ? 1 : -1;
+    }
+    const cmp = a.projectedDate.localeCompare(b.projectedDate);
     return dir === "asc" ? cmp : -cmp;
   });
 }
@@ -386,7 +391,7 @@ function AnomalyDetail({
             {"צפוי "}
             <Amount amount={rowExpectedAmount} currency="ILS" colorize={false} />
             {" בתאריך "}
-            {formatDateObj(missedAlert.nextExpectedDate)}
+            {formatDateObj(missedAlert.projectedDate)}
             {", לא זוהה"}
           </p>
           <div className="flex gap-1.5">
@@ -414,9 +419,9 @@ function AnomalyDetail({
       {dormantAlert && (
         <div className="bg-muted/50 rounded border p-2">
           <p className="text-foreground mb-1.5 font-medium">
-            {"לא זוהה חיוב מאז "}
-            {formatDateObj(dormantAlert.nextExpectedDate)}
-            {` (מעל ${dormantAlert.daysOverdue} ימים) — ייתכן שהמנוי בוטל`}
+            {dormantAlert.lastObservedChargeDate === null
+              ? "לא זוהה אף חיוב תואם בהיסטוריה — ייתכן שהמנוי בוטל"
+              : `לא זוהה חיוב מאז ${formatDateObj(dormantAlert.lastObservedChargeDate)} (${dormantAlert.silenceDays} ימים) — ייתכן שהמנוי בוטל`}
           </p>
           <div className="flex gap-1.5">
             <Button
@@ -521,7 +526,7 @@ export function SubscriptionsTable({
   alerts: AnomalyAlerts;
   categories: Category[];
 }) {
-  const [sortKey, setSortKey] = useState<SortKey>("nextExpectedDate");
+  const [sortKey, setSortKey] = useState<SortKey>("projectedDate");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [cancelingId, setCancelingId] = useState<string | null>(null);
@@ -700,10 +705,10 @@ export function SubscriptionsTable({
                   variant="ghost"
                   size="sm"
                   className="-mr-3 h-8 font-medium"
-                  onClick={() => handleSortClick("nextExpectedDate")}
+                  onClick={() => handleSortClick("projectedDate")}
                 >
                   תשלום הבא
-                  <SortIcon col="nextExpectedDate" sortKey={sortKey} sortDir={sortDir} />
+                  <SortIcon col="projectedDate" sortKey={sortKey} sortDir={sortDir} />
                 </Button>
               </TableHead>
               <TableHead className="text-right">סטטוס</TableHead>
@@ -751,7 +756,7 @@ export function SubscriptionsTable({
                       <Amount amount={row.expectedAmount} currency="ILS" colorize={false} />
                     </TableCell>
                     <TableCell className="text-muted-foreground tabular-nums">
-                      {formatDate(row.nextExpectedDate)}
+                      {row.projectedDate ? formatDate(row.projectedDate) : "אין עדות לחיוב"}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">

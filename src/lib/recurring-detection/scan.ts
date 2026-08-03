@@ -51,8 +51,8 @@ export async function countPendingAnomalies(
 
   return countAnomalyAlerts({
     priceChanges: detectPriceChanges(patterns, recentTxns),
-    missedPayments: detectMissedPayments(patterns, now),
-    dormant: detectDormant(patterns, now),
+    missedPayments: detectMissedPayments(patterns, recentTxns, now),
+    dormant: detectDormant(patterns, recentTxns, now),
     newlyDetected: detectNewlyDetected(patterns, recentTxns),
   });
 }
