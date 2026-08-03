@@ -24,3 +24,10 @@ export {
   countAnomalyAlerts,
 } from "./anomalies";
 export type { AnomalyAlertLists } from "./anomalies";
+export { projectSeries, projectUpcomingCharges, DEFAULT_HORIZON_DAYS } from "./project";
+export type {
+  ChargeEvidence,
+  SeriesProjection,
+  ProjectedCharge,
+  UpcomingChargesForecast,
+} from "./project";

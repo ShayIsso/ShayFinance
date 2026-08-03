@@ -1,8 +1,5 @@
 export const dynamic = "force-dynamic";
 
-import { db } from "@/db";
-import { recurringExpenses } from "@/db/schema";
-import { ne } from "drizzle-orm";
 import { SubscriptionsTable } from "./subscriptions-table";
 import {
   detectPriceChanges,
@@ -10,9 +7,9 @@ import {
   detectNewlyDetected,
   detectDormant,
   drizzleRecurringStore,
+  projectSeries,
 } from "@/lib/recurring-detection";
 import type {
-  PersistedRecurringPattern,
   PriceChangeAlert,
   MissedPaymentAlert,
   NewlyDetectedAlert,
@@ -27,11 +24,14 @@ export type SubscriptionRow = {
   displayName: string | null;
   expectedAmount: number;
   cadence: "monthly" | "quarterly" | "annual";
-  nextExpectedDate: string;
+  /**
+   * Projected next charge (last observed charge + cadence interval), ISO date.
+   * null when the series has no liveness evidence — the stored
+   * `next_expected_date` is never displayed (ADR-0012).
+   */
+  projectedDate: string | null;
   status: "active" | "paused" | "canceled";
   confirmedAt: Date | null;
-  patternFingerprint: string;
-  lastMatchedTxnId: string | null;
 };
 
 export type AnomalyAlerts = {
@@ -42,60 +42,36 @@ export type AnomalyAlerts = {
 };
 
 export default async function SubscriptionsPage() {
-  const rows = await db
-    .select({
-      id: recurringExpenses.id,
-      merchant: recurringExpenses.merchant,
-      displayName: recurringExpenses.displayName,
-      expectedAmount: recurringExpenses.expectedAmount,
-      cadence: recurringExpenses.expectedCadence,
-      nextExpectedDate: recurringExpenses.nextExpectedDate,
-      status: recurringExpenses.status,
-      confirmedAt: recurringExpenses.confirmedAt,
-      patternFingerprint: recurringExpenses.patternFingerprint,
-      lastMatchedTxnId: recurringExpenses.lastMatchedTxnId,
-    })
-    .from(recurringExpenses)
-    .where(ne(recurringExpenses.status, "canceled"));
-
-  const subscriptions: SubscriptionRow[] = rows.map((row) => ({
-    id: row.id,
-    merchant: row.merchant,
-    displayName: row.displayName ?? null,
-    expectedAmount: Number(row.expectedAmount),
-    cadence: row.cadence as "monthly" | "quarterly" | "annual",
-    nextExpectedDate: row.nextExpectedDate,
-    status: row.status as "active" | "paused" | "canceled",
-    confirmedAt: row.confirmedAt ?? null,
-    patternFingerprint: row.patternFingerprint,
-    lastMatchedTxnId: row.lastMatchedTxnId ?? null,
-  }));
-
-  // Build PersistedRecurringPattern[] for anomaly detectors.
-  // occurrenceDates is not a DB column — supply [] (detectors don't read it).
-  const patterns: PersistedRecurringPattern[] = subscriptions.map((sub) => ({
-    id: sub.id,
-    merchant: sub.merchant,
-    displayName: sub.displayName,
-    expectedAmount: sub.expectedAmount,
-    cadence: sub.cadence,
-    occurrenceDates: [],
-    lastMatchedTxnId: sub.lastMatchedTxnId ?? "",
-    patternFingerprint: sub.patternFingerprint,
-    nextExpectedDate: new Date(sub.nextExpectedDate),
-    status: sub.status,
-    confirmedAt: sub.confirmedAt,
-  }));
-
-  // Fetch recent transactions for detectPriceChanges.
-  const recentTxns = await drizzleRecurringStore.getTransactionsForDetection();
+  // One transaction read feeds every detector and the projection — the same
+  // liveness evidence the upcoming forecast uses, so the two pages agree.
+  const [patterns, recentTxns] = await Promise.all([
+    drizzleRecurringStore.getPersistedPatterns(),
+    drizzleRecurringStore.getTransactionsForDetection(),
+  ]);
 
   // Run detectors server-side; pass today once so pure functions stay pure.
   const today = new Date();
+  const projections = projectSeries(patterns, recentTxns, today);
+
+  const subscriptions: SubscriptionRow[] = patterns.map((pattern, i) => {
+    const { isLive, evidence } = projections[i];
+    return {
+      id: pattern.id,
+      merchant: pattern.merchant,
+      displayName: pattern.displayName,
+      expectedAmount: pattern.expectedAmount,
+      cadence: pattern.cadence,
+      // A dead series gets no projected charge — projecting one is the #192 defect.
+      projectedDate: isLive && evidence ? evidence.projectedDate.toISOString().slice(0, 10) : null,
+      status: pattern.status,
+      confirmedAt: pattern.confirmedAt,
+    };
+  });
+
   const priceChanges = detectPriceChanges(patterns, recentTxns);
-  const missedPayments = detectMissedPayments(patterns, today);
+  const missedPayments = detectMissedPayments(patterns, recentTxns, today);
   const newlyDetected = detectNewlyDetected(patterns, recentTxns);
-  const dormant = detectDormant(patterns, today);
+  const dormant = detectDormant(patterns, recentTxns, today);
 
   const alerts: AnomalyAlerts = { priceChanges, missedPayments, newlyDetected, dormant };
 

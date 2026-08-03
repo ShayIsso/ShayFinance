@@ -66,31 +66,31 @@ export type PriceChangeAlert = {
   pctChange: number;
 };
 
-/** Alert raised when a payment is overdue by more than 7 days. */
+/** Alert raised when a live series is more than 7 days late for its projected charge. */
 export type MissedPaymentAlert = {
   type: "missed_payment";
   patternId: string;
   merchant: string;
-  /** The date the next payment was expected. */
-  nextExpectedDate: Date;
-  /** How many days overdue (today - nextExpectedDate, whole days). */
+  /** Projected charge date derived from evidence: last observed charge + cadence interval. */
+  projectedDate: Date;
+  /** Whole days between the projected date and today. */
   daysOverdue: number;
 };
 
 /**
- * Alert raised when a pattern is so far past its expected date that it is
- * likely cancelled/dormant rather than merely a one-off missed payment.
- * Derived at view-time only — never persisted.
+ * Alert raised when a series' silence has reached the death threshold — dead by
+ * evidence, not user-cancelled. Derived at read time only, never persisted
+ * (ADR-0012).
  */
 export type DormantAlert = {
   type: "dormant";
   patternId: string;
   merchant: string;
-  /** The date the next payment was expected. */
-  nextExpectedDate: Date;
-  /** How many days overdue (today - nextExpectedDate, whole days). */
-  daysOverdue: number;
-  /** The pattern's cadence — drives the dormancy threshold. */
+  /** Last observed matching charge; null when the window holds no evidence at all. */
+  lastObservedChargeDate: Date | null;
+  /** Days since that charge; null without evidence. */
+  silenceDays: number | null;
+  /** The series' cadence — drives the death threshold. */
   cadence: Cadence;
 };
 

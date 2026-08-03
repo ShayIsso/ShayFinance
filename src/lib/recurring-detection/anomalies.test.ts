@@ -50,11 +50,19 @@ function makeTxn(
   return { id, description, chargedAmount, date };
 }
 
-/** Returns a date that is `days` days after baseDate */
-function addDays(base: Date, days: number): Date {
-  const d = new Date(base.getTime());
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
+/** Fixed "now" for the evidence-based detectors. */
+const TODAY = new Date("2026-06-01T00:00:00.000Z");
+
+/** ISO date `silenceDays` days before TODAY. */
+function silenceDate(silenceDays: number): string {
+  const d = new Date(TODAY.getTime());
+  d.setUTCDate(d.getUTCDate() - silenceDays);
+  return d.toISOString().slice(0, 10);
+}
+
+/** A money-out charge for `merchant`, `silenceDays` days before TODAY. */
+function chargeAtSilence(merchant: string, silenceDays: number): DetectionTransaction {
+  return makeTxn(`t-${merchant}-${silenceDays}`, merchant, -100, silenceDate(silenceDays));
 }
 
 // ── detectPriceChanges ────────────────────────────────────────────────────────
@@ -164,102 +172,104 @@ describe("detectPriceChanges", () => {
   });
 });
 
-// ── detectMissedPayments ──────────────────────────────────────────────────────
+// ── detectMissedPayments (evidence-based, ADR-0012) ───────────────────────────
 
 describe("detectMissedPayments", () => {
-  const nextExpected = new Date("2025-05-01T00:00:00.000Z");
-
-  const activePattern = makePattern({
-    id: "mp1",
-    merchant: "spotify",
-    nextExpectedDate: nextExpected,
-  });
+  // monthly: interval 30d, grace 7d, death threshold 45d → missed when silence is 38..44
+  const monthly = makePattern({ id: "mp1", merchant: "acme-gym", cadence: "monthly" });
 
   describe("no alert cases", () => {
-    it("does not alert when today is the expected date (0 days overdue)", () => {
-      const alerts = detectMissedPayments([activePattern], nextExpected);
-      expect(alerts).toHaveLength(0);
+    it("does not alert when the charge arrived today (no silence)", () => {
+      const txns = [chargeAtSilence("acme-gym", 0)];
+      expect(detectMissedPayments([monthly], txns, TODAY)).toHaveLength(0);
     });
 
-    it("does not alert when today is 7 days after (exactly 7 — boundary, NOT missed)", () => {
-      const today = addDays(nextExpected, 7);
-      const alerts = detectMissedPayments([activePattern], today);
-      expect(alerts).toHaveLength(0);
+    it("does not alert at exactly the grace boundary (silence = interval + 7)", () => {
+      const txns = [chargeAtSilence("acme-gym", 37)];
+      expect(detectMissedPayments([monthly], txns, TODAY)).toHaveLength(0);
     });
 
-    it("does not alert when today is before the expected date", () => {
-      const today = addDays(nextExpected, -1);
-      const alerts = detectMissedPayments([activePattern], today);
-      expect(alerts).toHaveLength(0);
+    it("does not alert once the series is dead (silence at the death threshold)", () => {
+      const txns = [chargeAtSilence("acme-gym", 45)];
+      expect(detectMissedPayments([monthly], txns, TODAY)).toHaveLength(0);
+    });
+
+    it("does not alert for a series with no evidence at all — that is dormant, not missed", () => {
+      expect(detectMissedPayments([monthly], [], TODAY)).toHaveLength(0);
+    });
+
+    it("does not alert when the stored next-expected date is stale but the merchant still charges", () => {
+      const stalePattern = makePattern({
+        id: "mp-stale",
+        merchant: "acme-gym",
+        nextExpectedDate: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      const txns = [chargeAtSilence("acme-gym", 3)];
+      expect(detectMissedPayments([stalePattern], txns, TODAY)).toHaveLength(0);
     });
 
     it("does not alert for paused patterns", () => {
-      const paused = makePattern({
-        id: "mp2",
-        merchant: "spotify",
-        nextExpectedDate: nextExpected,
-        status: "paused",
-      });
-      const today = addDays(nextExpected, 30);
-      const alerts = detectMissedPayments([paused], today);
-      expect(alerts).toHaveLength(0);
+      const paused = makePattern({ id: "mp2", merchant: "acme-gym", status: "paused" });
+      const txns = [chargeAtSilence("acme-gym", 40)];
+      expect(detectMissedPayments([paused], txns, TODAY)).toHaveLength(0);
     });
 
     it("does not alert for canceled patterns", () => {
-      const canceled = makePattern({
-        id: "mp3",
-        merchant: "spotify",
-        nextExpectedDate: nextExpected,
-        status: "canceled",
-      });
-      const today = addDays(nextExpected, 30);
-      const alerts = detectMissedPayments([canceled], today);
-      expect(alerts).toHaveLength(0);
+      const canceled = makePattern({ id: "mp3", merchant: "acme-gym", status: "canceled" });
+      const txns = [chargeAtSilence("acme-gym", 40)];
+      expect(detectMissedPayments([canceled], txns, TODAY)).toHaveLength(0);
     });
 
     it("returns empty for empty patterns list", () => {
-      const today = addDays(nextExpected, 30);
-      expect(detectMissedPayments([], today)).toHaveLength(0);
+      expect(detectMissedPayments([], [chargeAtSilence("acme-gym", 40)], TODAY)).toHaveLength(0);
     });
   });
 
   describe("alert cases", () => {
-    it("alerts when today is 8 days after (8 > 7 — missed)", () => {
-      const today = addDays(nextExpected, 8);
-      const alerts = detectMissedPayments([activePattern], today);
+    it("alerts one day past the grace boundary (silence 38 → 8 days overdue)", () => {
+      const txns = [chargeAtSilence("acme-gym", 38)];
+      const alerts = detectMissedPayments([monthly], txns, TODAY);
       expect(alerts).toHaveLength(1);
       expect(alerts[0].type).toBe("missed_payment");
       expect(alerts[0].patternId).toBe("mp1");
       expect(alerts[0].daysOverdue).toBe(8);
     });
 
-    it("alerts when today is 30 days overdue", () => {
-      const today = addDays(nextExpected, 30);
-      const [alert] = detectMissedPayments([activePattern], today);
-      expect(alert.daysOverdue).toBe(30);
+    it("alerts one day short of death (silence 44 → 14 days overdue)", () => {
+      const txns = [chargeAtSilence("acme-gym", 44)];
+      const [alert] = detectMissedPayments([monthly], txns, TODAY);
+      expect(alert.daysOverdue).toBe(14);
     });
 
-    it("includes correct nextExpectedDate in the alert", () => {
-      const today = addDays(nextExpected, 10);
-      const [alert] = detectMissedPayments([activePattern], today);
-      expect(alert.nextExpectedDate.getTime()).toBe(nextExpected.getTime());
+    it("reports the projected date derived from evidence, not the stored column", () => {
+      const stalePattern = makePattern({
+        id: "mp-proj",
+        merchant: "acme-gym",
+        nextExpectedDate: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      const txns = [chargeAtSilence("acme-gym", 40)];
+      const [alert] = detectMissedPayments([stalePattern], txns, TODAY);
+      // last observed 40 days ago + 30-day interval → 10 days ago
+      expect(alert.projectedDate.toISOString().slice(0, 10)).toBe(silenceDate(10));
     });
 
     it("includes merchant name in the alert", () => {
-      const today = addDays(nextExpected, 10);
-      const [alert] = detectMissedPayments([activePattern], today);
-      expect(alert.merchant).toBe("spotify");
+      const txns = [chargeAtSilence("acme-gym", 40)];
+      const [alert] = detectMissedPayments([monthly], txns, TODAY);
+      expect(alert.merchant).toBe("acme-gym");
     });
 
     it("alerts multiple missed patterns simultaneously", () => {
-      const p2 = makePattern({
-        id: "mp4",
-        merchant: "adobe",
-        nextExpectedDate: addDays(nextExpected, -5), // 5 days earlier → more overdue
-      });
-      const today = addDays(nextExpected, 10);
-      const alerts = detectMissedPayments([activePattern, p2], today);
-      expect(alerts).toHaveLength(2);
+      const other = makePattern({ id: "mp4", merchant: "acme-club", cadence: "monthly" });
+      const txns = [chargeAtSilence("acme-gym", 40), chargeAtSilence("acme-club", 42)];
+      expect(detectMissedPayments([monthly, other], txns, TODAY)).toHaveLength(2);
+    });
+
+    it("scales the missed window by cadence (quarterly: silence 99 is missed, not dead)", () => {
+      const quarterly = makePattern({ id: "mp5", merchant: "acme-gym", cadence: "quarterly" });
+      const txns = [chargeAtSilence("acme-gym", 99)];
+      const [alert] = detectMissedPayments([quarterly], txns, TODAY);
+      expect(alert.daysOverdue).toBe(8);
     });
   });
 });
@@ -349,110 +359,113 @@ describe("detectNewlyDetected", () => {
   });
 });
 
-// ── detectDormant + missed/dormant mutual exclusivity ──────────────────────────
+// ── detectDormant (evidence-based, ADR-0012) ─────────────────────────────────
 
 describe("detectDormant", () => {
-  const nextExpected = new Date("2025-05-01T00:00:00.000Z");
+  describe("monthly cadence (death threshold = 45 days of silence)", () => {
+    const monthly = makePattern({ id: "d-m", merchant: "acme-gym", cadence: "monthly" });
 
-  // dormancyThreshold = round(base * 1.5): monthly 45, quarterly 137, annual 548.
-  describe("monthly cadence (threshold = 45 days)", () => {
-    const monthly = makePattern({
-      id: "d-m",
-      merchant: "netflix",
-      cadence: "monthly",
-      nextExpectedDate: nextExpected,
+    it("does NOT fire one day under the threshold (44 days of silence)", () => {
+      expect(detectDormant([monthly], [chargeAtSilence("acme-gym", 44)], TODAY)).toHaveLength(0);
     });
 
-    it("does NOT fire dormant just below threshold (44 days overdue)", () => {
-      const today = addDays(nextExpected, 44);
-      expect(detectDormant([monthly], today)).toHaveLength(0);
-    });
-
-    it("fires dormant at exactly the threshold (45 days overdue)", () => {
-      const today = addDays(nextExpected, 45);
-      const alerts = detectDormant([monthly], today);
+    it("fires at exactly the threshold (45 days of silence)", () => {
+      const alerts = detectDormant([monthly], [chargeAtSilence("acme-gym", 45)], TODAY);
       expect(alerts).toHaveLength(1);
       expect(alerts[0].type).toBe("dormant");
       expect(alerts[0].patternId).toBe("d-m");
       expect(alerts[0].cadence).toBe("monthly");
-      expect(alerts[0].daysOverdue).toBe(45);
+      expect(alerts[0].silenceDays).toBe(45);
+      expect(alerts[0].lastObservedChargeDate?.toISOString().slice(0, 10)).toBe(silenceDate(45));
     });
 
-    it("fires dormant well above threshold (8 months overdue)", () => {
-      const today = addDays(nextExpected, 240);
-      expect(detectDormant([monthly], today)).toHaveLength(1);
+    it("fires well above the threshold (240 days of silence)", () => {
+      expect(detectDormant([monthly], [chargeAtSilence("acme-gym", 240)], TODAY)).toHaveLength(1);
     });
 
-    it("does NOT fire for paused/canceled patterns", () => {
+    it("fires with no evidence at all — no evidence means no life", () => {
+      const alerts = detectDormant([monthly], [], TODAY);
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0].lastObservedChargeDate).toBeNull();
+      expect(alerts[0].silenceDays).toBeNull();
+    });
+
+    it("does NOT fire when the stored next-expected date is stale but the merchant still charges", () => {
+      const stalePattern = makePattern({
+        id: "d-stale",
+        merchant: "acme-gym",
+        cadence: "monthly",
+        nextExpectedDate: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      expect(detectDormant([stalePattern], [chargeAtSilence("acme-gym", 3)], TODAY)).toHaveLength(
+        0,
+      );
+    });
+
+    it("does NOT fire for paused patterns", () => {
       const paused = makePattern({
         id: "d-p",
+        merchant: "acme-gym",
         cadence: "monthly",
-        nextExpectedDate: nextExpected,
         status: "paused",
       });
-      const today = addDays(nextExpected, 240);
-      expect(detectDormant([paused], today)).toHaveLength(0);
+      expect(detectDormant([paused], [chargeAtSilence("acme-gym", 240)], TODAY)).toHaveLength(0);
     });
   });
 
   describe("quarterly cadence (threshold = 137 days)", () => {
-    const quarterly = makePattern({
-      id: "d-q",
-      cadence: "quarterly",
-      nextExpectedDate: nextExpected,
-    });
+    const quarterly = makePattern({ id: "d-q", merchant: "acme-gym", cadence: "quarterly" });
 
-    it("does NOT fire at 136 days; fires at 137 days", () => {
-      expect(detectDormant([quarterly], addDays(nextExpected, 136))).toHaveLength(0);
-      expect(detectDormant([quarterly], addDays(nextExpected, 137))).toHaveLength(1);
+    it("does NOT fire at 136 days of silence; fires at 137", () => {
+      expect(detectDormant([quarterly], [chargeAtSilence("acme-gym", 136)], TODAY)).toHaveLength(0);
+      expect(detectDormant([quarterly], [chargeAtSilence("acme-gym", 137)], TODAY)).toHaveLength(1);
     });
   });
 
   describe("annual cadence (threshold = 548 days)", () => {
-    const annual = makePattern({
-      id: "d-a",
-      cadence: "annual",
-      nextExpectedDate: nextExpected,
-    });
+    const annual = makePattern({ id: "d-a", merchant: "acme-gym", cadence: "annual" });
 
-    it("does NOT fire at 547 days; fires at 548 days", () => {
-      expect(detectDormant([annual], addDays(nextExpected, 547))).toHaveLength(0);
-      expect(detectDormant([annual], addDays(nextExpected, 548))).toHaveLength(1);
+    it("does NOT fire at 547 days of silence; fires at 548", () => {
+      expect(detectDormant([annual], [chargeAtSilence("acme-gym", 547)], TODAY)).toHaveLength(0);
+      expect(detectDormant([annual], [chargeAtSilence("acme-gym", 548)], TODAY)).toHaveLength(1);
     });
   });
 });
 
-describe("missed / dormant mutual exclusivity (monthly, threshold = 45 days)", () => {
-  const nextExpected = new Date("2025-05-01T00:00:00.000Z");
-  const monthly = makePattern({
-    id: "x1",
-    merchant: "spotify",
-    cadence: "monthly",
-    nextExpectedDate: nextExpected,
+describe("missed / dormant mutual exclusivity (monthly: grace 37, threshold 45)", () => {
+  const monthly = makePattern({ id: "x1", merchant: "acme-gym", cadence: "monthly" });
+
+  function verdicts(silenceDays: number) {
+    const txns = [chargeAtSilence("acme-gym", silenceDays)];
+    return {
+      missed: detectMissedPayments([monthly], txns, TODAY).length,
+      dormant: detectDormant([monthly], txns, TODAY).length,
+    };
+  }
+
+  it("at the grace boundary (37) → neither", () => {
+    expect(verdicts(37)).toEqual({ missed: 0, dormant: 0 });
   });
 
-  it("just below threshold (44 days) → missed only, NOT dormant", () => {
-    const today = addDays(nextExpected, 44);
-    expect(detectMissedPayments([monthly], today)).toHaveLength(1);
-    expect(detectDormant([monthly], today)).toHaveLength(0);
+  it("just inside the missed window (38) → missed only", () => {
+    expect(verdicts(38)).toEqual({ missed: 1, dormant: 0 });
   });
 
-  it("at threshold (45 days) → dormant only, NOT missed", () => {
-    const today = addDays(nextExpected, 45);
-    expect(detectMissedPayments([monthly], today)).toHaveLength(0);
-    expect(detectDormant([monthly], today)).toHaveLength(1);
+  it("one day under the threshold (44) → missed only", () => {
+    expect(verdicts(44)).toEqual({ missed: 1, dormant: 0 });
   });
 
-  it("long overdue (8 months) → dormant only; missed no longer fires", () => {
-    const today = addDays(nextExpected, 240);
-    expect(detectMissedPayments([monthly], today)).toHaveLength(0);
-    expect(detectDormant([monthly], today)).toHaveLength(1);
+  it("at the threshold (45) → dormant only", () => {
+    expect(verdicts(45)).toEqual({ missed: 0, dormant: 1 });
   });
 
-  it("8 days overdue still fires missed (well inside the missed window)", () => {
-    const today = addDays(nextExpected, 8);
-    expect(detectMissedPayments([monthly], today)).toHaveLength(1);
-    expect(detectDormant([monthly], today)).toHaveLength(0);
+  it("long silent (240) → dormant only", () => {
+    expect(verdicts(240)).toEqual({ missed: 0, dormant: 1 });
+  });
+
+  it("no evidence → dormant only", () => {
+    expect(detectMissedPayments([monthly], [], TODAY)).toHaveLength(0);
+    expect(detectDormant([monthly], [], TODAY)).toHaveLength(1);
   });
 });
 
@@ -492,13 +505,11 @@ describe("countAnomalyAlerts", () => {
       [makeTxn("t1", "NETFLIX", -150, "2025-05-01")],
     );
     const missed = detectMissedPayments(
-      [makePattern({ id: "p2", nextExpectedDate: new Date("2025-05-01T00:00:00.000Z") })],
-      addDays(new Date("2025-05-01T00:00:00.000Z"), 10),
+      [makePattern({ id: "p2", merchant: "acme-gym" })],
+      [chargeAtSilence("acme-gym", 40)],
+      TODAY,
     );
-    const dormant = detectDormant(
-      [makePattern({ id: "p3", nextExpectedDate: new Date("2025-05-01T00:00:00.000Z") })],
-      addDays(new Date("2025-05-01T00:00:00.000Z"), 240),
-    );
+    const dormant = detectDormant([makePattern({ id: "p3", merchant: "acme-club" })], [], TODAY);
     const newlyDetected = detectNewlyDetected([makePattern({ id: "p4", confirmedAt: null })], []);
 
     expect(netflixPriceChange).toHaveLength(1);
