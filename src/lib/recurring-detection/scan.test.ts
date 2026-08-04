@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { countPendingAnomalies } from "./scan";
+import { countPendingAnomalies, persistDetectedPatterns } from "./scan";
 import type { RecurringStore } from "./store";
 import type { DetectionTransaction, PersistedRecurringPattern, RecurringPattern } from "./types";
 
@@ -101,5 +101,75 @@ describe("countPendingAnomalies", () => {
     const store = makeFakeStore([dormantPattern], [makeTxn("acme-stream", "2000-01-01")]);
     const total = await countPendingAnomalies(store);
     expect(total).toBe(1);
+  });
+});
+
+describe("persistDetectedPatterns — one row per fingerprint (#237)", () => {
+  function makeDetected(fingerprint: string, amount: number, last: string): RecurringPattern {
+    return {
+      merchant: "harbor market",
+      expectedAmount: amount,
+      cadence: "monthly",
+      occurrenceDates: [new Date(`${last}T00:00:00.000Z`)],
+      lastMatchedTxnId: `txn-${amount}`,
+      patternFingerprint: fingerprint,
+      nextExpectedDate: new Date("2026-07-01T00:00:00.000Z"),
+    };
+  }
+
+  function recordingStore(upserted: RecurringPattern[]): RecurringStore {
+    return {
+      async getTransactionsForDetection() {
+        return [];
+      },
+      async upsertPattern(pattern: RecurringPattern) {
+        upserted.push(pattern);
+      },
+      async getPersistedPatterns() {
+        return [];
+      },
+    };
+  }
+
+  it("upserts the most recent regime when several share one fingerprint", async () => {
+    const upserted: RecurringPattern[] = [];
+    await persistDetectedPatterns(
+      [
+        makeDetected("harbor market::monthly", 54, "2026-06-01"),
+        makeDetected("harbor market::monthly", 33, "2026-04-01"),
+        makeDetected("harbor market::monthly", 67, "2026-02-01"),
+      ],
+      recordingStore(upserted),
+    );
+
+    expect(upserted).toHaveLength(1);
+    expect(upserted[0].expectedAmount).toBe(54);
+  });
+
+  it("is order-independent", async () => {
+    const forward: RecurringPattern[] = [];
+    const reversed: RecurringPattern[] = [];
+    const regimes = [
+      makeDetected("harbor market::monthly", 54, "2026-06-01"),
+      makeDetected("harbor market::monthly", 33, "2026-04-01"),
+    ];
+
+    await persistDetectedPatterns(regimes, recordingStore(forward));
+    await persistDetectedPatterns([...regimes].reverse(), recordingStore(reversed));
+
+    expect(reversed[0].expectedAmount).toBe(forward[0].expectedAmount);
+  });
+
+  it("still upserts every distinct fingerprint", async () => {
+    const upserted: RecurringPattern[] = [];
+    await persistDetectedPatterns(
+      [
+        makeDetected("harbor market::monthly", 54, "2026-06-01"),
+        makeDetected("orbit sound::monthly", 33, "2026-04-01"),
+      ],
+      recordingStore(upserted),
+    );
+
+    expect(upserted).toHaveLength(2);
   });
 });

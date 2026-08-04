@@ -554,3 +554,54 @@ describe("countAnomalyAlerts", () => {
     expect(countAnomalyAlerts(lists)).toBe(3);
   });
 });
+
+// ── Anomalies under descriptor drift (#237) ───────────────────────────────────
+// The detectors read evidence through the shared merchant-identity predicate, so
+// descriptor drift must not manufacture a dormancy or hide a price change.
+describe("anomaly detectors under descriptor drift (#237)", () => {
+  const OLD_BRANCH = 'הארבור מרכז פ"ת- הו"ק';
+  const NEW_BRANCH = 'הארבור פ"ת דרום הו"ק';
+
+  it("does NOT report dormant when charges continue under a new branch descriptor", () => {
+    const pattern = makePattern({ id: "p1", merchant: OLD_BRANCH });
+    const txns = [
+      makeTxn("t1", OLD_BRANCH, -215, "2026-02-17"),
+      makeTxn("t2", NEW_BRANCH, -215, "2026-05-17"),
+    ];
+
+    expect(detectDormant([pattern], txns, TODAY)).toHaveLength(0);
+  });
+
+  it("does NOT report missed payment when the drifted form charged on time", () => {
+    const pattern = makePattern({ id: "p1", merchant: OLD_BRANCH });
+    const txns = [
+      makeTxn("t1", OLD_BRANCH, -215, "2026-02-17"),
+      makeTxn("t2", NEW_BRANCH, -215, "2026-05-17"),
+    ];
+
+    expect(detectMissedPayments([pattern], txns, TODAY)).toHaveLength(0);
+  });
+
+  it("prices a series off its newest charge even when that charge drifted form", () => {
+    const pattern = makePattern({ id: "p1", merchant: OLD_BRANCH, expectedAmount: 215 });
+    const txns = [
+      makeTxn("t1", OLD_BRANCH, -215, "2026-04-17"),
+      makeTxn("t2", NEW_BRANCH, -290, "2026-05-17"),
+    ];
+
+    const [alert] = detectPriceChanges([pattern], txns);
+
+    expect(alert.newAmount).toBeCloseTo(290, 5);
+    expect(alert.oldAmount).toBeCloseTo(215, 5);
+  });
+
+  it("reads a per-charge tokenized descriptor as the same series", () => {
+    const pattern = makePattern({ id: "p1", merchant: "orbitsndil northport se" });
+    const txns = [
+      makeTxn("t1", "ORBITSND K7Q2M4     NORTHPORT   SE", -23.9, "2026-05-13"),
+      makeTxn("t2", "ORBITSND K7Q2M9     NORTHPORT   SE", -23.9, "2026-05-20"),
+    ];
+
+    expect(detectDormant([pattern], txns, TODAY)).toHaveLength(0);
+  });
+});
