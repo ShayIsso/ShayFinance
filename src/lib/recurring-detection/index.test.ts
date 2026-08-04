@@ -518,6 +518,20 @@ describe("descriptor drift and price regimes (#237)", () => {
     expect(reversed).toBe(forward);
   });
 
+  it("fingerprints a MIXED plain+tokenized family identically whichever form arrives first", () => {
+    // The plain and tokenized forms key differently (only `sameMerchant` unites
+    // them), so the cluster representative — and with it the upsert fingerprint —
+    // must not depend on which form the scan happens to read first.
+    const txns = [
+      makeTxn("m1", "ORBITSND K7Q2M4     NORTHPORT   SE", 23.9, "2025-11-13"),
+      makeTxn("m2", "ORBITSNDIL          NORTHPORT   SE", 23.9, "2025-12-13"),
+      makeTxn("m3", "ORBITSNDIL          NORTHPORT   SE", 23.9, "2026-01-13"),
+    ];
+    const forward = detectPatterns(txns)[0].patternFingerprint;
+    const reversed = detectPatterns([...txns].reverse())[0].patternFingerprint;
+    expect(reversed).toBe(forward);
+  });
+
   it("detects one series across a tokenized descriptor family mixed with the plain form", () => {
     const txns = [
       makeTxn("s1", "ORBITSNDIL          NORTHPORT   SE", 23.9, "2025-11-13"),
@@ -554,5 +568,22 @@ describe("exclusivity boundary against incidental charges (#237)", () => {
   it("rejects a run that falls just below the 0.5 boundary", () => {
     // One more incidental charge → 3/7 ≈ 0.43 → rejected.
     expect(detectPatterns(runWithOneOffs([20, 95, 150, 260]))).toHaveLength(0);
+  });
+
+  // Exempting every price regime from the ratio leaves cadence classification as
+  // the only backstop against a merchant with two habitual price points. Pin it:
+  // habitual visits are irregularly spaced, and irregular spacing is rejected.
+  it("rejects two habitual price points that are not on a cadence", () => {
+    const txns = [
+      makeTxn("p1", "מזנון הרכבת", 30, "2025-03-03"),
+      makeTxn("p2", "מזנון הרכבת", 30, "2025-03-07"),
+      makeTxn("p3", "מזנון הרכבת", 30, "2025-03-12"),
+      makeTxn("p4", "מזנון הרכבת", 30, "2025-03-19"),
+      makeTxn("q1", "מזנון הרכבת", 52, "2025-03-05"),
+      makeTxn("q2", "מזנון הרכבת", 52, "2025-03-10"),
+      makeTxn("q3", "מזנון הרכבת", 52, "2025-03-14"),
+      makeTxn("q4", "מזנון הרכבת", 52, "2025-03-21"),
+    ];
+    expect(detectPatterns(txns)).toHaveLength(0);
   });
 });

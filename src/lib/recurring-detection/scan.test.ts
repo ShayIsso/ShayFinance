@@ -6,9 +6,14 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { countPendingAnomalies, persistDetectedPatterns } from "./scan";
+import { countPendingAnomalies, persistDetectedPatterns, alignToPersistedSeries } from "./scan";
 import type { RecurringStore } from "./store";
-import type { DetectionTransaction, PersistedRecurringPattern, RecurringPattern } from "./types";
+import type {
+  DetectionTransaction,
+  PersistedRecurringPattern,
+  RecurringPattern,
+  SeriesIdentity,
+} from "./types";
 
 function makePattern(
   overrides: Partial<PersistedRecurringPattern> & { id: string },
@@ -39,6 +44,9 @@ function makeFakeStore(
     async upsertPattern(_pattern: RecurringPattern) {},
     async getPersistedPatterns() {
       return patterns;
+    },
+    async getSeriesIdentities() {
+      return [];
     },
   };
 }
@@ -117,7 +125,10 @@ describe("persistDetectedPatterns — one row per fingerprint (#237)", () => {
     };
   }
 
-  function recordingStore(upserted: RecurringPattern[]): RecurringStore {
+  function recordingStore(
+    upserted: RecurringPattern[],
+    existing: SeriesIdentity[] = [],
+  ): RecurringStore {
     return {
       async getTransactionsForDetection() {
         return [];
@@ -127,6 +138,9 @@ describe("persistDetectedPatterns — one row per fingerprint (#237)", () => {
       },
       async getPersistedPatterns() {
         return [];
+      },
+      async getSeriesIdentities() {
+        return existing;
       },
     };
   }
@@ -171,5 +185,96 @@ describe("persistDetectedPatterns — one row per fingerprint (#237)", () => {
     );
 
     expect(upserted).toHaveLength(2);
+  });
+});
+
+describe("alignToPersistedSeries — write path shares read-path identity (#237)", () => {
+  function storeWith(
+    upserted: RecurringPattern[],
+    existing: SeriesIdentity[] = [],
+  ): RecurringStore {
+    return {
+      async getTransactionsForDetection() {
+        return [];
+      },
+      async upsertPattern(pattern: RecurringPattern) {
+        upserted.push(pattern);
+      },
+      async getPersistedPatterns() {
+        return [];
+      },
+      async getSeriesIdentities() {
+        return existing;
+      },
+    };
+  }
+
+  function candidate(merchant: string, amount = 24): RecurringPattern {
+    return {
+      merchant,
+      expectedAmount: amount,
+      cadence: "monthly",
+      occurrenceDates: [new Date("2026-06-13T00:00:00.000Z")],
+      lastMatchedTxnId: "txn-1",
+      patternFingerprint: `${merchant}::monthly`,
+      nextExpectedDate: new Date("2026-07-13T00:00:00.000Z"),
+    };
+  }
+
+  it("renames a drifted candidate onto the series it already is", () => {
+    const [aligned] = alignToPersistedSeries(
+      [candidate("orbitsnd northport se")],
+      [{ merchant: "orbitsndil northport se", cadence: "monthly" }],
+    );
+
+    expect(aligned.merchant).toBe("orbitsndil northport se");
+    expect(aligned.patternFingerprint).toBe("orbitsndil northport se::monthly");
+  });
+
+  it("leaves an unrelated candidate untouched", () => {
+    const [aligned] = alignToPersistedSeries(
+      [candidate("harbor market")],
+      [{ merchant: "orbitsndil northport se", cadence: "monthly" }],
+    );
+
+    expect(aligned.merchant).toBe("harbor market");
+    expect(aligned.patternFingerprint).toBe("harbor market::monthly");
+  });
+
+  it("does not align across cadences", () => {
+    const [aligned] = alignToPersistedSeries(
+      [candidate("orbitsnd northport se")],
+      [{ merchant: "orbitsndil northport se", cadence: "annual" }],
+    );
+
+    expect(aligned.merchant).toBe("orbitsnd northport se");
+  });
+
+  it("updates the existing row instead of minting a sibling on re-detect", async () => {
+    const upserted: RecurringPattern[] = [];
+    await persistDetectedPatterns([candidate("orbitsnd northport se")], storeWith(upserted));
+
+    expect(upserted).toHaveLength(1);
+    expect(upserted[0].patternFingerprint).toBe("orbitsnd northport se::monthly");
+
+    const second: RecurringPattern[] = [];
+    await persistDetectedPatterns(
+      [candidate("orbitsnd northport se")],
+      storeWith(second, [{ merchant: "orbitsndil northport se", cadence: "monthly" }]),
+    );
+
+    expect(second).toHaveLength(1);
+    expect(second[0].patternFingerprint).toBe("orbitsndil northport se::monthly");
+  });
+
+  it("collapses several drifted forms of one series onto a single row", async () => {
+    const upserted: RecurringPattern[] = [];
+    await persistDetectedPatterns(
+      [candidate("orbitsnd northport se", 24), candidate("orbitsndil northport se", 26)],
+      storeWith(upserted, [{ merchant: "orbitsndil northport se", cadence: "monthly" }]),
+    );
+
+    expect(upserted).toHaveLength(1);
+    expect(upserted[0].merchant).toBe("orbitsndil northport se");
   });
 });

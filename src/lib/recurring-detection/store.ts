@@ -1,7 +1,12 @@
 import { db } from "@/db";
 import { transactions, recurringExpenses, categories } from "@/db/schema";
 import { and, or, eq, gte, lt, ne, isNull, notInArray } from "drizzle-orm";
-import type { DetectionTransaction, RecurringPattern, PersistedRecurringPattern } from "./types";
+import type {
+  DetectionTransaction,
+  RecurringPattern,
+  PersistedRecurringPattern,
+  SeriesIdentity,
+} from "./types";
 
 // ── Store interface ───────────────────────────────────────────────────────────
 
@@ -27,6 +32,19 @@ export interface RecurringStore {
    * it comes back empty.
    */
   getPersistedPatterns(): Promise<PersistedRecurringPattern[]>;
+
+  /**
+   * The identity of every persisted series — canceled rows INCLUDED, unlike
+   * `getPersistedPatterns`.
+   *
+   * The write path remaps detected candidates onto these, so canceled series must
+   * be visible. Matching only live rows was the alternative, and it lets a
+   * dismissed series come back the moment its descriptor drifts: detection mints
+   * a fresh active row under the new key, dodging the upsert's promise never to
+   * revive a user-retired one. A merchant the user dismissed keeps charging —
+   * that is the normal case, not evidence the dismissal was wrong.
+   */
+  getSeriesIdentities(): Promise<SeriesIdentity[]>;
 }
 
 // ── Drizzle implementation ────────────────────────────────────────────────────
@@ -63,7 +81,11 @@ export const drizzleRecurringStore: RecurringStore = {
             notInArray(categories.type, ["transfer", "ignore", "investment"]),
           ),
         ),
-      );
+      )
+      // Detection is order-sensitive at the margins (greedy clustering, and the
+      // first-match-wins amount buckets), so an unordered scan could shift a
+      // verdict between syncs over identical data.
+      .orderBy(transactions.date, transactions.id);
 
     return rows.map((row) => ({
       id: row.id,
@@ -101,6 +123,18 @@ export const drizzleRecurringStore: RecurringStore = {
           updatedAt: now,
         },
       });
+  },
+
+  async getSeriesIdentities(): Promise<SeriesIdentity[]> {
+    const rows = await db
+      .select({
+        merchant: recurringExpenses.merchant,
+        cadence: recurringExpenses.expectedCadence,
+      })
+      .from(recurringExpenses)
+      .orderBy(recurringExpenses.merchant);
+
+    return rows;
   },
 
   async getPersistedPatterns(): Promise<PersistedRecurringPattern[]> {

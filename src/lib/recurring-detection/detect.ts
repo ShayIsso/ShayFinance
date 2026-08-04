@@ -56,11 +56,37 @@ const MERCHANT_EXCLUSIVITY_RATIO = 0.5;
  * it, or starts a new one.
  *
  * Representatives are identity KEYS, so the `merchant` a pattern carries into
- * `recurring_expenses` can never be one charge's decorated descriptor. Keying it
- * off whichever charge the scan happened to see first let a per-charge machine
- * token reach the upsert fingerprint, which would mint a second row for a series
- * that already had one.
+ * `recurring_expenses` can never be one charge's decorated descriptor.
+ *
+ * The representative is then re-elected canonically (see `electRepresentative`),
+ * because the key a cluster is *seeded* with is whichever charge the scan read
+ * first. Where drift leaves a merchant with several keys that only `sameMerchant`
+ * unites — a plain form alongside tokenized ones — that seed decided the upsert
+ * fingerprint, so input order alone could mint a sibling row for one series.
  */
+/**
+ * The cluster's canonical name: the identity key most of its charges carry, ties
+ * broken lexicographically. Independent of input order, and it prefers the
+ * merchant's dominant descriptor form — usually the one already persisted.
+ */
+function electRepresentative(txns: DetectionTransaction[]): string {
+  const counts = new Map<string, number>();
+  for (const txn of txns) {
+    const key = merchantKey(txn.description);
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  let elected = "";
+  let electedCount = 0;
+  for (const [key, count] of [...counts].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (count > electedCount) {
+      elected = key;
+      electedCount = count;
+    }
+  }
+  return elected;
+}
+
 function clusterByMerchant(
   txns: DetectionTransaction[],
 ): Map<string, { representative: string; txns: DetectionTransaction[] }> {
@@ -82,6 +108,10 @@ function clusterByMerchant(
     if (!assigned) {
       clusters.set(merchant, { representative: merchant, txns: [txn] });
     }
+  }
+
+  for (const cluster of clusters.values()) {
+    cluster.representative = electRepresentative(cluster.txns);
   }
 
   return clusters;
