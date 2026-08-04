@@ -6,9 +6,14 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { countPendingAnomalies } from "./scan";
+import { countPendingAnomalies, persistDetectedPatterns, alignToPersistedSeries } from "./scan";
 import type { RecurringStore } from "./store";
-import type { DetectionTransaction, PersistedRecurringPattern, RecurringPattern } from "./types";
+import type {
+  DetectionTransaction,
+  PersistedRecurringPattern,
+  RecurringPattern,
+  SeriesIdentity,
+} from "./types";
 
 function makePattern(
   overrides: Partial<PersistedRecurringPattern> & { id: string },
@@ -39,6 +44,9 @@ function makeFakeStore(
     async upsertPattern(_pattern: RecurringPattern) {},
     async getPersistedPatterns() {
       return patterns;
+    },
+    async getSeriesIdentities() {
+      return [];
     },
   };
 }
@@ -101,5 +109,172 @@ describe("countPendingAnomalies", () => {
     const store = makeFakeStore([dormantPattern], [makeTxn("acme-stream", "2000-01-01")]);
     const total = await countPendingAnomalies(store);
     expect(total).toBe(1);
+  });
+});
+
+describe("persistDetectedPatterns — one row per fingerprint (#237)", () => {
+  function makeDetected(fingerprint: string, amount: number, last: string): RecurringPattern {
+    return {
+      merchant: "harbor market",
+      expectedAmount: amount,
+      cadence: "monthly",
+      occurrenceDates: [new Date(`${last}T00:00:00.000Z`)],
+      lastMatchedTxnId: `txn-${amount}`,
+      patternFingerprint: fingerprint,
+      nextExpectedDate: new Date("2026-07-01T00:00:00.000Z"),
+    };
+  }
+
+  function recordingStore(
+    upserted: RecurringPattern[],
+    existing: SeriesIdentity[] = [],
+  ): RecurringStore {
+    return {
+      async getTransactionsForDetection() {
+        return [];
+      },
+      async upsertPattern(pattern: RecurringPattern) {
+        upserted.push(pattern);
+      },
+      async getPersistedPatterns() {
+        return [];
+      },
+      async getSeriesIdentities() {
+        return existing;
+      },
+    };
+  }
+
+  it("upserts the most recent regime when several share one fingerprint", async () => {
+    const upserted: RecurringPattern[] = [];
+    await persistDetectedPatterns(
+      [
+        makeDetected("harbor market::monthly", 54, "2026-06-01"),
+        makeDetected("harbor market::monthly", 33, "2026-04-01"),
+        makeDetected("harbor market::monthly", 67, "2026-02-01"),
+      ],
+      recordingStore(upserted),
+    );
+
+    expect(upserted).toHaveLength(1);
+    expect(upserted[0].expectedAmount).toBe(54);
+  });
+
+  it("is order-independent", async () => {
+    const forward: RecurringPattern[] = [];
+    const reversed: RecurringPattern[] = [];
+    const regimes = [
+      makeDetected("harbor market::monthly", 54, "2026-06-01"),
+      makeDetected("harbor market::monthly", 33, "2026-04-01"),
+    ];
+
+    await persistDetectedPatterns(regimes, recordingStore(forward));
+    await persistDetectedPatterns([...regimes].reverse(), recordingStore(reversed));
+
+    expect(reversed[0].expectedAmount).toBe(forward[0].expectedAmount);
+  });
+
+  it("still upserts every distinct fingerprint", async () => {
+    const upserted: RecurringPattern[] = [];
+    await persistDetectedPatterns(
+      [
+        makeDetected("harbor market::monthly", 54, "2026-06-01"),
+        makeDetected("orbit sound::monthly", 33, "2026-04-01"),
+      ],
+      recordingStore(upserted),
+    );
+
+    expect(upserted).toHaveLength(2);
+  });
+});
+
+describe("alignToPersistedSeries — write path shares read-path identity (#237)", () => {
+  function storeWith(
+    upserted: RecurringPattern[],
+    existing: SeriesIdentity[] = [],
+  ): RecurringStore {
+    return {
+      async getTransactionsForDetection() {
+        return [];
+      },
+      async upsertPattern(pattern: RecurringPattern) {
+        upserted.push(pattern);
+      },
+      async getPersistedPatterns() {
+        return [];
+      },
+      async getSeriesIdentities() {
+        return existing;
+      },
+    };
+  }
+
+  function candidate(merchant: string, amount = 24): RecurringPattern {
+    return {
+      merchant,
+      expectedAmount: amount,
+      cadence: "monthly",
+      occurrenceDates: [new Date("2026-06-13T00:00:00.000Z")],
+      lastMatchedTxnId: "txn-1",
+      patternFingerprint: `${merchant}::monthly`,
+      nextExpectedDate: new Date("2026-07-13T00:00:00.000Z"),
+    };
+  }
+
+  it("renames a drifted candidate onto the series it already is", () => {
+    const [aligned] = alignToPersistedSeries(
+      [candidate("orbitsnd northport se")],
+      [{ merchant: "orbitsndil northport se", cadence: "monthly" }],
+    );
+
+    expect(aligned.merchant).toBe("orbitsndil northport se");
+    expect(aligned.patternFingerprint).toBe("orbitsndil northport se::monthly");
+  });
+
+  it("leaves an unrelated candidate untouched", () => {
+    const [aligned] = alignToPersistedSeries(
+      [candidate("harbor market")],
+      [{ merchant: "orbitsndil northport se", cadence: "monthly" }],
+    );
+
+    expect(aligned.merchant).toBe("harbor market");
+    expect(aligned.patternFingerprint).toBe("harbor market::monthly");
+  });
+
+  it("does not align across cadences", () => {
+    const [aligned] = alignToPersistedSeries(
+      [candidate("orbitsnd northport se")],
+      [{ merchant: "orbitsndil northport se", cadence: "annual" }],
+    );
+
+    expect(aligned.merchant).toBe("orbitsnd northport se");
+  });
+
+  it("updates the existing row instead of minting a sibling on re-detect", async () => {
+    const upserted: RecurringPattern[] = [];
+    await persistDetectedPatterns([candidate("orbitsnd northport se")], storeWith(upserted));
+
+    expect(upserted).toHaveLength(1);
+    expect(upserted[0].patternFingerprint).toBe("orbitsnd northport se::monthly");
+
+    const second: RecurringPattern[] = [];
+    await persistDetectedPatterns(
+      [candidate("orbitsnd northport se")],
+      storeWith(second, [{ merchant: "orbitsndil northport se", cadence: "monthly" }]),
+    );
+
+    expect(second).toHaveLength(1);
+    expect(second[0].patternFingerprint).toBe("orbitsndil northport se::monthly");
+  });
+
+  it("collapses several drifted forms of one series onto a single row", async () => {
+    const upserted: RecurringPattern[] = [];
+    await persistDetectedPatterns(
+      [candidate("orbitsnd northport se", 24), candidate("orbitsndil northport se", 26)],
+      storeWith(upserted, [{ merchant: "orbitsndil northport se", cadence: "monthly" }]),
+    );
+
+    expect(upserted).toHaveLength(1);
+    expect(upserted[0].merchant).toBe("orbitsndil northport se");
   });
 });

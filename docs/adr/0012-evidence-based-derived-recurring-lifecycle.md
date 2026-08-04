@@ -40,6 +40,9 @@ writing it, but no lifecycle, anomaly, or forecast consumer may read it.
 - Liveness matching is amount-agnostic by design: a price change must not kill a series. The cost —
   any merchant-matching purchase keeps a series alive — is accepted; habitual false-positive series
   die by user dismissal, not by lifecycle.
-- Descriptor instability (a merchant whose description mutates per charge) is the known blind spot:
-  evidence-matching only sees the descriptor form detection fingerprinted. Tracked as a
-  detection/matching concern, not a lifecycle one.
+- Descriptor instability (a merchant whose description mutates per charge) was the known blind
+  spot: evidence-matching only saw the descriptor form detection fingerprinted, so a series whose
+  charges continued under a drifted descriptor went dead on false silence. Closed by #237, which
+  moved both detection clustering and evidence matching onto one shared `merchant identity`
+  predicate (`sameMerchant` in `transaction-matching`) — the two can no longer disagree about which
+  charges belong to a series.

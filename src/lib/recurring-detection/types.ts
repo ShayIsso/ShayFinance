@@ -53,6 +53,16 @@ export type PersistedRecurringPattern = RecurringPattern & {
   confirmedAt: Date | null;
 };
 
+/**
+ * Enough of a persisted series to recognise it again: its stored match key and
+ * cadence. What the write path remaps detected candidates onto so a descriptor
+ * that drifted updates the existing row instead of minting a sibling.
+ */
+export type SeriesIdentity = {
+  merchant: string;
+  cadence: Cadence;
+};
+
 /** Alert raised when a pattern's latest charge deviates > 15% from expectedAmount. */
 export type PriceChangeAlert = {
   type: "price_change";

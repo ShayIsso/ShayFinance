@@ -1,4 +1,4 @@
-import { extractMerchant } from "@/lib/transaction-matching";
+import { merchantKey, sameMerchant } from "@/lib/transaction-matching";
 import type { Cadence, DetectionTransaction, PersistedRecurringPattern } from "./types";
 
 const MS_PER_DAY = 86_400_000;
@@ -27,13 +27,13 @@ export function dormancyThreshold(cadence: Cadence): number {
   return Math.round(CADENCE_INTERVAL_DAYS[cadence] * DEATH_THRESHOLD_MULTIPLIER);
 }
 
-/** Money-out charges grouped by `extractMerchant`-normalized, lowercased description. */
+/** Money-out charges grouped by `merchantKey` — one bucket per merchant identity. */
 export type MerchantChargeIndex = Map<string, DetectionTransaction[]>;
 
 export function indexChargesByMerchant(txns: DetectionTransaction[]): MerchantChargeIndex {
   const index: MerchantChargeIndex = new Map();
   for (const txn of txns) {
-    const key = extractMerchant(txn.description).toLowerCase();
+    const key = merchantKey(txn.description);
     if (!key) continue;
     const bucket = index.get(key);
     if (bucket) bucket.push(txn);
@@ -46,13 +46,26 @@ export function indexChargesByMerchant(txns: DetectionTransaction[]): MerchantCh
  * The series' observed charges, oldest first. Matching is on `merchant` — the
  * immutable match key — never `displayName`, and is amount-agnostic: a price
  * change must not kill a series (ADR-0012).
+ *
+ * Matching is CONTEXT.md `merchant identity` — the same predicate that clustered
+ * these charges into the series at detection time, so detection and evidence can
+ * never disagree about which charges belong to it (#237). `merchantKey` is
+ * idempotent, so a PERSISTED `merchant` re-keys into the same bucket as a raw
+ * description and stored rows heal without a migration.
+ *
+ * Scans the index's keys rather than doing one lookup: a drifted charge sits
+ * under a different key by definition. Keys are distinct merchants, not
+ * transactions, so this stays small.
  */
 export function observedChargesFor(
   pattern: PersistedRecurringPattern,
   index: MerchantChargeIndex,
 ): DetectionTransaction[] {
-  const matched = index.get(pattern.merchant.toLowerCase()) ?? [];
-  return [...matched].sort((a, b) => a.date.localeCompare(b.date));
+  const matched: DetectionTransaction[] = [];
+  for (const [candidateKey, charges] of index) {
+    if (sameMerchant(candidateKey, pattern.merchant)) matched.push(...charges);
+  }
+  return matched.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** What the window's matching charges say about one series. All-or-nothing. */

@@ -303,3 +303,96 @@ describe("projectUpcomingCharges", () => {
     expect(projectUpcomingCharges([pattern], txns, TODAY, 25).upcoming).toHaveLength(1);
   });
 });
+
+// ── Evidence under descriptor drift (#237) ────────────────────────────────────
+// ADR-0012 named descriptor instability its known blind spot: evidence matching
+// only saw the descriptor form detection happened to fingerprint, so a series
+// whose live charges continued under a drifted form was derived DEAD after ~1.5×
+// cadence of false silence. Evidence now asks the same merchant-identity
+// question the clusterer asks, so the two cannot disagree.
+describe("projectSeries — descriptor drift (#237)", () => {
+  const OLD_BRANCH = 'הארבור מרכז פ"ת- הו"ק';
+  const NEW_BRANCH = 'הארבור פ"ת דרום הו"ק';
+
+  it("counts charges under a new branch descriptor as evidence for the series", () => {
+    const pattern = makePattern({ id: "p1", merchant: OLD_BRANCH });
+    const txns = [
+      makeTxn("t1", OLD_BRANCH, -215, daysBefore(TODAY, 95)),
+      makeTxn("t2", NEW_BRANCH, -215, daysBefore(TODAY, 65)),
+      makeTxn("t3", NEW_BRANCH, -215, daysBefore(TODAY, 35)),
+      makeTxn("t4", NEW_BRANCH, -225, daysBefore(TODAY, 5)),
+    ];
+
+    const [projection] = projectSeries([pattern], txns, TODAY);
+
+    expect(projection.isLive).toBe(true);
+    expect(projection.evidence?.silenceDays).toBe(5);
+    expect(projection.evidence?.lastObservedChargeDate.toISOString().slice(0, 10)).toBe(
+      daysBefore(TODAY, 5),
+    );
+  });
+
+  it("does not derive a series dead while its charges continue under a drifted descriptor", () => {
+    // Silence measured on the retired form alone would be 95 days — past the
+    // 45-day monthly death threshold — and the series would surface as dormant.
+    const pattern = makePattern({ id: "p1", merchant: OLD_BRANCH });
+    const txns = [
+      makeTxn("t1", OLD_BRANCH, -215, daysBefore(TODAY, 95)),
+      makeTxn("t2", NEW_BRANCH, -215, daysBefore(TODAY, 10)),
+    ];
+
+    expect(projectSeries([pattern], txns, TODAY)[0].isLive).toBe(true);
+  });
+
+  it("counts a per-charge tokenized descriptor as evidence for the plain-form series", () => {
+    const pattern = makePattern({ id: "p1", merchant: "orbitsndil northport se" });
+    const txns = [
+      makeTxn("t1", "ORBITSNDIL          NORTHPORT   SE", -23.9, daysBefore(TODAY, 62)),
+      makeTxn("t2", "ORBITSND K7Q2M4     NORTHPORT   SE", -23.9, daysBefore(TODAY, 32)),
+      makeTxn("t3", "ORBITSND K7Q2M9     NORTHPORT   SE", -23.9, daysBefore(TODAY, 2)),
+    ];
+
+    const [projection] = projectSeries([pattern], txns, TODAY);
+
+    expect(projection.isLive).toBe(true);
+    expect(projection.evidence?.silenceDays).toBe(2);
+  });
+
+  it("averages the drifted charges into the expected amount", () => {
+    const pattern = makePattern({ id: "p1", merchant: OLD_BRANCH, expectedAmount: 240 });
+    const txns = [
+      makeTxn("t1", OLD_BRANCH, -240, daysBefore(TODAY, 62)),
+      makeTxn("t2", NEW_BRANCH, -215, daysBefore(TODAY, 32)),
+      makeTxn("t3", NEW_BRANCH, -215, daysBefore(TODAY, 2)),
+    ];
+
+    const [projection] = projectSeries([pattern], txns, TODAY);
+
+    expect(projection.evidence?.observedAmount).toBeCloseTo((240 + 215 + 215) / 3, 5);
+  });
+
+  it("still ignores an unrelated merchant's charges", () => {
+    const pattern = makePattern({ id: "p1", merchant: "harbor fitness" });
+    const txns = [makeTxn("t1", "ORBIT SOUND", -215, daysBefore(TODAY, 2))];
+
+    const [projection] = projectSeries([pattern], txns, TODAY);
+
+    expect(projection.isLive).toBe(false);
+    expect(projection.evidence).toBeNull();
+  });
+
+  it("forecasts a drifted series from its newest charge, whatever form it wore", () => {
+    const pattern = makePattern({ id: "p1", merchant: OLD_BRANCH });
+    const txns = [
+      makeTxn("t1", OLD_BRANCH, -215, daysBefore(TODAY, 95)),
+      makeTxn("t2", NEW_BRANCH, -215, daysBefore(TODAY, 4)),
+    ];
+
+    const { upcoming } = projectUpcomingCharges([pattern], txns, TODAY);
+
+    expect(upcoming).toHaveLength(1);
+    expect(upcoming[0].lastObservedChargeDate.toISOString().slice(0, 10)).toBe(
+      daysBefore(TODAY, 4),
+    );
+  });
+});

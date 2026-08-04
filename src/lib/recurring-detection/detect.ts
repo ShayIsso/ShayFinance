@@ -1,4 +1,4 @@
-import { extractMerchant, amountsMatch, scoreSimilarity } from "@/lib/transaction-matching";
+import { merchantKey, amountsMatch, sameMerchant } from "@/lib/transaction-matching";
 import type { DetectionTransaction, RecurringPattern, Cadence } from "./types";
 import { buildFingerprint } from "./fingerprint";
 import { computeNextExpectedDate } from "./next-date";
@@ -39,40 +39,66 @@ function classifyCadence(sortedDates: Date[]): Cadence | null {
   return cadence;
 }
 
-const STRONG_MATCH_THRESHOLD = 0.7;
+/** Occurrences at one amount that make it a CONTEXT.md `price regime`. */
+const REGIME_MIN_OCCURRENCES = 3;
 
 /**
- * Minimum share of a merchant's total money-out activity that an amount-group
- * must represent to be treated as a genuine recurring pattern. Rejects
- * habitual-purchase false positives (e.g. a ₪25 bakery visited 3× among ~20
- * varied charges) while keeping real subscriptions (one stable amount, every
- * charge in the same bucket → ratio 1.0).
+ * Minimum share of the activity a candidate series is weighed against — itself
+ * plus the merchant's CONTEXT.md `incidental charge`s, never the merchant's
+ * other price regimes. Rejects habitual-purchase false positives (a ₪25 bakery
+ * visited 3× among ~20 varied charges) while keeping real subscriptions.
  */
 const MERCHANT_EXCLUSIVITY_RATIO = 0.5;
 
 /**
- * Groups transactions by fuzzy merchant similarity.
- * Each group contains transactions that likely belong to the same merchant.
+ * Groups transactions by CONTEXT.md `merchant identity`, greedy single-linkage:
+ * each transaction joins the first cluster whose representative `sameMerchant`s
+ * it, or starts a new one.
  *
- * Algorithm: greedy single-linkage clustering.
- * - For each transaction, extract its merchant name.
- * - Find the first existing cluster whose representative merchant scores
- *   ≥ 0.7 (JW²) against this transaction's merchant.
- * - If found, add to that cluster; otherwise start a new cluster.
+ * Representatives are identity KEYS, so the `merchant` a pattern carries into
+ * `recurring_expenses` can never be one charge's decorated descriptor.
+ *
+ * The representative is then re-elected canonically (see `electRepresentative`),
+ * because the key a cluster is *seeded* with is whichever charge the scan read
+ * first. Where drift leaves a merchant with several keys that only `sameMerchant`
+ * unites — a plain form alongside tokenized ones — that seed decided the upsert
+ * fingerprint, so input order alone could mint a sibling row for one series.
  */
+/**
+ * The cluster's canonical name: the identity key most of its charges carry, ties
+ * broken lexicographically. Independent of input order, and it prefers the
+ * merchant's dominant descriptor form — usually the one already persisted.
+ */
+function electRepresentative(txns: DetectionTransaction[]): string {
+  const counts = new Map<string, number>();
+  for (const txn of txns) {
+    const key = merchantKey(txn.description);
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  let elected = "";
+  let electedCount = 0;
+  for (const [key, count] of [...counts].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (count > electedCount) {
+      elected = key;
+      electedCount = count;
+    }
+  }
+  return elected;
+}
+
 function clusterByMerchant(
   txns: DetectionTransaction[],
 ): Map<string, { representative: string; txns: DetectionTransaction[] }> {
   const clusters = new Map<string, { representative: string; txns: DetectionTransaction[] }>();
 
   for (const txn of txns) {
-    const merchant = extractMerchant(txn.description);
+    const merchant = merchantKey(txn.description);
     if (!merchant) continue;
 
     let assigned = false;
     for (const cluster of clusters.values()) {
-      const score = scoreSimilarity(cluster.representative, merchant);
-      if (score >= STRONG_MATCH_THRESHOLD) {
+      if (sameMerchant(cluster.representative, merchant)) {
         cluster.txns.push(txn);
         assigned = true;
         break;
@@ -82,6 +108,10 @@ function clusterByMerchant(
     if (!assigned) {
       clusters.set(merchant, { representative: merchant, txns: [txn] });
     }
+  }
+
+  for (const cluster of clusters.values()) {
+    cluster.representative = electRepresentative(cluster.txns);
   }
 
   return clusters;
@@ -144,15 +174,16 @@ export function detectPatterns(txns: DetectionTransaction[]): RecurringPattern[]
   for (const cluster of merchantClusters.values()) {
     const amountGroups = partitionByAmount(cluster.txns);
 
-    for (const group of amountGroups) {
-      if (group.txns.length < 3) continue;
+    const incidentalCount = amountGroups
+      .filter((group) => group.txns.length < REGIME_MIN_OCCURRENCES)
+      .reduce((sum, group) => sum + group.txns.length, 0);
 
-      // Merchant-exclusivity heuristic: reject an amount-group that is only a
-      // minority of this merchant's total money-out activity in the window.
-      // A real subscription always charges the same amount (ratio → 1.0); a
-      // habitual purchase produces a small same-amount cluster among many
-      // varied charges (ratio → low). Boundary: exactly 0.5 is KEPT.
-      if (group.txns.length / cluster.txns.length < MERCHANT_EXCLUSIVITY_RATIO) {
+    for (const group of amountGroups) {
+      if (group.txns.length < REGIME_MIN_OCCURRENCES) continue;
+
+      // Boundary: exactly MERCHANT_EXCLUSIVITY_RATIO is KEPT.
+      const weighedAgainst = group.txns.length + incidentalCount;
+      if (group.txns.length / weighedAgainst < MERCHANT_EXCLUSIVITY_RATIO) {
         continue;
       }
 

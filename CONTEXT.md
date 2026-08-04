@@ -219,7 +219,12 @@ _Avoid_: subscription (a series need not be a subscription — standing orders a
 
 ### `liveness evidence` — load-bearing
 
-The only admissible input for judging whether a series is live: the most recent money-out transaction whose normalized merchant matches the series' `merchant`. The stored `next_expected_date` is **never** lifecycle input — it is a detection-time display artifact. See [ADR-0012](./docs/adr/0012-evidence-based-derived-recurring-lifecycle.md).
+The only admissible input for judging whether a series is live: the most recent money-out transaction that is the same `merchant identity` as the series' `merchant`. The stored `next_expected_date` is **never** lifecycle input — it is a detection-time display artifact. See [ADR-0012](./docs/adr/0012-evidence-based-derived-recurring-lifecycle.md).
+
+### `merchant identity` — load-bearing
+
+The single answer to "are these two descriptors the same merchant?", owned by `transaction-matching` (`sameMerchant`, over the `merchantKey` identity key). One definition, two consumers that must never disagree: detection's merchant clustering and `liveness evidence` matching. Identity survives **descriptor drift** — a per-charge machine token, a per-charge date stamp, a branch rename — because a series whose charges continue under a drifted descriptor would otherwise be clustered as one merchant yet derived dead from evidence (#237). Distinct from `extractMerchant`, which stays a _persisted_ key (`merchant memory`, `recurring_expenses.merchant`) and so may not be redefined; identity layers on top of it and is idempotent, which is what lets a stored merchant re-key without a migration.
+_Avoid_: fuzzy match (identity is a verdict, not a score; whole-string similarity alone reads sibling names as one merchant)
 
 ### `live` / `dead` — load-bearing
 
@@ -229,6 +234,10 @@ _Avoid_: retired, expired (as automated states)
 ### `silence` and the `death threshold`
 
 **Silence** is days elapsed since a series' last observed matching charge. The **death threshold** is 1.5× the cadence interval (monthly ≈ 45d, quarterly ≈ 137d, annual ≈ 548d) — one shared constant with the dormant/missed anomaly detectors, so a series can never be simultaneously "dormant" on one page and "upcoming" on another. Liveness matching is amount-agnostic: price changes must not kill a series.
+
+### `price regime` and `incidental charge`
+
+Within one merchant's charges, a **price regime** is an amount bucket the merchant charged at least three times — a plan or price the merchant genuinely billed, whether or not those dates turn out to form a cadence. Everything else at that merchant is an **incidental charge**. Detection's exclusivity heuristic weighs a candidate series against the merchant's incidental charges only, never against its other regimes: measuring against _all_ of the merchant's activity made a series that changed price mid-window a structural minority of itself, so a live standing order whose branch descriptor and price both moved was never detected (#237). Regimes are sequential (a price rise retires the old one) or concurrent (two plans at one merchant).
 
 ### `projected charge` — load-bearing
 
