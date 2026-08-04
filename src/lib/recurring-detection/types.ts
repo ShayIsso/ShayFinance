@@ -17,7 +17,8 @@ export type RecurringPattern = {
   /** ID of the most-recent matched transaction (for lastMatchedTxnId column). */
   lastMatchedTxnId: string;
   /**
-   * Stable deterministic fingerprint of (merchant, amountBucket, cadence).
+   * Stable deterministic fingerprint of (merchant, cadence) — amount is
+   * deliberately excluded, see `buildFingerprint` in `./fingerprint.ts`.
    * Used as the upsert key so the same recurring charge always maps to the
    * same row in recurring_expenses, regardless of which sync run detected it.
    */
