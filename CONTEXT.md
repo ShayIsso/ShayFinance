@@ -214,7 +214,7 @@ The דוחות monthly report's per-category-budget and savings-target results f
 
 ### `recurring series`
 
-A detected repeating charge (subscription, standing order, membership) persisted in `recurring_expenses`, keyed by a fingerprint of (merchant, amount bucket, cadence). `cadence` is its repeat interval: monthly, quarterly, or annual.
+A detected repeating charge (subscription, standing order, membership) persisted in `recurring_expenses`, keyed by a fingerprint of (`merchant identity`, cadence) — amount is deliberately excluded, so a price change cannot fork or freeze a series. `cadence` is its repeat interval: monthly, quarterly, or annual.
 _Avoid_: subscription (a series need not be a subscription — standing orders and fees qualify)
 
 ### `liveness evidence` — load-bearing
