@@ -26,8 +26,6 @@ export async function GET() {
       expectedAmount: charge.expectedAmount,
       cadence: charge.cadence,
       projectedDate: toIsoDate(charge.projectedDate),
-      // Alias kept for the C1 placeholder widget; #209 owns dropping it.
-      nextExpectedDate: toIsoDate(charge.projectedDate),
     })),
     total,
   });
