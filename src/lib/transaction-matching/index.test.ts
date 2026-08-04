@@ -6,6 +6,8 @@ import {
   extractMerchant,
   scoreSimilarity,
   canonicalizeMerchant,
+  merchantKey,
+  sameMerchant,
 } from "./index";
 
 describe("datesWithin", () => {
@@ -246,5 +248,137 @@ describe("canonicalizeMerchant", () => {
     // hyphen/dot separators still tokenize: "google-pay" contains the token "google".
     expect(canonicalizeMerchant("google pay")).toBe(canonicalizeMerchant("google"));
     expect(canonicalizeMerchant("נטפליקס ישראל")).toBe(canonicalizeMerchant("netflix"));
+  });
+});
+
+// ── Merchant identity (#237) ──────────────────────────────────────────────────
+// All descriptors below are synthesized. The shapes they stand for — a
+// per-charge machine token, a per-charge date fragment, a branch/city suffix —
+// are the real recall failures; the strings are not real bank data.
+
+describe("merchantKey", () => {
+  it("strips a per-charge machine token (mixed letters+digits) from a card descriptor", () => {
+    expect(merchantKey("ORBITSND K7Q2M4 NORTHPORT SE")).toBe("orbitsnd northport se");
+  });
+
+  it("gives every charge of a tokenized descriptor family the same key", () => {
+    const keys = [
+      merchantKey("ORBITSND K7Q2M4 NORTHPORT SE"),
+      merchantKey("ORBITSND K7Q2M9 NORTHPORT SE"),
+      merchantKey("ORBITSND K7Q2N3 NORTHPORT SE"),
+    ];
+    expect(new Set(keys).size).toBe(1);
+  });
+
+  it("keeps a brand token that carries a single digit", () => {
+    expect(merchantKey("level3 media")).toBe("level3 media");
+    expect(merchantKey("קפה 5")).toBe("קפה 5");
+  });
+
+  it("keeps a short alphanumeric token — too short to be a machine token", () => {
+    expect(merchantKey("h2o bar")).toBe("h2o bar");
+  });
+
+  it("strips a digit run of 4+ that punctuation glues to a word", () => {
+    // extractMerchant only strips whitespace-bounded digit runs, so a per-charge
+    // reference number attached by a colon survives it.
+    expect(merchantKey("משיכת שיק:1234")).toBe("משיכת שיק");
+  });
+
+  it("strips an embedded per-charge date fragment", () => {
+    expect(merchantKey("מש' מכספומט 19/05")).toBe("מש' מכספומט");
+    expect(merchantKey("מש' מכספומט 04/08")).toBe("מש' מכספומט");
+  });
+
+  it("leaves an ordinary merchant descriptor alone (beyond extractMerchant's own work)", () => {
+    expect(merchantKey("harbor fitness northport")).toBe("harbor fitness northport");
+    expect(merchantKey("מכון כושר צפון")).toBe("מכון כושר צפון");
+  });
+
+  it("is idempotent — a key re-keyed is unchanged", () => {
+    for (const input of [
+      "ORBITSND K7Q2M4 NORTHPORT SE",
+      "משיכת שיק:1234",
+      "מש' מכספומט 19/05",
+      "harbor fitness northport",
+      "",
+    ]) {
+      expect(merchantKey(merchantKey(input))).toBe(merchantKey(input));
+    }
+  });
+
+  it("agrees whether applied to a raw description or to its extracted merchant", () => {
+    // The invariant that lets evidence matching key a PERSISTED merchant (already
+    // an extractMerchant output) and a raw description into the same bucket
+    // without a data migration.
+    for (const input of [
+      "תשלום ב-ORBITSND K7Q2M4 NORTHPORT SE",
+      "רכישה בהארבור פיטנס צפון",
+      "משיכת שיק:1234",
+    ]) {
+      expect(merchantKey(extractMerchant(input))).toBe(merchantKey(input));
+    }
+  });
+
+  it("strips a host prefix that carries no identity", () => {
+    expect(merchantKey("WWW.ORBITSHOP")).toBe(merchantKey("ORBITSHOP"));
+  });
+
+  it("returns empty for blank input", () => {
+    expect(merchantKey("")).toBe("");
+    expect(merchantKey("   ")).toBe("");
+  });
+});
+
+describe("sameMerchant", () => {
+  it("matches two charges of a tokenized descriptor family", () => {
+    expect(sameMerchant("ORBITSND K7Q2M4 NORTHPORT SE", "ORBITSND K7Q2N3 NORTHPORT SE")).toBe(true);
+  });
+
+  it("matches a tokenized descriptor against the same merchant's plain form", () => {
+    expect(sameMerchant("ORBITSND K7Q2M4 NORTHPORT SE", "ORBITSNDIL NORTHPORT SE")).toBe(true);
+  });
+
+  it("matches a branch/descriptor switch at one merchant", () => {
+    expect(sameMerchant('הארבור מרכז פ"ת- הו"ק', 'הארבור פ"ת דרום הו"ק')).toBe(true);
+  });
+
+  it("matches across scripts through the alias table", () => {
+    expect(sameMerchant("נטפליקס ישראל", "NETFLIX.COM")).toBe(true);
+  });
+
+  it("does NOT match unrelated merchants", () => {
+    expect(sameMerchant("harbor fitness", "orbit sound")).toBe(false);
+    expect(sameMerchant("נטפליקס", "SPOTIFY")).toBe(false);
+  });
+
+  it("is symmetric", () => {
+    const a = "ORBITSND K7Q2M4 NORTHPORT SE";
+    const b = "ORBITSNDIL NORTHPORT SE";
+    expect(sameMerchant(a, b)).toBe(sameMerchant(b, a));
+  });
+
+  // Regression: a lone token found INSIDE a longer descriptor is coincidence, not
+  // identity. On real data this merged unrelated merchants sharing a similar word,
+  // and let generic descriptors swallow everything they prefixed.
+  it("does NOT match a single-token key contained in a longer descriptor", () => {
+    expect(sameMerchant("parkstone", "alonet park northport")).toBe(false);
+    expect(sameMerchant("transfer", "transfer to alpha beta")).toBe(false);
+    expect(sameMerchant("fee", "fee via alpha northport")).toBe(false);
+  });
+
+  it("still matches two single-token keys directly", () => {
+    expect(sameMerchant("orbitshop", "orbitshopil")).toBe(true);
+  });
+
+  it("still matches when the shorter side carries a company suffix", () => {
+    // Two tokens is enough to be contained: the shorter key is fully present.
+    expect(sameMerchant("גוד מרקט", 'גוד מרקט בע"מ')).toBe(true);
+  });
+
+  it("never matches when either side has no merchant at all", () => {
+    expect(sameMerchant("", "harbor fitness")).toBe(false);
+    expect(sameMerchant("harbor fitness", "")).toBe(false);
+    expect(sameMerchant("", "")).toBe(false);
   });
 });

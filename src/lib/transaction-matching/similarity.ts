@@ -37,7 +37,9 @@ function jaro(s1: string, s2: string): number {
   return (matches / s1.length + matches / s2.length + (matches - transpositions / 2) / matches) / 3;
 }
 
-function jaroWinkler(s1: string, s2: string): number {
+/** Raw Jaro-Winkler. Internal to the module — consumers score through
+ * `scoreSimilarity` (squared) or ask `sameMerchant` for a verdict. */
+export function jaroWinkler(s1: string, s2: string): number {
   const jaroScore = jaro(s1, s2);
   if (jaroScore === 0) return 0;
 

@@ -4,5 +4,6 @@ export { datesWithin } from "./dates";
 export { extractMerchant } from "./merchant";
 export { canonicalizeMerchant } from "./canonicalize";
 export { scoreSimilarity } from "./similarity";
+export { merchantKey, sameMerchant } from "./identity";
 export type { TransferDescriptorKind, TransferDescriptorMatch } from "./transfer-descriptors";
 export { classifyTransferDescriptor, matchesTransferDescriptor } from "./transfer-descriptors";
