@@ -246,6 +246,30 @@ _Avoid_: fabricated charge (a projection for a dead series — the #192 defect; 
 
 ---
 
+## Openness vocabulary (Phase 3)
+
+Locked in [ADR-0013](./docs/adr/0013-declarative-bank-registry.md) and [ADR-0014](./docs/adr/0014-first-run-bootstrap-and-secret-placement.md) (#110). Use these exact terms.
+
+### `bank registry` — load-bearing
+
+The single committed, frozen, DB-free source of every fact about a supported institution: id, Hebrew and English display names, `kind`, `issuesOtp`, scraper company id, credential fields, and tier. Two laws bind it: **a bank literal outside the registry is a bug**, and **code branches on a registry property, never on a bank id**. The second is the load-bearing one — label drift is cosmetic, behaviour drift (a new institution missing from a `CARD_BANK_TYPES` set) is wrong money. Not a table, not a plugin format: an entry cannot make an institution work — only the scraper library can — so runtime-addable entries would only enable broken rows.
+_Avoid_: bank list, bank map (both name a copy; there is exactly one)
+
+### `verified tier` / `experimental tier` — load-bearing
+
+Two presentational trust levels on a registry entry — **never a second code path**. `verified` means we have tested the institution with real credentials; `experimental` means the library implements it and we have not. An experimental failure must read as "unverified institution", never as an app defect. The registry's tier is the global default and changes by pull request; an installation overrules the label from its own evidence, so **a recorded successful sync retires the caveat on that install**. The distinction: _the registry states what we have verified; the instance states what it has observed._
+
+### `credential field kind` — load-bearing
+
+One of a **closed** union (`text`, `password`, `national-id`, `account-number`, `card-6-digits`) naming how a credential field renders and validates. A generic form builds any institution's credential form from its field list; per-bank form forks and duplicated Zod schemas do not exist. Field descriptors are curated by us and **pinned by assertion against the scraper library's `loginFields`**, since pure derivation breaks on non-user-entered fields and yields no Hebrew labels or secrecy marking. `password` is the only kind marked secret — national IDs and account numbers are already covered structurally by the `redaction boundary`'s 5+-digit rule.
+_Avoid_: field schema (implies a DSL; the kinds are closed and each maps to one rendering)
+
+### `onboarding completion` — load-bearing
+
+The explicit `onboarding_completed_at` flag on the single-row settings table — the **sole** first-run signal, never inferred from data (deleting your only bank must not relaunch onboarding). Only the app-password step is mandatory; every later step is skippable and lands the user in the app with the corresponding empty state. Onboarding is a courtesy path, never a gate, and has no re-run entry point — each step's real home is in Settings.
+
+---
+
 ## Architectural vocabulary
 
 ### `deep module`
