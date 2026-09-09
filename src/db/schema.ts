@@ -383,3 +383,34 @@ export const aiSuggestions = pgTable(
     index("idx_ai_suggestions_status").on(table.status),
   ],
 );
+
+/**
+ * App-level settings — a single row (id=1, mirrors `scheduler_config` /
+ * `goals_settings`: always upsert, never insert additional rows). Holds what
+ * ADR-0014 moves out of the environment, because the app can ask for it: the
+ * app-password hash and the categorization provider selection with its key.
+ *
+ * `onboarding_completed_at` is the *sole* first-run signal and is never inferred
+ * from data — deleting your only bank must not relaunch onboarding (ADR-0014
+ * §4). It is written once: the setup submission conditions its upsert on this
+ * column still being null, so a replay is harmless by construction.
+ *
+ * The API key is stored as the same AES-256-GCM triple as `bank_credentials`
+ * (ADR-0002 — unique IV per record, GCM auth tag). All three parts are nullable
+ * because a fresh install has no key, and all three must be read together.
+ *
+ * `categorization_provider` is `text`, not a `pgEnum`: the provider kinds are
+ * owned by `src/lib/ai-categorization` and validated at the Zod boundary, and a
+ * database enum listing them again is the second source of truth this schema
+ * spent #248 removing. Projection is total, so a retired kind reads as unset.
+ */
+export const appSettings = pgTable("app_settings", {
+  id: integer("id").primaryKey().default(1),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+  appPasswordHash: text("app_password_hash"),
+  categorizationProvider: text("categorization_provider"),
+  categorizationApiKeyEncrypted: bytea("categorization_api_key_encrypted"),
+  categorizationApiKeyIv: bytea("categorization_api_key_iv"),
+  categorizationApiKeyAuthTag: bytea("categorization_api_key_auth_tag"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

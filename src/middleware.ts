@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkBootEnv } from "@/lib/env";
 
 const SESSION_COOKIE = "shayfinance-session";
+const ENV_DIAGNOSTIC_PATH = "/env-check";
 
 function hexToArrayBuffer(hex: string): ArrayBuffer {
   const buf = new ArrayBuffer(hex.length / 2);
@@ -40,6 +42,23 @@ async function validateSessionEdge(token: string): Promise<boolean> {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Boot preflight (ADR-0014 §1), ahead of the login exemption because signing
+  // in needs the very key that may be missing. This has to run here rather than
+  // in the root layout: Next renders a page independently of whether its layout
+  // renders `children`, so a layout-level guard still lets a database-touching
+  // page run and 500 first. The middleware is the only seam that precedes it.
+  //
+  // Edge runtime — `process.env` and WebCrypto only, no database (which is also
+  // why the auth gate cannot consult the onboarding flag, ADR-0014 §4).
+  if (!checkBootEnv(process.env).ok) {
+    if (pathname.startsWith("/api/")) {
+      // Same reasoning as the 401 below: an API client needs a machine-readable
+      // failure, not 200 and a page of Hebrew prose.
+      return NextResponse.json({ error: "Environment not configured" }, { status: 503 });
+    }
+    return NextResponse.rewrite(new URL(ENV_DIAGNOSTIC_PATH, req.url));
+  }
 
   if (pathname === "/login" || pathname.startsWith("/api/auth/")) {
     return NextResponse.next();
