@@ -22,6 +22,7 @@ import {
 } from "./runs";
 import { runAiSyncStep } from "./ai-step";
 import { runPostImportPipeline, type PostSyncEvent } from "./post-import";
+import { createSyncClaim, acquireAndRelease } from "./claim";
 
 // Module-level OTP handler — set during active sync, used by POST /api/sync/otp
 let activeOtpHandler: OtpHandler | null = null;
@@ -32,6 +33,11 @@ export function submitOtp(code: string): boolean {
   activeOtpHandler = null;
   return true;
 }
+
+// One in-progress sync at a time, across every entry point that can launch
+// one — the SSE route and the scheduler (#246). Without this, two runs could
+// both set `activeOtpHandler` above and race to resolve each other's OTP.
+const syncClaim = createSyncClaim();
 
 export type SyncOptions = {
   /** Which surface triggered this sync — recorded in sync_runs.triggered_by. Defaults to "manual". */
@@ -51,7 +57,10 @@ export type SyncSummaryEvent = (SyncEvent & { _credentialId?: string }) | PostSy
 // delay; the timer lives here (setTimeout), out of the pure run/policy code.
 const syncBatchSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<SyncSummaryEvent> {
+// Not exported: every real caller must go through the claim (route.ts and
+// scheduler/index.ts both use `syncAllBanksClaimed` below). Exporting this
+// directly would reopen the exact bypass #246 exists to close.
+async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<SyncSummaryEvent> {
   const triggeredBy = opts.triggeredBy ?? "manual";
   const otpMode = opts.otpMode ?? "interactive";
 
@@ -189,4 +198,18 @@ export async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<Sync
     },
     importSummary: { total, byBank: importedByBank },
   });
+}
+
+/**
+ * `syncAllBanks`, guarded by the process-lifetime claim: a second concurrent
+ * call while one is already running returns `null` instead of starting —
+ * the caller (the SSE route, the scheduler) must check for `null` and
+ * refuse rather than iterate. On success, the claim releases once iteration
+ * ends for any reason: completion, a genuine throw, or the consumer walking
+ * away early (SSE client disconnect; the scheduler's own abort path).
+ */
+export function syncAllBanksClaimed(
+  opts: SyncOptions = {},
+): AsyncGenerator<SyncSummaryEvent> | null {
+  return acquireAndRelease(syncClaim, () => syncAllBanks(opts));
 }
