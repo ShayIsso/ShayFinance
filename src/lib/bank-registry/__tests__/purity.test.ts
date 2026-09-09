@@ -92,11 +92,18 @@ describe("the bank registry's import graph", () => {
     expect(names).toContain("fields.ts");
   });
 
-  it("walks no file outside its own module directory", () => {
-    const strays = files
-      .filter((file) => path.relative(MODULE_DIR, file).startsWith(".."))
-      .map((file) => path.relative(SRC_ROOT, file));
-    expect(strays).toEqual([]);
+  /**
+   * Resolution is confined to the module directory, so anything in-repo that the
+   * module reaches for arrives here as an unresolved specifier — asserting on
+   * `files` instead would hold by construction. This is the general form of the
+   * database check below: it also catches a reach into any other module, which
+   * is what would reintroduce a dependency the DB-free consumers cannot take.
+   */
+  it("imports nothing from the rest of the repository", () => {
+    const inRepo = dependencies.filter(
+      (dep) => dep.specifier.startsWith("@/") || dep.specifier.startsWith("."),
+    );
+    expect(inRepo).toEqual([]);
   });
 
   it("reaches no database barrel, directly or transitively", () => {
