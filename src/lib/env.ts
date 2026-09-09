@@ -56,9 +56,11 @@ const bootEnvSchema = envSchema.pick({ DATABASE_URL: true, ENCRYPTION_KEY: true 
 export type BootEnvVariable = keyof z.infer<typeof bootEnvSchema>;
 
 /**
- * Commands that produce a valid value. Nothing read from the environment is
- * ever interpolated into these: they feed a page rendered to the browser, where
- * no part of a secret may appear (zero-leak policy).
+ * The command to run to obtain each value — for the key, one that prints a
+ * fresh one; for the database, one that brings the local instance up so its
+ * connection string exists to copy. Nothing read from the environment is ever
+ * interpolated into these: they feed a page rendered to the browser, where no
+ * part of a secret may appear (zero-leak policy).
  */
 const GENERATE_COMMAND: Record<BootEnvVariable, string> = {
   DATABASE_URL: "docker compose up db -d",

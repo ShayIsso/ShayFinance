@@ -23,6 +23,9 @@ function makeInMemoryStore(seed: AppSettingsRow | null = null) {
     async setAppPasswordHash(hash) {
       row = { ...blank(), ...row, appPasswordHash: hash };
     },
+    async readAppPasswordHash() {
+      return row?.appPasswordHash ?? null;
+    },
     async completeOnboarding(completedAt) {
       if (row?.onboardingCompletedAt) return false;
       row = { ...blank(), ...row, onboardingCompletedAt: completedAt };
@@ -67,10 +70,19 @@ describe("AppSettingsStore contract", () => {
     expect(await store.read()).toEqual(EMPTY_APP_SETTINGS);
   });
 
-  it("reads back a written app-password hash", async () => {
+  it("reports a written app password as set without exposing its hash", async () => {
     const { store } = makeInMemoryStore();
     await store.setAppPasswordHash("bcrypt-hash-placeholder");
-    expect((await store.read()).appPasswordHash).toBe("bcrypt-hash-placeholder");
+
+    const settings = await store.read();
+    expect(settings.hasAppPassword).toBe(true);
+    expect(JSON.stringify(settings)).not.toContain("bcrypt-hash-placeholder");
+  });
+
+  it("returns the hash only through the dedicated read", async () => {
+    const { store } = makeInMemoryStore();
+    await store.setAppPasswordHash("bcrypt-hash-placeholder");
+    expect(await store.readAppPasswordHash()).toBe("bcrypt-hash-placeholder");
   });
 
   it("replaces the app-password hash rather than accumulating rows", async () => {
@@ -100,7 +112,7 @@ describe("AppSettingsStore contract", () => {
     const { store } = makeInMemoryStore();
     await store.setAppPasswordHash("bcrypt-hash-placeholder");
     await store.completeOnboarding(new Date("2026-03-04T00:00:00.000Z"));
-    expect((await store.read()).appPasswordHash).toBe("bcrypt-hash-placeholder");
+    expect(await store.readAppPasswordHash()).toBe("bcrypt-hash-placeholder");
   });
 
   it("reports a stored provider and key presence without exposing the key", async () => {

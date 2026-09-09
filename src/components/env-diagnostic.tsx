@@ -2,19 +2,6 @@ import { ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BootEnvProblem, BootEnvVariable } from "@/lib/env";
 
-/**
- * The boot-failure diagnostic (ADR-0014 §1). Rendered by the root layout in
- * place of the page whenever the boot preflight fails.
- *
- * This must render with no database connection and no session — neither is
- * available in the failure it reports, since the failing variable is either the
- * database URL itself or the key that decrypts what the database holds. Keep it
- * free of data fetching, cookies and client state: a refactor that adds any of
- * them turns this page into the same 500 it exists to replace.
- *
- * It names variables and commands only. No value — not a prefix, not a length —
- * may reach this markup (zero-leak policy).
- */
 const PURPOSE: Record<BootEnvVariable, string> = {
   DATABASE_URL:
     "כתובת החיבור למסד הנתונים. הריצו את מסד הנתונים המקומי והעתיקו את כתובת החיבור שלו.",
@@ -22,6 +9,20 @@ const PURPOSE: Record<BootEnvVariable, string> = {
     "המפתח שמצפין את פרטי ההתחברות לבנקים בתוך מסד הנתונים. צרו מפתח חדש והעתיקו אותו.",
 };
 
+/**
+ * The boot-failure diagnostic (ADR-0014 §1), rendered by `/env-check` — the
+ * route the middleware rewrites every page request to while the environment is
+ * unusable.
+ *
+ * It must render with no database connection and no session: neither is
+ * available in the failure it reports, since the failing variable is either the
+ * database URL itself or the key that decrypts what the database holds. Keep it
+ * free of data fetching, cookies and client state — a refactor that adds any of
+ * them turns this page into the same 500 it exists to replace.
+ *
+ * It names variables and commands only. No value — not a prefix, not a length —
+ * may reach this markup (zero-leak policy).
+ */
 export function EnvDiagnostic({ problems }: { problems: readonly BootEnvProblem[] }) {
   return (
     <main className="flex min-h-full flex-1 items-center justify-center p-6">

@@ -18,6 +18,16 @@ describe("projectAppSettings", () => {
     expect(projectAppSettings(null)).toEqual(EMPTY_APP_SETTINGS);
   });
 
+  it("reduces a stored password hash to a presence flag", () => {
+    const projected = projectAppSettings(row({ appPasswordHash: "bcrypt-hash-placeholder" }));
+    expect(projected.hasAppPassword).toBe(true);
+    expect(JSON.stringify(projected)).not.toContain("bcrypt-hash-placeholder");
+  });
+
+  it("reports no app password when none is stored", () => {
+    expect(projectAppSettings(row()).hasAppPassword).toBe(false);
+  });
+
   it("reports a key as present when all three ciphertext parts are stored", () => {
     const projected = projectAppSettings(
       row({

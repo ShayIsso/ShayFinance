@@ -12,6 +12,8 @@ export type CategorizationSelection = {
 export type AppSettingsStore = {
   read(): Promise<AppSettings>;
   setAppPasswordHash(hash: string): Promise<void>;
+  /** Reads the bcrypt hash. The only path by which it leaves the store. */
+  readAppPasswordHash(): Promise<string | null>;
   /**
    * Records first-run completion, and reports whether this call is the one that
    * did it. `false` means onboarding was already complete — the write is
@@ -27,11 +29,20 @@ export type AppSettingsStore = {
 
 const SINGLETON_ID = 1;
 
+/**
+ * The database barrel is imported per call rather than at module load, so this
+ * module can be imported without opening a connection — the same reason
+ * `makeDrizzleSchedulerConfigStore` does it (ADR-0007).
+ */
+async function connect() {
+  const [{ db }, { appSettings }] = await Promise.all([import("@/db"), import("@/db/schema")]);
+  return { db, appSettings };
+}
+
 export function makeDrizzleAppSettingsStore(): AppSettingsStore {
   return {
     async read(): Promise<AppSettings> {
-      const { db } = await import("@/db");
-      const { appSettings } = await import("@/db/schema");
+      const { db, appSettings } = await connect();
 
       const row = await db.query.appSettings.findFirst();
       if (!row) {
@@ -51,8 +62,7 @@ export function makeDrizzleAppSettingsStore(): AppSettingsStore {
     },
 
     async setAppPasswordHash(hash: string): Promise<void> {
-      const { db } = await import("@/db");
-      const { appSettings } = await import("@/db/schema");
+      const { db, appSettings } = await connect();
 
       await db
         .insert(appSettings)
@@ -63,9 +73,15 @@ export function makeDrizzleAppSettingsStore(): AppSettingsStore {
         });
     },
 
+    async readAppPasswordHash(): Promise<string | null> {
+      const { db } = await connect();
+
+      const row = await db.query.appSettings.findFirst();
+      return row?.appPasswordHash ?? null;
+    },
+
     async completeOnboarding(completedAt: Date): Promise<boolean> {
-      const { db } = await import("@/db");
-      const { appSettings } = await import("@/db/schema");
+      const { db, appSettings } = await connect();
 
       const written = await db
         .insert(appSettings)
@@ -81,8 +97,7 @@ export function makeDrizzleAppSettingsStore(): AppSettingsStore {
     },
 
     async setCategorization(selection: CategorizationSelection): Promise<void> {
-      const { db } = await import("@/db");
-      const { appSettings } = await import("@/db/schema");
+      const { db, appSettings } = await connect();
 
       const key =
         selection.apiKey === null
@@ -103,7 +118,7 @@ export function makeDrizzleAppSettingsStore(): AppSettingsStore {
     },
 
     async readCategorizationApiKey(): Promise<string | null> {
-      const { db } = await import("@/db");
+      const { db } = await connect();
 
       const row = await db.query.appSettings.findFirst();
       const encrypted = row?.categorizationApiKeyEncrypted;

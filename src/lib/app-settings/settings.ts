@@ -20,20 +20,23 @@ export type AppSettingsRow = {
 };
 
 /**
- * App settings as the rest of the app sees them. The categorization key appears
- * only as a presence flag: ADR-0008's provider resolution takes a flag, never
- * the secret, so a resolution input can be logged without leaking.
+ * App settings as the rest of the app sees them. Both stored secrets appear
+ * only as presence flags, and each has its own dedicated read on the store:
+ * ADR-0008's provider resolution takes a flag rather than the key, so a
+ * resolution input can be logged without leaking, and the password hash has no
+ * business in a projection a settings screen renders. What consumers need is
+ * whether a password is set, not the hash that proves it.
  */
 export type AppSettings = {
   readonly onboardingCompletedAt: Date | null;
-  readonly appPasswordHash: string | null;
+  readonly hasAppPassword: boolean;
   readonly categorizationProvider: AiProviderKind | null;
   readonly hasCategorizationApiKey: boolean;
 };
 
 export const EMPTY_APP_SETTINGS: AppSettings = {
   onboardingCompletedAt: null,
-  appPasswordHash: null,
+  hasAppPassword: false,
   categorizationProvider: null,
   hasCategorizationApiKey: false,
 };
@@ -70,7 +73,7 @@ export function projectAppSettings(row: AppSettingsRow | null): AppSettings {
 
   return {
     onboardingCompletedAt: row.onboardingCompletedAt,
-    appPasswordHash: row.appPasswordHash,
+    hasAppPassword: row.appPasswordHash !== null,
     categorizationProvider: toProviderKind(row.categorizationProvider),
     hasCategorizationApiKey: isStoredSecretComplete(row.categorizationKey),
   };
