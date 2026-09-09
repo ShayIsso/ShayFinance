@@ -13,7 +13,6 @@
 export type { BankKind, BankTier, BankRegistryEntry, BankType } from "./entries";
 export {
   bankRegistry,
-  getBankEntry,
   findBankEntry,
   isBankType,
   enabledBankEntries,

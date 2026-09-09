@@ -4,13 +4,13 @@ import {
   isSecretFieldKind,
   credentialFieldRendering,
   credentialSchemaFor,
-  getBankEntry,
   type BankRegistryEntry,
 } from "../index";
+import { registered } from "./registered";
 
 /** A card issuer that identifies the cardholder by the last six digits of the card. */
 const sixDigitEntry: BankRegistryEntry = {
-  ...getBankEntry("max"),
+  ...registered("max"),
   credentialFields: [{ key: "card6", kind: "card-6-digits", label: "שש ספרות אחרונות" }],
 };
 
@@ -36,7 +36,7 @@ describe("credentialFieldKinds", () => {
   it("gives every kind a Zod rule with a Hebrew message", () => {
     for (const kind of credentialFieldKinds) {
       const schema = credentialSchemaFor({
-        ...getBankEntry("max"),
+        ...registered("max"),
         credentialFields: [{ key: "field", kind, label: "שדה" }],
       });
       const result = schema.safeParse({ field: "" });
@@ -71,7 +71,7 @@ describe("credentialFieldRendering", () => {
 
 describe("credentialSchemaFor", () => {
   it("builds a schema over exactly the institution's field keys", () => {
-    const parsed = credentialSchemaFor(getBankEntry("discount")).parse({
+    const parsed = credentialSchemaFor(registered("discount")).parse({
       id: "000000001",
       password: "sample-secret",
       num: "000123",
@@ -81,7 +81,7 @@ describe("credentialSchemaFor", () => {
   });
 
   it("rejects a blank field with a Hebrew message naming that field", () => {
-    const result = credentialSchemaFor(getBankEntry("discount")).safeParse({
+    const result = credentialSchemaFor(registered("discount")).safeParse({
       id: "",
       password: "sample-secret",
       num: "000123",
@@ -91,12 +91,12 @@ describe("credentialSchemaFor", () => {
   });
 
   it("rejects a missing field rather than defaulting it", () => {
-    const result = credentialSchemaFor(getBankEntry("max")).safeParse({ username: "sample-user" });
+    const result = credentialSchemaFor(registered("max")).safeParse({ username: "sample-user" });
     expect(result.success).toBe(false);
   });
 
   it("accepts a card issuer's internet username and password", () => {
-    const result = credentialSchemaFor(getBankEntry("visaCal")).safeParse({
+    const result = credentialSchemaFor(registered("visaCal")).safeParse({
       username: "sample-user",
       password: "sample-secret",
     });

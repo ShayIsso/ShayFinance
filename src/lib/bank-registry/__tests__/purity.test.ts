@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "fs";
 import path from "path";
 
+/**
+ * The walk is rooted at the public interface only, which is what consumers
+ * import — so it is structurally blind to a second entry point. Adding one to
+ * this module means rooting the walk at both.
+ */
 const MODULE_ENTRY = path.resolve(__dirname, "../index.ts");
+const MODULE_DIR = path.resolve(__dirname, "..");
 const SRC_ROOT = path.resolve(__dirname, "../../..");
 
 interface Dependency {
@@ -21,13 +27,19 @@ const SIDE_EFFECT_ONLY = /(?:^|\n)[ \t]*import[ \t]*["']([^"']+)["']/g;
  */
 const DYNAMIC = /\bimport[ \t]*\([ \t]*["']([^"']+)["'][ \t]*\)/g;
 
-function resolveLocal(specifier: string, importingFile: string): string | undefined {
+/**
+ * Resolves only inside this module. An in-repo path that leaves the module —
+ * `@/db` above all — must be reported as a dependency rather than walked into,
+ * or the banned-list assertion silently never matches because the barrel
+ * resolved to a real file and was followed like one of our own.
+ */
+function resolveWithinModule(specifier: string, importingFile: string): string | undefined {
   const base = specifier.startsWith("@/")
     ? path.join(SRC_ROOT, specifier.slice(2))
     : specifier.startsWith(".")
       ? path.resolve(path.dirname(importingFile), specifier)
       : undefined;
-  if (!base) return undefined;
+  if (!base || path.relative(MODULE_DIR, base).startsWith("..")) return undefined;
   for (const candidate of [`${base}.ts`, `${base}.tsx`, path.join(base, "index.ts")]) {
     if (existsSync(candidate)) return candidate;
   }
@@ -59,9 +71,9 @@ function walkModule(): { files: string[]; dependencies: Dependency[] } {
     }
 
     for (const { specifier, typeOnly } of found) {
-      const local = resolveLocal(specifier, file);
-      if (local) {
-        queue.push(local);
+      const withinModule = resolveWithinModule(specifier, file);
+      if (withinModule) {
+        queue.push(withinModule);
         continue;
       }
       dependencies.push({ specifier, typeOnly, importedBy: path.relative(SRC_ROOT, file) });
@@ -80,6 +92,13 @@ describe("the bank registry's import graph", () => {
     expect(names).toContain("fields.ts");
   });
 
+  it("walks no file outside its own module directory", () => {
+    const strays = files
+      .filter((file) => path.relative(MODULE_DIR, file).startsWith(".."))
+      .map((file) => path.relative(SRC_ROOT, file));
+    expect(strays).toEqual([]);
+  });
+
   it("reaches no database barrel, directly or transitively", () => {
     const database = dependencies.filter((dep) =>
       ["@/db", "@/db/schema", "drizzle-orm", "postgres"].some(
@@ -90,10 +109,14 @@ describe("the bank registry's import graph", () => {
   });
 
   it("takes zod as its only runtime dependency beyond the scraper library's definitions", () => {
-    const runtime = dependencies
-      .filter((dep) => !dep.typeOnly)
-      .map((dep) => dep.specifier)
-      .filter((specifier) => specifier !== "zod");
+    const runtime = [
+      ...new Set(
+        dependencies
+          .filter((dep) => !dep.typeOnly)
+          .map((dep) => dep.specifier)
+          .filter((specifier) => specifier !== "zod"),
+      ),
+    ].sort();
     expect(runtime).toEqual(["israeli-bank-scrapers-core/lib/definitions"]);
   });
 

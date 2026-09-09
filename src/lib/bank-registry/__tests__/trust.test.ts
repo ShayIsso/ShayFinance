@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { resolveBankTrust, getBankEntry, type BankRegistryEntry } from "../index";
+import { resolveBankTrust, type BankRegistryEntry } from "../index";
+import { registered } from "./registered";
 
-const verifiedEntry: BankRegistryEntry = getBankEntry("discount");
-const experimentalEntry: BankRegistryEntry = { ...getBankEntry("discount"), tier: "experimental" };
+const verifiedEntry: BankRegistryEntry = registered("discount");
+const experimentalEntry: BankRegistryEntry = { ...registered("discount"), tier: "experimental" };
 
 describe("resolveBankTrust", () => {
   it("keeps a verified institution verified before this install has synced it", () => {

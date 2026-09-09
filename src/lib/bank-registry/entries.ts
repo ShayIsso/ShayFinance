@@ -32,6 +32,13 @@ export interface BankRegistryEntry {
  * The single source of institution facts (ADR-0013). Adding an institution is an
  * entry here plus the scraper's company-mapping line — nothing else.
  *
+ * Consumers read this through the accessors below, not by indexing it.
+ *
+ * The `as const` is load-bearing, not stylistic: without it `id` widens to
+ * `string` and `BankType` silently stops constraining anything, while
+ * `satisfies` keeps compiling. `__tests__/derived-union.test.ts` fails if it
+ * is ever dropped.
+ *
  * `oneZero` is deliberately absent from both tiers rather than registered as
  * experimental: its login needs a long-term OTP token, which ADR-0003 puts out of
  * scope, so listing it would promise what the scraper structurally cannot deliver.
@@ -86,13 +93,14 @@ const byId: ReadonlyMap<string, BankRegistryEntry> = new Map(
   bankRegistry.map((entry) => [entry.id, entry]),
 );
 
-export function getBankEntry(id: BankType): BankRegistryEntry {
-  return byId.get(id)!;
-}
-
 /**
- * Lookup for an id that may not be registered — a stored row naming an
- * institution since removed from the registry stays readable (ADR-0013 §4).
+ * The only entry lookup, and it takes `string` rather than `BankType` on purpose.
+ * Institution ids arrive as database text with no CHECK constraint behind them
+ * (ADR-0013 §4), so a row naming a de-registered institution must stay readable
+ * and render as unknown. A lookup typed `(id: BankType) => BankRegistryEntry`
+ * would let a caller cast such text and then read a property off `undefined`,
+ * turning the very case §4 accepts into a crash — so the optional return is what
+ * forces every consumer to handle it at compile time.
  */
 export function findBankEntry(id: string): BankRegistryEntry | undefined {
   return byId.get(id);
