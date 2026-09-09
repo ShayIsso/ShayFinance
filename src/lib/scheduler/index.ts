@@ -27,11 +27,12 @@ export async function runScheduledSync(): Promise<void> {
   // A manual sync (or a previous scheduled run still finishing) already holds
   // the claim — refuse rather than overlap it (#246). Quiet no-op: there is
   // no SSE listener for a scheduled run, so this is log-only, not an error.
-  const events = syncAllBanksClaimed({ triggeredBy: "scheduled", otpMode: "skip" });
-  if (events === null) {
+  const claimed = syncAllBanksClaimed({ triggeredBy: "scheduled", otpMode: "skip" });
+  if (claimed === null) {
     logger.info("[scheduler] Skipped scheduled sync — a sync is already in progress");
     return;
   }
+  const { events, release } = claimed;
 
   try {
     for await (const _event of events) {
@@ -41,6 +42,12 @@ export async function runScheduledSync(): Promise<void> {
   } catch (err) {
     // Unexpected throw (should not happen — syncAllBanks catches internally).
     logger.error("[scheduler] runScheduledSync threw unexpectedly:", err);
+  } finally {
+    // Idempotent alongside `events`'s own finally-driven release — belt and
+    // suspenders for the same not-yet-started-generator gap route.ts guards
+    // against (see claim.ts's `acquireAndRelease`), should this function's
+    // shape ever grow an early return above the loop.
+    release();
   }
 }
 

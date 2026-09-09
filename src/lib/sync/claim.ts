@@ -36,36 +36,63 @@ export function createSyncClaim(): SyncClaim {
   };
 }
 
+export type ClaimedRun<T> = {
+  events: AsyncGenerator<T>;
+  /**
+   * Releases the claim. Idempotent, and safe to call even if `events` was
+   * never iterated at all — see the note on `acquireAndRelease` below for
+   * why that case needs its own release path rather than relying on
+   * `events`'s `finally`.
+   */
+  release(): void;
+};
+
 /**
- * Acquires `claim` and, if that succeeds, returns `makeEvents()` re-yielded
- * with the claim released once iteration ends — by normal completion, a
- * genuine throw, or the consumer walking away early. The last case matters
- * here: an SSE client disconnect tears down the route's `ReadableStream`
- * mid-iteration by calling `.return()` on whatever it's consuming, which
- * `yield*` forwards through to `makeEvents()`'s generator. That resumes this
- * function at its current `yield`, as if a `return` were written there, and
- * unwinds through the `finally` below exactly like a normal finish — so the
- * claim still gets released instead of leaking until the process restarts.
+ * Acquires `claim` and, if that succeeds, returns `events` (re-yielding
+ * `makeEvents()`) plus a standalone `release`. Returns `null` — never a
+ * rejected/empty result — when the claim is already held, so a refused
+ * start is a plain synchronous fact the caller can check before doing
+ * anything else (route.ts turns it into a 409 before ever constructing its
+ * stream).
  *
- * Returns `null` — never a rejected/empty generator — when the claim is
- * already held, so a refused start is a plain synchronous fact the caller
- * can check before doing anything else (route.ts turns it into a 409 before
- * ever constructing its stream). Acquire and wrap happen together, in one
- * call, so there's no separate "acquire, then remember to wrap" step a
- * future caller could skip and end up releasing a claim it never took.
+ * `events`'s own `finally` releases the claim once iteration ends — by
+ * normal completion, a genuine throw, or the consumer walking away early.
+ * The last case matters: an SSE client disconnect tears the route's
+ * `ReadableStream` down mid-iteration by calling `.return()` on whatever
+ * it's consuming, which `yield*` forwards through to `makeEvents()`'s
+ * generator, resuming this function at its current `yield` as if a
+ * `return` were written there and unwinding through the `finally` exactly
+ * like a normal finish.
+ *
+ * But `.return()` on a generator that was never iterated (no `.next()`
+ * call yet) completes it WITHOUT running the body at all — the `finally`
+ * never executes, so a caller that acquires, then exits before ever
+ * starting to consume `events` (an `await`ed check added between acquiring
+ * and iterating, say), would leak the claim for the rest of the process
+ * with no timeout to recover it. `release` is exposed separately so a
+ * caller's own cleanup path can guarantee release regardless of whether
+ * `events` ever started — this is why `acquireAndRelease` hands back an
+ * object instead of a bare generator.
  */
 export function acquireAndRelease<T>(
   claim: SyncClaim,
   makeEvents: () => AsyncGenerator<T>,
-): AsyncGenerator<T> | null {
+): ClaimedRun<T> | null {
   if (!claim.acquire()) return null;
+
+  let released = false;
+  function release(): void {
+    if (released) return;
+    released = true;
+    claim.release();
+  }
 
   async function* run(): AsyncGenerator<T> {
     try {
       yield* makeEvents();
     } finally {
-      claim.release();
+      release();
     }
   }
-  return run();
+  return { events: run(), release };
 }

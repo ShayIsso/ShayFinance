@@ -71,6 +71,12 @@ Always say "settlement charge" or "The Paradox" — these names are used in BACK
 
 Only **Bank Discount** issues an OTP during scraping. Max and Cal do not. The OTP arrives as an SMS to the user; the UI prompts them to enter it within a 3-minute window (`/api/sync/otp` POST endpoint, promise-bridged to the scraper). On timeout the per-bank scrape fails and the next bank starts (per ADR-0003).
 
+### `sync claim` — load-bearing
+
+The in-progress guard on `syncAllBanks` (issue #246): one claim, shared by every entry point that can launch a sync (the SSE route, the scheduler), refusing a second concurrent invocation instead of starting it — closing the OTP-bridge race above (two runs could otherwise both set the module-level OTP handler and race to resolve each other's code) and the double-Puppeteer-browser-per-bank hazard ADR-0003 doesn't itself prevent (ADR-0003 guarantees one browser per _bank_, not one _run_).
+
+Deliberately **process-lifetime** (an in-memory claim in `src/lib/sync/claim.ts`), not a persisted DB row: this app is single-user/single-instance, so a crashed or killed process holds no claim and recovery on restart is automatic, with no staleness window to reconcile. Held on `globalThis`, not a bare module-level `const` — Next.js bundles the instrumentation hook (→ the scheduler) separately from the App Router route handlers, so a plain module-scoped claim would silently fork into two independent claims across bundles.
+
 ### `futureDebits` (scraper field, credit cards)
 
 The `israeli-bank-scrapers-core` library exposes a `futureDebits` array on credit-card account objects, intended to surface upcoming charges. **It is empty in practice for Max and Cal.** Don't design features assuming `futureDebits` is populated — currently it isn't. The card-balance gap this caused is resolved by the `next-debit estimate` (below), which deliberately bypasses this field.

@@ -22,12 +22,17 @@ import {
 } from "./runs";
 import { runAiSyncStep } from "./ai-step";
 import { runPostImportPipeline, type PostSyncEvent } from "./post-import";
-import { createSyncClaim, acquireAndRelease } from "./claim";
+import { createSyncClaim, acquireAndRelease, type ClaimedRun } from "./claim";
 
 // Module-level OTP handler — set during active sync, used by POST /api/sync/otp
 let activeOtpHandler: OtpHandler | null = null;
 
 export function submitOtp(code: string): boolean {
+  // No sync in progress — this specifically catches a stale handler left
+  // bridged to an abandoned run's promise (e.g. an aborted SSE connection):
+  // without this check, resolving it would silently go nowhere instead of
+  // reporting "no active request" to the caller.
+  if (!syncClaim.isHeld()) return false;
   if (!activeOtpHandler) return false;
   activeOtpHandler.resolveOtp(code);
   activeOtpHandler = null;
@@ -37,7 +42,19 @@ export function submitOtp(code: string): boolean {
 // One in-progress sync at a time, across every entry point that can launch
 // one — the SSE route and the scheduler (#246). Without this, two runs could
 // both set `activeOtpHandler` above and race to resolve each other's OTP.
-const syncClaim = createSyncClaim();
+//
+// Keyed off `globalThis`, not a bare module-level `const` — Next.js bundles
+// the instrumentation hook (src/instrumentation.ts → the scheduler) into a
+// separate chunk from the App Router route handlers, so `createSyncClaim()`
+// called at plain module scope would run once per bundle and produce two
+// independent claims that can never see each other, silently reopening the
+// exact scheduler/manual overlap this guard exists to close. `globalThis` is
+// shared across every bundle in the process, so this is a true singleton.
+const GLOBAL_CLAIM_KEY = "__shayfinanceSyncClaim" as const;
+const globalForSyncClaim = globalThis as typeof globalThis & {
+  [GLOBAL_CLAIM_KEY]?: ReturnType<typeof createSyncClaim>;
+};
+const syncClaim = (globalForSyncClaim[GLOBAL_CLAIM_KEY] ??= createSyncClaim());
 
 export type SyncOptions = {
   /** Which surface triggered this sync — recorded in sync_runs.triggered_by. Defaults to "manual". */
@@ -180,9 +197,15 @@ async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<SyncSummary
           hasScreenshot: false,
         };
       }
+    } finally {
+      // `finally`, not a bare statement after the try/catch: a consumer
+      // walking away (SSE client disconnect) while suspended at the
+      // otp_required yield above unwinds via `.return()`, which skips any
+      // code after the try/catch entirely — only a `finally` still runs,
+      // and without it a live handler stays bridged to an abandoned
+      // promise that `submitOtp` could still resolve.
+      activeOtpHandler = null;
     }
-
-    activeOtpHandler = null;
   }
 
   yield* runPostImportPipeline({
@@ -204,12 +227,13 @@ async function* syncAllBanks(opts: SyncOptions = {}): AsyncGenerator<SyncSummary
  * `syncAllBanks`, guarded by the process-lifetime claim: a second concurrent
  * call while one is already running returns `null` instead of starting —
  * the caller (the SSE route, the scheduler) must check for `null` and
- * refuse rather than iterate. On success, the claim releases once iteration
- * ends for any reason: completion, a genuine throw, or the consumer walking
- * away early (SSE client disconnect; the scheduler's own abort path).
+ * refuse rather than iterate. On success, `events`'s claim releases once
+ * iteration ends for any reason: completion, a genuine throw, or the
+ * consumer walking away early (SSE client disconnect; the scheduler's own
+ * abort path). The standalone `release` is there for a caller whose own
+ * cleanup path must guarantee release even if it never starts consuming
+ * `events` at all — see `acquireAndRelease`'s doc comment in `claim.ts`.
  */
-export function syncAllBanksClaimed(
-  opts: SyncOptions = {},
-): AsyncGenerator<SyncSummaryEvent> | null {
+export function syncAllBanksClaimed(opts: SyncOptions = {}): ClaimedRun<SyncSummaryEvent> | null {
   return acquireAndRelease(syncClaim, () => syncAllBanks(opts));
 }

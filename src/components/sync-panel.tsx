@@ -35,7 +35,7 @@ type SyncSummary = {
 };
 
 // Client-side SSE event shape — otpHandler is stripped server-side before sending
-type ClientSyncEvent =
+export type ClientSyncEvent =
   | { type: "progress"; bank: string; status: BankSyncState["status"] }
   | { type: "otp_required"; bank: string }
   | { type: "otp_timeout"; bank: string }
@@ -131,6 +131,35 @@ export function formatRelativeAge(ageMs: number): string {
   return `לפני ${days} ימים`;
 }
 
+// ── SSE-over-fetch framing (#246 — EventSource can't read the 409 status) ───
+
+/**
+ * Splits accumulated SSE text on the `\n\n` frame separator, returning the
+ * complete frames and whatever incomplete tail to keep buffering. Pure so it
+ * can be pinned against adversarial splits (a separator itself split across
+ * two `reader.read()` chunks) without a real fetch stream.
+ */
+export function takeFrames(buffer: string): { frames: string[]; rest: string } {
+  const frames: string[] = [];
+  let rest = buffer;
+  let separatorIndex: number;
+  while ((separatorIndex = rest.indexOf("\n\n")) !== -1) {
+    frames.push(rest.slice(0, separatorIndex));
+    rest = rest.slice(separatorIndex + 2);
+  }
+  return { frames, rest };
+}
+
+/**
+ * True once `sync_complete` has been seen anywhere in `events` — the only
+ * event that means the run actually finished. A stream that hits a clean
+ * EOF without it is a failure (e.g. an unwrapped throw in the post-import
+ * pipeline closes the server's stream early), not a quiet success.
+ */
+export function hasSyncComplete(events: ClientSyncEvent[]): boolean {
+  return events.some((event) => event.type === "sync_complete");
+}
+
 function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunSummary[] }) {
   const searchParams = useSearchParams();
   // ?bank=<bankType> deep-link target — highlights the flagged bank card
@@ -161,9 +190,10 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
   const [connectionError, setConnectionError] = useState(false);
   // A second concurrent invocation was refused (409) — a sync is already
   // running (this tab, another tab, or the scheduler). Holds the server's
-  // own message (route.ts's 409 body) rather than a second hardcoded
-  // string, so the two can't drift apart. Distinct from connectionError so
-  // it doesn't read as a failure.
+  // own message (route.ts's 409 body) so the common case tracks route.ts
+  // without a second copy to maintain; the identical string appears once
+  // more below only as the fallback for the rare case the body doesn't
+  // parse. Distinct from connectionError so it doesn't read as a failure.
   const [alreadyRunningMessage, setAlreadyRunningMessage] = useState<string | null>(null);
   const [otpCodes, setOtpCodes] = useState<Record<string, string>>({});
   const [otpCountdowns, setOtpCountdowns] = useState<Record<string, number>>({});
@@ -260,24 +290,19 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
   }
 
   async function startSync() {
-    abortControllerRef.current?.abort();
-    for (const interval of Object.values(countdownIntervalsRef.current)) {
-      clearInterval(interval);
-    }
-    countdownIntervalsRef.current = {};
-
-    setBankStates({});
-    setSummary(null);
-    setReconciliationToast(null);
-    setAiSummary(null);
+    // No pre-emptive abort of a prior controller here: the retry button
+    // renders whenever ANY bank errors or times out, which routinely
+    // happens while other banks are still mid-run (per-bank isolation).
+    // Killing that still-useful stream just because one bank failed would
+    // make the guard this button is about to trip (409) come back *because
+    // of* this click, not despite it. Refusing a second start is exactly
+    // the behavior #246 wants — the still-running stream keeps flowing.
     setConnectionError(false);
     setAlreadyRunningMessage(null);
-    setOtpCodes({});
-    setOtpCountdowns({});
-    setSyncing(true);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    let sawSyncComplete = false;
 
     try {
       const res = await fetch("/api/sync", {
@@ -286,7 +311,8 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
       });
 
       if (res.status === 409) {
-        setSyncing(false);
+        // `syncing` is left untouched: if a run of ours is genuinely still
+        // live, this refusal must not hide that fact by flipping it false.
         const body: unknown = await res.json().catch(() => null);
         const message =
           body != null &&
@@ -299,10 +325,24 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
         return;
       }
       if (!res.ok || !res.body) {
-        setSyncing(false);
         setConnectionError(true);
         return;
       }
+
+      // Accepted — this really is a fresh run. Only now is it safe to clear
+      // the previous run's display; a refused start above never reaches
+      // here, so it can't wipe a still-active (or just-completed) run's data.
+      for (const interval of Object.values(countdownIntervalsRef.current)) {
+        clearInterval(interval);
+      }
+      countdownIntervalsRef.current = {};
+      setBankStates({});
+      setSummary(null);
+      setReconciliationToast(null);
+      setAiSummary(null);
+      setOtpCodes({});
+      setOtpCountdowns({});
+      setSyncing(true);
 
       // Plain fetch instead of EventSource — EventSource exposes no way to
       // read the response status, and the 409 above has to be observable
@@ -319,16 +359,32 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
         // messages) that lands on a chunk boundary from decoding as garbage.
         buffer += decoder.decode(value, { stream: true });
 
-        let separatorIndex: number;
-        while ((separatorIndex = buffer.indexOf("\n\n")) !== -1) {
-          const frame = buffer.slice(0, separatorIndex);
-          buffer = buffer.slice(separatorIndex + 2);
+        const { frames, rest } = takeFrames(buffer);
+        buffer = rest;
+        for (const frame of frames) {
           if (!frame.startsWith("data: ")) continue;
-          handleSyncEvent(JSON.parse(frame.slice(6)) as ClientSyncEvent);
+          const event = JSON.parse(frame.slice(6)) as ClientSyncEvent;
+          sawSyncComplete ||= hasSyncComplete([event]);
+          handleSyncEvent(event);
         }
       }
+
+      if (!sawSyncComplete) {
+        // A clean EOF that never yielded sync_complete means the server
+        // closed the stream early (e.g. an unwrapped throw in the
+        // post-import pipeline) — a failure, not a quiet success.
+        // sync_complete is the only event that clears `syncing`, so
+        // treating this any other way leaves the spinner stuck forever.
+        setSyncing(false);
+        setConnectionError(true);
+      }
     } catch {
-      if (controller.signal.aborted) return; // intentional: unmount or a newer startSync() call
+      const wasIntentional = controller.signal.aborted;
+      // Guarantees the connection tears down even when WE threw (e.g. a
+      // malformed frame) rather than the network — otherwise the server
+      // keeps consuming the generator, and the claim, indefinitely.
+      controller.abort();
+      if (wasIntentional) return; // deliberate: unmount, or a newer startSync() call
       setSyncing(false);
       setConnectionError(true);
     }
