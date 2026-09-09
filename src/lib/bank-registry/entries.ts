@@ -79,11 +79,7 @@ export const bankRegistry = Object.freeze([
   },
 ] as const satisfies readonly BankRegistryEntry[]);
 
-/**
- * Derived from the array above, never written beside it — an entry added to
- * `bankRegistry` widens this union in the same edit, so the runtime list and the
- * compile-time union cannot diverge.
- */
+/** Never replace this with a hand-written union: such copies are what ADR-0013 exists to retire. */
 export type BankType = (typeof bankRegistry)[number]["id"];
 
 const byId: ReadonlyMap<string, BankRegistryEntry> = new Map(
@@ -96,7 +92,7 @@ export function getBankEntry(id: BankType): BankRegistryEntry {
 
 /**
  * Lookup for an id that may not be registered — a stored row naming an
- * institution since removed from the registry stays readable (ADR-0013 §5).
+ * institution since removed from the registry stays readable (ADR-0013 §4).
  */
 export function findBankEntry(id: string): BankRegistryEntry | undefined {
   return byId.get(id);

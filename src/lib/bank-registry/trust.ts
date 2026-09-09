@@ -11,7 +11,6 @@ export type BankTrust = "verified" | "observed" | "experimental";
 
 export interface BankTrustInput {
   readonly entry: BankRegistryEntry;
-  /** Whether this installation's sync history holds a success for this institution. */
   readonly hasRecordedSuccessfulSync: boolean;
 }
 

@@ -20,8 +20,10 @@ function userEnteredLoginFields(company: CompanyTypes): string[] {
     .sort();
 }
 
+const ENTRY_CASES = enabledBankEntries().map((entry) => [entry.id, entry] as const);
+
 describe("registry entries cross-checked against the scraper library", () => {
-  it.each(enabledBankEntries().map((entry) => [entry.id, entry] as const))(
+  it.each(ENTRY_CASES)(
     "%s declares exactly the library's user-entered login fields",
     (_id, entry) => {
       const declared = entry.credentialFields.map((field) => field.key).sort();
@@ -29,15 +31,12 @@ describe("registry entries cross-checked against the scraper library", () => {
     },
   );
 
-  it.each(enabledBankEntries().map((entry) => [entry.id, entry] as const))(
-    "%s names a company the library still supports",
-    (_id, entry) => {
-      expect(SCRAPERS[entry.company]).toBeDefined();
-      expect(Object.values(CompanyTypes)).toContain(entry.company);
-    },
-  );
+  it.each(ENTRY_CASES)("%s names a company the library still supports", (_id, entry) => {
+    expect(SCRAPERS[entry.company]).toBeDefined();
+    expect(Object.values(CompanyTypes)).toContain(entry.company);
+  });
 
-  it.each(enabledBankEntries().map((entry) => [entry.id, entry] as const))(
+  it.each(ENTRY_CASES)(
     "%s declares each field once, so a form cannot render a duplicate input",
     (_id, entry) => {
       const keys = entry.credentialFields.map((field) => field.key);
@@ -45,7 +44,7 @@ describe("registry entries cross-checked against the scraper library", () => {
     },
   );
 
-  it.each(enabledBankEntries().map((entry) => [entry.id, entry] as const))(
+  it.each(ENTRY_CASES)(
     "%s carries a secret field for the credential endpoint to strip",
     (_id, entry) => {
       expect(entry.credentialFields.some((field) => field.kind === "password")).toBe(true);

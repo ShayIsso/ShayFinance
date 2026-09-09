@@ -46,9 +46,6 @@ interface CredentialFieldKindSpec {
 const required = (label: string) => z.string().min(1, `${label} חובה`);
 
 /**
- * Typed as a total record so the union above stays the single declaration of the
- * kinds and this table cannot fall behind it.
- *
  * Only `card-6-digits` constrains its value's shape. The other four validate
  * presence alone, matching what the app accepts today — tightening a national id
  * or account number would reject credentials that currently sync, which is a

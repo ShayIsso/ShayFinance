@@ -13,6 +13,13 @@ interface Dependency {
 
 const WITH_SOURCE = /(?:^|\n)[ \t]*(import|export)[ \t]+([\s\S]*?)from[ \t]*["']([^"']+)["']/g;
 const SIDE_EFFECT_ONLY = /(?:^|\n)[ \t]*import[ \t]*["']([^"']+)["']/g;
+/**
+ * Deferred `import("…")` counts as a runtime dependency. The store idiom this
+ * codebase uses for singleton tables reaches the database barrel exactly this
+ * way, so a walk that only saw static imports would miss the one import shape
+ * most likely to be added here by someone following that idiom.
+ */
+const DYNAMIC = /\bimport[ \t]*\([ \t]*["']([^"']+)["'][ \t]*\)/g;
 
 function resolveLocal(specifier: string, importingFile: string): string | undefined {
   const base = specifier.startsWith("@/")
@@ -27,7 +34,6 @@ function resolveLocal(specifier: string, importingFile: string): string | undefi
   return undefined;
 }
 
-/** Every file reachable from the public interface, and every package they import. */
 function walkModule(): { files: string[]; dependencies: Dependency[] } {
   const files: string[] = [];
   const dependencies: Dependency[] = [];
@@ -46,6 +52,9 @@ function walkModule(): { files: string[]; dependencies: Dependency[] } {
       found.push({ specifier: match[3], typeOnly: match[2].trimStart().startsWith("type") });
     }
     for (const match of source.matchAll(SIDE_EFFECT_ONLY)) {
+      found.push({ specifier: match[1], typeOnly: false });
+    }
+    for (const match of source.matchAll(DYNAMIC)) {
       found.push({ specifier: match[1], typeOnly: false });
     }
 
