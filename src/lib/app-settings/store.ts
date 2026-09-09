@@ -39,6 +39,35 @@ async function connect() {
   return { db, appSettings };
 }
 
+type Connection = Awaited<ReturnType<typeof connect>>;
+
+/**
+ * The write that makes onboarding completion a write-once fact (ADR-0014 §4):
+ * the SET applies only while the timestamp is null, and `returning` is what
+ * turns "no rows affected" into the caller's rejection.
+ *
+ * Built separately from its execution so a test can assert the emitted SQL.
+ * Both halves are invisible to a Store fake — a fake can only reimplement the
+ * rule as the check-then-act ADR-0014 §4 rejects — and swapping `setWhere` for
+ * the deprecated `where` would silently move the predicate onto the conflict
+ * target instead, leaving a replayed submission able to overwrite the date.
+ */
+export function buildCompleteOnboardingWrite(
+  { db, appSettings }: Connection,
+  completedAt: Date,
+  now: Date,
+) {
+  return db
+    .insert(appSettings)
+    .values({ id: SINGLETON_ID, onboardingCompletedAt: completedAt, updatedAt: now })
+    .onConflictDoUpdate({
+      target: appSettings.id,
+      set: { onboardingCompletedAt: completedAt, updatedAt: now },
+      setWhere: isNull(appSettings.onboardingCompletedAt),
+    })
+    .returning({ id: appSettings.id });
+}
+
 export function makeDrizzleAppSettingsStore(): AppSettingsStore {
   return {
     async read(): Promise<AppSettings> {
@@ -81,18 +110,7 @@ export function makeDrizzleAppSettingsStore(): AppSettingsStore {
     },
 
     async completeOnboarding(completedAt: Date): Promise<boolean> {
-      const { db, appSettings } = await connect();
-
-      const written = await db
-        .insert(appSettings)
-        .values({ id: SINGLETON_ID, onboardingCompletedAt: completedAt, updatedAt: new Date() })
-        .onConflictDoUpdate({
-          target: appSettings.id,
-          set: { onboardingCompletedAt: completedAt, updatedAt: new Date() },
-          setWhere: isNull(appSettings.onboardingCompletedAt),
-        })
-        .returning({ id: appSettings.id });
-
+      const written = await buildCompleteOnboardingWrite(await connect(), completedAt, new Date());
       return written.length > 0;
     },
 

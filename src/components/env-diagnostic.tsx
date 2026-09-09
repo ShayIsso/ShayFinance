@@ -1,5 +1,6 @@
 import { ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { BootEnvProblem, BootEnvVariable } from "@/lib/env";
 
 const PURPOSE: Record<BootEnvVariable, string> = {
@@ -35,8 +36,11 @@ export function EnvDiagnostic({ problems }: { problems: readonly BootEnvProblem[
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <div className="text-muted-foreground flex flex-col gap-1 text-sm">
+            {/* The file name sits mid-sentence deliberately: a Latin-script run
+                immediately before the Hebrew full stop puts the period on the
+                wrong side of it in an RTL paragraph. */}
             <p>
-              האפליקציה לא יכולה לעלות עד שהמשתנים הבאים יוגדרו בקובץ <Code>.env</Code>
+              בקובץ <Code>.env</Code> חסרים המשתנים הבאים, ובלעדיהם האפליקציה לא יכולה לעלות.
             </p>
             <p>לאחר ההגדרה, הפעילו את השרת מחדש.</p>
           </div>
@@ -66,7 +70,7 @@ function Code({ children, className }: { children: React.ReactNode; className?: 
   return (
     <code
       dir="ltr"
-      className={`bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-xs ${className ?? ""}`}
+      className={cn("bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-xs", className)}
     >
       {children}
     </code>

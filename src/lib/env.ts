@@ -14,8 +14,14 @@ const envSchema = z.object({
   // a fresh install threw out of the first getEnv() — including the scheduler's
   // at boot — before any page, the diagnostic one included, could render.
   APP_PASSWORD: blankAsUnset(z.string().min(1).optional()),
-  CHROMIUM_PATH: z.string().min(1).optional(),
-  SCHEDULER_ENABLED: z.enum(["true", "false"]).optional().default("false"),
+  // Blank-tolerant for the same reason as APP_PASSWORD above, and it bites
+  // harder here: CHROMIUM_PATH ships in .env.example with a macOS-only path, so
+  // a Linux or WSL self-hoster blanks the line — and a bare `KEY=` used to fail
+  // the whole parse inside the boot hook, taking down every route including the
+  // diagnostic. An out-of-range value still fails the parse; register() catches
+  // that (src/instrumentation.ts) rather than this schema going lenient.
+  CHROMIUM_PATH: blankAsUnset(z.string().min(1).optional()),
+  SCHEDULER_ENABLED: blankAsUnset(z.enum(["true", "false"]).optional().default("false")),
   // AI categorization (ADR-0008). Unset AI_PROVIDER resolves to off — a fresh
   // install makes zero external calls. `gemini` needs GEMINI_API_KEY or it too
   // resolves to off; `ollama` is the zero-egress mode. Resolution lives in the
