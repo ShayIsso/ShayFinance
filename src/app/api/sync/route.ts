@@ -1,15 +1,25 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { syncAllBanks } from "@/lib/sync";
+import { NextResponse } from "next/server";
+import { syncAllBanksClaimed } from "@/lib/sync";
 
 export async function GET() {
+  // Checked — and refused — before the stream is ever constructed, so a
+  // second concurrent invocation gets a normal 409 response instead of a
+  // 200 that then errors mid-stream (#246).
+  const claimed = syncAllBanksClaimed();
+  if (claimed === null) {
+    return NextResponse.json({ error: "סנכרון כבר פועל" }, { status: 409 });
+  }
+  const { events, release } = claimed;
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of syncAllBanks()) {
+        for await (const event of events) {
           // Strip internal fields before sending to client
           const { _credentialId, ...rest } = event as typeof event & { _credentialId?: string };
 
@@ -25,8 +35,30 @@ export async function GET() {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(rest)}\n\n`));
         }
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // Already closed by cancel() below (client disconnected) — nothing to do.
+        }
       }
+    },
+    cancel() {
+      // A client disconnect (tab closed, navigation) tears this stream down
+      // mid-iteration without the loop above ever reaching its finally
+      // naturally. Forcing `.return()` resumes the generator at its current
+      // yield as a return, unwinding through acquireAndRelease's `run()`
+      // finally (see claim.ts) — same path as a normal finish — so the
+      // claim still gets released instead of leaking until process restart.
+      // `.catch` guards a rejection from the scraper's own cleanup (e.g.
+      // Puppeteer's browser.close() rejecting when the browser is already
+      // gone) from surfacing as an unhandled rejection — which is also a
+      // zero-leak concern, since a scraper failure can carry site text.
+      void events.return(undefined).catch(() => {});
+      // Belt-and-suspenders alongside the `.return()` above: `release` is
+      // idempotent and safe even if `events` never got its first `.next()`
+      // call (`.return()` on a not-yet-started generator skips its `finally`
+      // entirely — see claim.ts's `acquireAndRelease`).
+      release();
     },
   });
 

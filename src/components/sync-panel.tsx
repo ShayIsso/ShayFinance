@@ -35,7 +35,7 @@ type SyncSummary = {
 };
 
 // Client-side SSE event shape — otpHandler is stripped server-side before sending
-type ClientSyncEvent =
+export type ClientSyncEvent =
   | { type: "progress"; bank: string; status: BankSyncState["status"] }
   | { type: "otp_required"; bank: string }
   | { type: "otp_timeout"; bank: string }
@@ -131,6 +131,35 @@ export function formatRelativeAge(ageMs: number): string {
   return `לפני ${days} ימים`;
 }
 
+// ── SSE-over-fetch framing (#246 — EventSource can't read the 409 status) ───
+
+/**
+ * Splits accumulated SSE text on the `\n\n` frame separator, returning the
+ * complete frames and whatever incomplete tail to keep buffering. Pure so it
+ * can be pinned against adversarial splits (a separator itself split across
+ * two `reader.read()` chunks) without a real fetch stream.
+ */
+export function takeFrames(buffer: string): { frames: string[]; rest: string } {
+  const frames: string[] = [];
+  let rest = buffer;
+  let separatorIndex: number;
+  while ((separatorIndex = rest.indexOf("\n\n")) !== -1) {
+    frames.push(rest.slice(0, separatorIndex));
+    rest = rest.slice(separatorIndex + 2);
+  }
+  return { frames, rest };
+}
+
+/**
+ * True once `sync_complete` has been seen anywhere in `events` — the only
+ * event that means the run actually finished. A stream that hits a clean
+ * EOF without it is a failure (e.g. an unwrapped throw in the post-import
+ * pipeline closes the server's stream early), not a quiet success.
+ */
+export function hasSyncComplete(events: ClientSyncEvent[]): boolean {
+  return events.some((event) => event.type === "sync_complete");
+}
+
 function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunSummary[] }) {
   const searchParams = useSearchParams();
   // ?bank=<bankType> deep-link target — highlights the flagged bank card
@@ -159,14 +188,21 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
     skipped: number;
   } | null>(null);
   const [connectionError, setConnectionError] = useState(false);
+  // A second concurrent invocation was refused (409) — a sync is already
+  // running (this tab, another tab, or the scheduler). Holds the server's
+  // own message (route.ts's 409 body) so the common case tracks route.ts
+  // without a second copy to maintain; the identical string appears once
+  // more below only as the fallback for the rare case the body doesn't
+  // parse. Distinct from connectionError so it doesn't read as a failure.
+  const [alreadyRunningMessage, setAlreadyRunningMessage] = useState<string | null>(null);
   const [otpCodes, setOtpCodes] = useState<Record<string, string>>({});
   const [otpCountdowns, setOtpCountdowns] = useState<Record<string, number>>({});
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const countdownIntervalsRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   useEffect(() => {
     return () => {
-      eventSourceRef.current?.close();
+      abortControllerRef.current?.abort();
       for (const interval of Object.values(countdownIntervalsRef.current)) {
         clearInterval(interval);
       }
@@ -185,101 +221,173 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
     }
   }
 
-  function startSync() {
-    eventSourceRef.current?.close();
-    for (const interval of Object.values(countdownIntervalsRef.current)) {
-      clearInterval(interval);
-    }
-    countdownIntervalsRef.current = {};
-
-    setBankStates({});
-    setSummary(null);
-    setReconciliationToast(null);
-    setAiSummary(null);
-    setConnectionError(false);
-    setOtpCodes({});
-    setOtpCountdowns({});
-    setSyncing(true);
-
-    const es = new EventSource("/api/sync");
-    eventSourceRef.current = es;
-
-    es.onmessage = (e: MessageEvent<string>) => {
-      const event = JSON.parse(e.data) as ClientSyncEvent;
-
-      if (event.type === "progress") {
-        setBankStates((prev) => ({
-          ...prev,
-          [event.bank]: { ...prev[event.bank], status: event.status },
-        }));
-      } else if (event.type === "otp_required") {
-        setBankStates((prev) => ({
-          ...prev,
-          [event.bank]: { ...prev[event.bank], status: "otp_required" },
-        }));
-        setOtpCountdowns((prev) => ({ ...prev, [event.bank]: 180 }));
-        const { bank } = event;
-        const interval = setInterval(() => {
-          setOtpCountdowns((prev) => {
-            const next = (prev[bank] ?? 1) - 1;
-            if (next <= 0) {
-              clearCountdown(bank);
-              return { ...prev, [bank]: 0 };
-            }
-            return { ...prev, [bank]: next };
-          });
-        }, 1000);
-        countdownIntervalsRef.current[bank] = interval;
-      } else if (event.type === "otp_timeout") {
-        clearCountdown(event.bank);
-        setBankStates((prev) => ({
-          ...prev,
-          [event.bank]: { ...prev[event.bank], status: "otp_timeout" },
-        }));
-      } else if (event.type === "bank_complete") {
-        setBankStates((prev) => ({
-          ...prev,
-          [event.bank]: { ...prev[event.bank], status: "complete" },
-        }));
-      } else if (event.type === "bank_error") {
-        setBankStates((prev) => ({
-          ...prev,
-          [event.bank]: {
-            status: "error",
-            error: event.error,
-            hasScreenshot: event.hasScreenshot,
-            screenshotFilename: event.screenshotFilename,
-          },
-        }));
-      } else if (event.type === "reconciliation_summary") {
-        if (event.autoApplied > 0 || event.queued > 0) {
-          setReconciliationToast({ autoApplied: event.autoApplied, queued: event.queued });
-        }
-      } else if (event.type === "ai_summary") {
-        if (event.applied > 0 || event.queued > 0 || event.skipped > 0) {
-          setAiSummary({ applied: event.applied, queued: event.queued, skipped: event.skipped });
-        }
-      } else if (event.type === "sync_complete") {
-        setBankStates((prev) => {
-          const next = { ...prev };
-          for (const [bank, count] of Object.entries(event.summary.byBank)) {
-            if (next[bank]) {
-              next[bank] = { ...next[bank], transactionCount: count };
-            }
+  function handleSyncEvent(event: ClientSyncEvent): void {
+    if (event.type === "progress") {
+      setBankStates((prev) => ({
+        ...prev,
+        [event.bank]: { ...prev[event.bank], status: event.status },
+      }));
+    } else if (event.type === "otp_required") {
+      setBankStates((prev) => ({
+        ...prev,
+        [event.bank]: { ...prev[event.bank], status: "otp_required" },
+      }));
+      setOtpCountdowns((prev) => ({ ...prev, [event.bank]: 180 }));
+      const { bank } = event;
+      const interval = setInterval(() => {
+        setOtpCountdowns((prev) => {
+          const next = (prev[bank] ?? 1) - 1;
+          if (next <= 0) {
+            clearCountdown(bank);
+            return { ...prev, [bank]: 0 };
           }
-          return next;
+          return { ...prev, [bank]: next };
         });
-        setSummary(event.summary);
-        setSyncing(false);
-        es.close();
+      }, 1000);
+      countdownIntervalsRef.current[bank] = interval;
+    } else if (event.type === "otp_timeout") {
+      clearCountdown(event.bank);
+      setBankStates((prev) => ({
+        ...prev,
+        [event.bank]: { ...prev[event.bank], status: "otp_timeout" },
+      }));
+    } else if (event.type === "bank_complete") {
+      setBankStates((prev) => ({
+        ...prev,
+        [event.bank]: { ...prev[event.bank], status: "complete" },
+      }));
+    } else if (event.type === "bank_error") {
+      setBankStates((prev) => ({
+        ...prev,
+        [event.bank]: {
+          status: "error",
+          error: event.error,
+          hasScreenshot: event.hasScreenshot,
+          screenshotFilename: event.screenshotFilename,
+        },
+      }));
+    } else if (event.type === "reconciliation_summary") {
+      if (event.autoApplied > 0 || event.queued > 0) {
+        setReconciliationToast({ autoApplied: event.autoApplied, queued: event.queued });
       }
-    };
+    } else if (event.type === "ai_summary") {
+      if (event.applied > 0 || event.queued > 0 || event.skipped > 0) {
+        setAiSummary({ applied: event.applied, queued: event.queued, skipped: event.skipped });
+      }
+    } else if (event.type === "sync_complete") {
+      setBankStates((prev) => {
+        const next = { ...prev };
+        for (const [bank, count] of Object.entries(event.summary.byBank)) {
+          if (next[bank]) {
+            next[bank] = { ...next[bank], transactionCount: count };
+          }
+        }
+        return next;
+      });
+      setSummary(event.summary);
+      setSyncing(false);
+    }
+  }
 
-    es.onerror = () => {
-      es.close();
+  async function startSync() {
+    // No pre-emptive abort of a prior controller here: the retry button
+    // renders whenever ANY bank errors or times out, which routinely
+    // happens while other banks are still mid-run (per-bank isolation).
+    // Killing that still-useful stream just because one bank failed would
+    // make the guard this button is about to trip (409) come back *because
+    // of* this click, not despite it. Refusing a second start is exactly
+    // the behavior #246 wants — the still-running stream keeps flowing.
+    setConnectionError(false);
+    setAlreadyRunningMessage(null);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    let sawSyncComplete = false;
+
+    try {
+      const res = await fetch("/api/sync", {
+        signal: controller.signal,
+        headers: { Accept: "text/event-stream" },
+      });
+
+      if (res.status === 409) {
+        // `syncing` is left untouched: if a run of ours is genuinely still
+        // live, this refusal must not hide that fact by flipping it false.
+        const body: unknown = await res.json().catch(() => null);
+        const message =
+          body != null &&
+          typeof body === "object" &&
+          "error" in body &&
+          typeof body.error === "string"
+            ? body.error
+            : "סנכרון כבר פועל";
+        setAlreadyRunningMessage(message);
+        return;
+      }
+      if (!res.ok || !res.body) {
+        setConnectionError(true);
+        return;
+      }
+
+      // Accepted — this really is a fresh run. Only now is it safe to clear
+      // the previous run's display; a refused start above never reaches
+      // here, so it can't wipe a still-active (or just-completed) run's data.
+      for (const interval of Object.values(countdownIntervalsRef.current)) {
+        clearInterval(interval);
+      }
+      countdownIntervalsRef.current = {};
+      setBankStates({});
+      setSummary(null);
+      setReconciliationToast(null);
+      setAiSummary(null);
+      setOtpCodes({});
+      setOtpCountdowns({});
+      setSyncing(true);
+
+      // Plain fetch instead of EventSource — EventSource exposes no way to
+      // read the response status, and the 409 above has to be observable
+      // before any stream is treated as open (#246).
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        // {stream: true} keeps a multi-byte UTF-8 char (Hebrew text in error
+        // messages) that lands on a chunk boundary from decoding as garbage.
+        buffer += decoder.decode(value, { stream: true });
+
+        const { frames, rest } = takeFrames(buffer);
+        buffer = rest;
+        for (const frame of frames) {
+          if (!frame.startsWith("data: ")) continue;
+          const event = JSON.parse(frame.slice(6)) as ClientSyncEvent;
+          sawSyncComplete ||= hasSyncComplete([event]);
+          handleSyncEvent(event);
+        }
+      }
+
+      if (!sawSyncComplete) {
+        // A clean EOF that never yielded sync_complete means the server
+        // closed the stream early (e.g. an unwrapped throw in the
+        // post-import pipeline) — a failure, not a quiet success.
+        // sync_complete is the only event that clears `syncing`, so
+        // treating this any other way leaves the spinner stuck forever.
+        setSyncing(false);
+        setConnectionError(true);
+      }
+    } catch {
+      const wasIntentional = controller.signal.aborted;
+      // Guarantees the connection tears down even when WE threw (e.g. a
+      // malformed frame) rather than the network — otherwise the server
+      // keeps consuming the generator, and the claim, indefinitely.
+      controller.abort();
+      if (wasIntentional) return; // deliberate: unmount, or a newer startSync() call
       setSyncing(false);
       setConnectionError(true);
-    };
+    }
   }
 
   async function submitOtp(bank: string) {
@@ -305,7 +413,7 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <Button onClick={startSync} disabled={syncing}>
+        <Button onClick={() => void startSync()} disabled={syncing}>
           {syncing ? (
             <>
               <Loader2 className="animate-spin" />
@@ -316,6 +424,9 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
           )}
         </Button>
         {connectionError && <p className="text-destructive text-sm">שגיאת חיבור. נסה שוב.</p>}
+        {alreadyRunningMessage && (
+          <p className="text-muted-foreground text-sm">{alreadyRunningMessage}</p>
+        )}
       </div>
 
       {!syncing && !summary && Object.keys(bankStates).length === 0 && lastRuns.length === 0 && (
@@ -325,7 +436,7 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
               icon={RefreshCw}
               heading="עדיין לא בוצע סנכרון"
               explainer="הפעל סנכרון כדי להוריד את העסקאות האחרונות מחשבונות הבנק שלך."
-              cta={{ label: "סנכרן עכשיו", onClick: startSync }}
+              cta={{ label: "סנכרן עכשיו", onClick: () => void startSync() }}
             />
           </CardContent>
         </Card>
@@ -461,7 +572,7 @@ function SyncPanelInner({ banks, lastRuns }: { banks: Bank[]; lastRuns: SyncRunS
 
                 {canRetry && (
                   <div className="flex items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={startSync}>
+                    <Button variant="outline" size="sm" onClick={() => void startSync()}>
                       נסה שוב
                     </Button>
                     {liveState?.screenshotFilename && (
