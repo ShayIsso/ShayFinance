@@ -9,7 +9,12 @@ function getSecret(): string {
 }
 
 export async function verifyPassword(input: string): Promise<boolean> {
-  return bcrypt.compare(input, getEnv().APP_PASSWORD);
+  const legacyOverride = getEnv().APP_PASSWORD;
+  // ADR-0014 §2: the override wins when set. With no override there is nothing
+  // to compare against yet, so verification fails closed — never "any password
+  // passes". The stored-hash fallback lands with onboarding (#258).
+  if (!legacyOverride) return false;
+  return bcrypt.compare(input, legacyOverride);
 }
 
 export function createSession(): string {
