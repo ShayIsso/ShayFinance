@@ -50,7 +50,7 @@ export function submitOtp(code: string): boolean {
 // independent claims that can never see each other, silently reopening the
 // exact scheduler/manual overlap this guard exists to close. `globalThis` is
 // shared across every bundle in the process, so this is a true singleton.
-const GLOBAL_CLAIM_KEY = "__shayfinanceSyncClaim" as const;
+const GLOBAL_CLAIM_KEY = "__yitraSyncClaim" as const;
 const globalForSyncClaim = globalThis as typeof globalThis & {
   [GLOBAL_CLAIM_KEY]?: ReturnType<typeof createSyncClaim>;
 };

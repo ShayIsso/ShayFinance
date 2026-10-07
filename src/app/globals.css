@@ -146,6 +146,10 @@
   --emerald: oklch(0.596 0.145 163.225); /* emerald-600 */
   --emerald-foreground: oklch(1 0 0);
 
+  /* Identity violet — the Yitra mark only; deliberately collides with no data color
+     (green/red/amber carry money and warning meaning). See brand/brand.md. */
+  --brand: #4b22e0;
+
   /* Money-color source of truth (#109 sheet): --pos = positive money (emerald),
      --neg = negative money (red). <Amount> is the primary consumer via text-pos/
      text-neg; a sign-driven ternary (v >= 0 ? "text-pos" : "text-neg") is the
@@ -221,6 +225,7 @@
   --emerald: oklch(0.72 0.15 163);
   /* emerald is lifted in dark — dark text reads, white washes out */
   --emerald-foreground: oklch(0.165 0 0);
+  --brand: #a78bfa;
 
   /* Money colors lifted for the dark surface; dark red brightened so it isn't muddy. */
   --pos: oklch(0.72 0.15 163);

@@ -1,4 +1,4 @@
-# ShayFinance — Domain Context
+# Yitra — Domain Context
 
 Glossary of terms, financial invariants, and architectural vocabulary that should be used consistently across PRDs, issues, ADRs, refactor proposals, test names, and UI copy.
 

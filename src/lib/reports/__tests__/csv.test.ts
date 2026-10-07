@@ -249,7 +249,7 @@ describe("resolveExportDateRange", () => {
 describe("buildExportFilename", () => {
   it("builds the ASCII filename from the resolved range", () => {
     expect(buildExportFilename("2026-01-01", "2026-01-31")).toBe(
-      "shayfinance-transactions-2026-01-01_2026-01-31.csv",
+      "yitra-transactions-2026-01-01_2026-01-31.csv",
     );
   });
 });

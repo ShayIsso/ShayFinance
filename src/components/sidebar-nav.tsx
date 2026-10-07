@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
@@ -94,7 +95,10 @@ export function SidebarNav({ pendingReconCount = 0 }: { pendingReconCount?: numb
   return (
     <DrawerPrimitive.Root open={drawerOpen} onOpenChange={setDrawerOpen} swipeDirection="right">
       <header className="bg-card sticky top-0 z-20 flex items-center justify-between border-b p-4 md:hidden">
-        <h1 className="text-lg font-bold tracking-tight">ShayFinance</h1>
+        <h1 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+          <BrandMark className="h-5 w-auto" />
+          Yitra
+        </h1>
         <DrawerPrimitive.Trigger
           data-slot="sidebar-drawer-trigger"
           render={<Button variant="ghost" size="icon" aria-label="פתיחת תפריט ניווט" />}
@@ -105,7 +109,10 @@ export function SidebarNav({ pendingReconCount = 0 }: { pendingReconCount?: numb
 
       <aside className="bg-card fixed top-0 right-0 z-10 hidden h-full w-56 flex-col border-l md:flex">
         <div className="border-b p-6">
-          <h1 className="text-lg font-bold tracking-tight">ShayFinance</h1>
+          <h1 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+            <BrandMark className="h-5 w-auto" />
+            Yitra
+          </h1>
         </div>
         <NavLinks navItems={navItems} pathname={pathname} />
         <div className="border-t p-3">
@@ -132,7 +139,10 @@ export function SidebarNav({ pendingReconCount = 0 }: { pendingReconCount?: numb
           )}
         >
           <div className="flex items-center justify-between border-b p-6">
-            <h1 className="text-lg font-bold tracking-tight">ShayFinance</h1>
+            <h1 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+              <BrandMark className="h-5 w-auto" />
+              Yitra
+            </h1>
             <DrawerPrimitive.Close
               data-slot="sidebar-drawer-close"
               render={<Button variant="ghost" size="icon-sm" aria-label="סגירת תפריט ניווט" />}

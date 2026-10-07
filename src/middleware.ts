@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkBootEnv } from "@/lib/env";
 
-const SESSION_COOKIE = "shayfinance-session";
+const SESSION_COOKIE = "yitra-session";
 const ENV_DIAGNOSTIC_PATH = "/env-check";
 
 function hexToArrayBuffer(hex: string): ArrayBuffer {
@@ -79,6 +79,8 @@ export async function middleware(req: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
+// The brand icons must stay reachable while signed out: browsers fetch them for
+// the login tab, and a redirect to /login returns HTML in place of the image.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png).*)"],
 };

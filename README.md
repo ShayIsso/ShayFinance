@@ -1,4 +1,4 @@
-# ShayFinance
+# <img src="brand/yitra-icon.svg" alt="" height="32"> Yitra
 
 Private, self-hosted personal finance dashboard for Israeli banks.
 
@@ -12,8 +12,8 @@ Automatically fetches transactions from **Bank Discount**, **Max**, and **Cal**,
 | **Phase 2**       | **In progress** | Accounting Engine (reconciliation) · automation (scheduler, retroactive rule application) · production craft (RHF+Zod, Server Actions, visual overhaul) |
 | **Phase 3+**      | Planned         | Dark mode · budgeting & goals · reports & export · push notifications                                                                                   |
 
-- **Phase 1 PRD:** [docs/PRD-v1.md](docs/PRD-v1.md) — [closed GitHub issue #1](https://github.com/ShayIsso/ShayFinance/issues/1)
-- **Phase 2 PRD:** [docs/PRD-phase2.md](docs/PRD-phase2.md) — [GitHub issue #35](https://github.com/ShayIsso/ShayFinance/issues/35) (approved, 23 slice issues open)
+- **Phase 1 PRD:** [docs/PRD-v1.md](docs/PRD-v1.md) — [closed GitHub issue #1](https://github.com/ShayIsso/yitra/issues/1)
+- **Phase 2 PRD:** [docs/PRD-phase2.md](docs/PRD-phase2.md) — [GitHub issue #35](https://github.com/ShayIsso/yitra/issues/35) (approved, 23 slice issues open)
 - **Phase 2 Kickoff:** [docs/phase2-kickoff.md](docs/phase2-kickoff.md) — inheritance doc, strategic debt, architecture snapshot
 - **Backlog:** [BACKLOG.md](BACKLOG.md)
 
@@ -62,8 +62,8 @@ Automatically fetches transactions from **Bank Discount**, **Max**, and **Cal**,
 
 ```bash
 # Clone the repo
-git clone git@github.com:ShayIsso/ShayFinance.git
-cd ShayFinance
+git clone git@github.com:ShayIsso/yitra.git
+cd yitra
 
 # Copy environment variables
 cp .env.example .env
@@ -122,7 +122,7 @@ src/
 
 ## How This Project Is Built — AI-Assisted Development
 
-ShayFinance is developed with a structured human + agent workflow. Every phase moves through the same pipeline:
+Yitra is developed with a structured human + agent workflow. Every phase moves through the same pipeline:
 
 ```
  Grill Me  →  to-prd  →  PRD as GitHub Issue  →  to-issues  →  feature branches  →  review  →  merge

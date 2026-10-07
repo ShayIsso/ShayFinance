@@ -8,7 +8,7 @@ beforeAll(() => {
 
 describe("crypto module", () => {
   it("encrypt→decrypt round-trip returns original plaintext", () => {
-    const plaintext = "hello, ShayFinance";
+    const plaintext = "hello, Yitra";
     const payload = encrypt(plaintext);
     expect(decrypt(payload)).toBe(plaintext);
   });

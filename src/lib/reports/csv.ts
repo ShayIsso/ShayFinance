@@ -181,7 +181,7 @@ export function resolveExportDateRange(
   };
 }
 
-/** ASCII filename: shayfinance-transactions-<from>_<to>.csv */
+/** ASCII filename: yitra-transactions-<from>_<to>.csv */
 export function buildExportFilename(from: string, to: string): string {
-  return `shayfinance-transactions-${from}_${to}.csv`;
+  return `yitra-transactions-${from}_${to}.csv`;
 }
