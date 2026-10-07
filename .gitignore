@@ -80,3 +80,7 @@ scripts/spike/taxonomy-decisions-133.json
 
 # database backups (real financial data — never commit)
 backups/
+
+# Claude Code agent memory is personal working state and lives outside the repo
+# (~/.claude/projects/); the copies once committed here were stale snapshots of it.
+/.claude/projects/
