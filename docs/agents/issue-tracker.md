@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and PRDs for ShayFinance live as GitHub issues at `ShayIsso/ShayFinance`. Use the `gh` CLI for all operations.
+Issues and PRDs for Yitra live as GitHub issues at `ShayIsso/yitra`. Use the `gh` CLI for all operations.
 
 ## Conventions
 
@@ -11,7 +11,7 @@ Issues and PRDs for ShayFinance live as GitHub issues at `ShayIsso/ShayFinance`.
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 
-`gh` resolves the repo from `git remote -v` automatically inside a clone. If it can't (occasional gh quirk seen on this repo), pass `--repo ShayIsso/ShayFinance` explicitly.
+`gh` resolves the repo from `git remote -v` automatically inside a clone. If it can't (occasional gh quirk seen on this repo), pass `--repo ShayIsso/yitra` explicitly.
 
 ## When a skill says "publish to the issue tracker"
 

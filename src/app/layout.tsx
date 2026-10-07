@@ -8,7 +8,7 @@ const assistant = Assistant({
 });
 
 export const metadata: Metadata = {
-  title: "ShayFinance",
+  title: "Yitra",
   description: "לוח בקרה פיננסי אישי",
 };
 
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
  * dark load, and diverge from SSR markup (hydration mismatch) — #109 line-item
  * 4. Keep the localStorage key in sync with THEME_STORAGE_KEY in components/theme.
  */
-const themeScript = `(function(){try{var t=localStorage.getItem("shayfinance-theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();`;
+const themeScript = `(function(){try{var t=localStorage.getItem("yitra-theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();`;
 
 export default function RootLayout({
   children,

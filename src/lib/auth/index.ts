@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { getEnv } from "@/lib/env";
 
-export const SESSION_COOKIE = "shayfinance-session";
+export const SESSION_COOKIE = "yitra-session";
 
 function getSecret(): string {
   return getEnv().ENCRYPTION_KEY;

@@ -1,10 +1,10 @@
-# ShayFinance — Development Guidelines
+# Yitra — Development Guidelines
 
 ## Project Overview
 
 Private, self-hosted personal finance dashboard. Fetches and categorizes transactions from Israeli banks (Bank Discount, Max, Cal). Single-user, local/Docker only. Hebrew RTL interface.
 
-**PRD v1 (MVP):** https://github.com/ShayIsso/ShayFinance/issues/1
+**PRD v1 (MVP):** https://github.com/ShayIsso/yitra/issues/1
 **Phase 2 Kickoff:** `docs/phase2-kickoff.md`
 **Backlog:** `BACKLOG.md`
 
@@ -163,7 +163,7 @@ Four pages — **Dashboard**, **Transactions**, **Sync**, **Settings** — under
 
 ### Issue tracker
 
-GitHub issues at `ShayIsso/ShayFinance` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+GitHub issues at `ShayIsso/yitra` via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

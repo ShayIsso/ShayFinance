@@ -11,7 +11,7 @@ import { middleware } from "@/middleware";
  * `process.env` per call, so no module reset is needed between cases.
  */
 const VALID_KEY = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
-const SESSION_COOKIE = "shayfinance-session";
+const SESSION_COOKIE = "yitra-session";
 
 const ORIGINAL = {
   DATABASE_URL: process.env.DATABASE_URL,

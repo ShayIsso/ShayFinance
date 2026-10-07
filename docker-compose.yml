@@ -17,6 +17,7 @@ services:
       retries: 5
 
   app:
+    image: yitra
     build:
       context: .
       dockerfile: Dockerfile
@@ -36,3 +37,7 @@ services:
 
 volumes:
   pgdata:
+    # Pinned: Compose derives the default name from the checkout directory, and
+    # the real data lives in this volume. A re-clone under another directory
+    # name would otherwise start the app on a silently empty database.
+    name: shayfinance_pgdata

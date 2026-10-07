@@ -100,7 +100,7 @@ describe("exportTransactionsCsv", () => {
 
     const result = await exportTransactionsCsv(noFilter, store);
 
-    expect(result.filename).toBe("shayfinance-transactions-2026-02-01_2026-04-15.csv");
+    expect(result.filename).toBe("yitra-transactions-2026-02-01_2026-04-15.csv");
   });
 
   it("uses the explicit dateFrom/dateTo filter bounds for the filename when given", async () => {
@@ -112,7 +112,7 @@ describe("exportTransactionsCsv", () => {
       store,
     );
 
-    expect(result.filename).toBe("shayfinance-transactions-2026-01-01_2026-12-31.csv");
+    expect(result.filename).toBe("yitra-transactions-2026-01-01_2026-12-31.csv");
   });
 
   it("produces a header-only CSV with a BOM for an empty matching set", async () => {

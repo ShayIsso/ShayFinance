@@ -1,6 +1,6 @@
 # Domain Docs
 
-How the engineering skills should consume ShayFinance's domain documentation.
+How the engineering skills should consume Yitra's domain documentation.
 
 ## Before exploring, read these
 
@@ -32,7 +32,7 @@ Single-context repo:
 
 When your output names a domain concept (issue title, refactor proposal, test name, hypothesis), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids — e.g. say "transfer" not "internal movement", "ignore" not "excluded", "deep module" not "well-encapsulated module".
 
-If the concept isn't in the glossary, that's a signal: either you're inventing language ShayFinance doesn't use (reconsider), or there's a real gap to flag for `/grill-with-docs`.
+If the concept isn't in the glossary, that's a signal: either you're inventing language Yitra doesn't use (reconsider), or there's a real gap to flag for `/grill-with-docs`.
 
 ## Flag ADR conflicts
 

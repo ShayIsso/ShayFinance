@@ -1,4 +1,4 @@
-# ShayFinance — Feature Backlog
+# Yitra — Feature Backlog
 
 Deferred features captured during the architecture planning session (2026-03-31). These are explicitly out of scope for the MVP but represent validated ideas for future development.
 
@@ -56,7 +56,7 @@ Every interaction must feel fluid: loading skeletons (not "טוען..."), smooth
 
 ### Bootstrap Drizzle Migration System
 
-**Done 2026-07-12** ([#104](https://github.com/ShayIsso/ShayFinance/issues/104), [ADR-0009](docs/adr/0009-generated-migrations-from-baseline.md)): baseline generated from `src/db/schema.ts` and marked applied against the live dev DB; all schema changes now ship as generated migrations, `db:push` retired.
+**Done 2026-07-12** ([#104](https://github.com/ShayIsso/yitra/issues/104), [ADR-0009](docs/adr/0009-generated-migrations-from-baseline.md)): baseline generated from `src/db/schema.ts` and marked applied against the live dev DB; all schema changes now ship as generated migrations, `db:push` retired.
 
 ### API Route Auth: Return 401 JSON Instead of Redirect
 
